@@ -26,6 +26,9 @@ namespace BlazorWebFormsComponents.Enums
 		public static WindowsTreeViewImageSet Windows { get; } = new WindowsTreeViewImageSet();
 		public static XP_ExplorerTreeViewImageSet XP_Explorer { get; } = new XP_ExplorerTreeViewImageSet();
 
+		public virtual bool HasCollapse => true;
+		public virtual bool HasNodes => true;
+
 		public virtual string Collapse => FormatFilename("Collapse");
 		public virtual string Expand => FormatFilename("Expand");
 		public virtual string NoExpand  => FormatFilename("NoExpand");
@@ -38,21 +41,84 @@ namespace BlazorWebFormsComponents.Enums
 
 	}
 
-	public class ArrowsTreeViewImageSet : TreeViewImageSet { }
-	public class BulletedListTreeViewImageSet : TreeViewImageSet { }
-	public class BulletedList2TreeViewImageSet : TreeViewImageSet { }
-	public class BulletedList3TreeViewImageSet : TreeViewImageSet { }
-	public class BulletedList4TreeViewImageSet : TreeViewImageSet { }
-	public class ContactsTreeViewImageSet : TreeViewImageSet { }
-	public class DefaultTreeViewImageSet : TreeViewImageSet { }
-	public class EventsTreeViewImageSet : TreeViewImageSet { }
-	public class FAQTreeViewImageSet : TreeViewImageSet { }
-	public class InboxTreeViewImageSet : TreeViewImageSet { }
-	public class MSDNTreeViewImageSet : TreeViewImageSet { }
-	public class NewsTreeViewImageSet : TreeViewImageSet { }
-	public class SimpleTreeViewImageSet : TreeViewImageSet { }
-	public class Simple2TreeViewImageSet : TreeViewImageSet { }
-	public class WindowsTreeViewImageSet : TreeViewImageSet { }
+	public class ArrowsTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasNodes => false;
+
+	}
+	public class BulletedListTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+	}
+	public class BulletedList2TreeViewImageSet : TreeViewImageSet {
+		public override bool HasCollapse => false;
+
+	}
+	public class BulletedList3TreeViewImageSet : TreeViewImageSet {
+		public override bool HasCollapse => false;
+
+	}
+
+	public class BulletedList4TreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+	}
+	public class ContactsTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasNodes => false;
+
+	}
+	public class DefaultTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+	}
+	public class EventsTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+	}
+	public class FAQTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+	}
+	public class InboxTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+	}
+	public class MSDNTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasNodes => false;
+
+	}
+	public class NewsTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+	}
+	public class SimpleTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+		public override bool HasNodes => false;
+
+	}
+	public class Simple2TreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasCollapse => false;
+
+		public override bool HasNodes => false;
+
+	}
+	public class WindowsTreeViewImageSet : TreeViewImageSet {
+
+		public override bool HasNodes => false;
+
+	}
 	public class XP_ExplorerTreeViewImageSet : TreeViewImageSet { }
 
 }
