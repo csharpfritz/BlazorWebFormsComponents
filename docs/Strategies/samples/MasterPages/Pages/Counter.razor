@@ -8,10 +8,13 @@
 <button class="btn btn-primary" @onclick="IncrementCount">Click me</button>
 
 @code {
-    private int currentCount = 0;
+
+    [CascadingParameter(Name="TheCount")]
+    public int currentCount {get;set;} = 0;
 
     private void IncrementCount()
     {
         currentCount++;
+        StateHasChanged();
     }
 }

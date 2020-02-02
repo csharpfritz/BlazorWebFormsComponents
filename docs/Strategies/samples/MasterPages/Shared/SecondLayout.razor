@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@layout MainLayout
 
 <div class="main">
 
@@ -10,12 +11,22 @@
     </div>
 
     <div class="content px-4">
+
+      <CascadingValue Name="TheCount" Value="TheCount">
         @Body
+      </CascadingValue>
 
       <footer style="margin-top: 20px;">
-        <a href="/">Return to index</a>
+        <a href="/">Return to index</a> -- The Count: @TheCount
       </footer>
 
     </div>
 
 </div>
+
+@code {
+
+  [CascadingParameter(Name="TheCount")]
+  public int TheCount {get;set;} = 10;
+
+}

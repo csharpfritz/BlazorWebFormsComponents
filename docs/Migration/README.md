@@ -28,9 +28,11 @@ In order to match some of the syntax previously available in Web Forms markup, a
 
 Components are the building blocks for Blazor, just as controls were in Web Forms.  If you have user controls in your application, you will need to convert those to components.  See the UserControl strategy below for more details.
 
-### MasterPages are no more
+### MasterPages are now Layouts
 
-The concept of a MasterPage does not exist in Blazor.  Instead, your ASPX pages will be loaded inside of a host page.  You can compose a razor component that hosts other *converted ASPX pages* but your pages cannot dictate their parent container.  See the MasterPage strategy below for more details.
+The MasterPage concept of containing a layout for a Page is available in Blazor but has some limitations.  In Blazor, we use Layout objects to define the shared layout of our application.  Your Blazor pages can reference a default layout and can also override layouts with a `@layout` directive at the top of the page.  Layouts, like MasterPages, can be nested so that a layout can be composed inside of another layout.
+
+For more information, see the MasterPage strategy below for more details.
 
 ### Page Directive Changes
 
@@ -50,7 +52,7 @@ For editor components, simply `@bind` the variable to the component.  This will 
 <input type="text" name="foo" @bind="bar" />
 ```
 
-### No Namespaces, No Tag-Prefixes 
+### No Tag-Prefixes and Markup Namespaces 
 
 Namespaces and tag-prefixes are gone.  You can do a Find and Replace on `asp:` and remove those from your markup.
 
@@ -66,7 +68,7 @@ The `System.Drawing.Color` object does not have a converter that allows you to c
 - Model-Binding
 - [.NET Standard to the rescue!](Strategies/NET-Standard.md)
 - Other considerations
-  - MasterPage
+  - [MasterPages](Strategies/MasterPages.md)
     - Rearchitecting Web Application Layout
   - UserControls
     - The simple conversion
