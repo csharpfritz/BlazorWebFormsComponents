@@ -3,18 +3,18 @@
 
 <h1>Counter</h1>
 
-<p>Current count: @currentCount</p>
+<p>Current count: @Settings.TheCount</p>
 
 <button class="btn btn-primary" @onclick="IncrementCount">Click me</button>
 
 @code {
 
-    [CascadingParameter(Name="TheCount")]
-    public int currentCount {get;set;} = 0;
+    [CascadingParameter(Name="LayoutSettings")]
+    public Data.LayoutSettings Settings {get;set;}
 
     private void IncrementCount()
     {
-        currentCount++;
+        Settings.TheCount++;
         StateHasChanged();
     }
 }

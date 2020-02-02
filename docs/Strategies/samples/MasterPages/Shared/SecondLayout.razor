@@ -12,12 +12,12 @@
 
     <div class="content px-4">
 
-      <CascadingValue Name="TheCount" Value="TheCount">
+      <CascadingValue Name="LayoutSettings" Value="Settings">
         @Body
       </CascadingValue>
 
       <footer style="margin-top: 20px;">
-        <a href="/">Return to index</a> -- The Count: @TheCount
+        <a href="/">Return to index</a> -- The Count: @Settings.TheCount
       </footer>
 
     </div>
@@ -26,7 +26,16 @@
 
 @code {
 
-  [CascadingParameter(Name="TheCount")]
-  public int TheCount {get;set;} = 10;
+	[CascadingParameter(Name = "LayoutSettings")]
+	public Data.LayoutSettings Settings { get; set; } = new Data.LayoutSettings();
+
+	protected override Task OnInitializedAsync()
+	{
+
+		Settings.StateHasChanged = () => StateHasChanged();
+
+		return base.OnInitializedAsync();
+
+	}
 
 }
