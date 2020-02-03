@@ -1,0 +1,30 @@
+﻿@page "/ControlSamples/MasterPage"
+@inherits BaseWebFormsComponent
+@layout _Layout
+
+<h3>Inner Page</h3>
+
+<p>
+The Random Value: @TheRandomValue
+</p>
+
+<p>
+Value created on Page: @ValueOnPage
+</p>
+
+@code {
+
+	public int TheRandomValue { get; set; }
+
+	public int ValueOnPage { get; set; } = new Random().Next(10000, 100000);
+
+	protected override Task OnParametersSetAsync() {
+
+		TheRandomValue = (int)Settings["TestValue"];
+		//Settings["ValueFromPage"] = ValueOnPage;
+
+		return base.OnParametersSetAsync();
+
+	}
+
+}

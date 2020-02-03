@@ -162,6 +162,13 @@ namespace BlazorWebFormsComponents
 
 		#endregion
 
+		#region MasterPageLayout Support
+
+		[CascadingParameter()]
+		public MasterPageSettings Settings { get; set; }
+
+		#endregion
+
 		#region IDisposable Support
 		private bool disposedValue = false; // To detect redundant calls
 
@@ -194,10 +201,6 @@ namespace BlazorWebFormsComponents
 			return Dispose(true);
 		}
 		#endregion
-
-		public bool LayoutTemplateRendered { get; set; } = false;
-
-
 
 	}
 

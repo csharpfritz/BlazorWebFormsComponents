@@ -19,7 +19,6 @@ namespace BlazorWebFormsComponents
 
 		protected override Task OnInitializedAsync()
 		{
-
 			Settings.StateHasChanged = StateHasChanged;
 
 			return base.OnInitializedAsync();

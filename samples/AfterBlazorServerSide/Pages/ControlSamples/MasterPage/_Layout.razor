@@ -1,0 +1,37 @@
+﻿@inherits MasterPageLayoutBase
+@layout Shared.MainLayout
+
+<main>
+
+<h2>Inner Layout</h2>
+
+<CascadingValue Value="Settings">
+	@Body
+</CascadingValue>
+
+<p>
+The Random Value:  @TheRandomValue
+</p>
+
+<p>
+Value from page: @ValueFromPage
+</p>
+
+</main>
+
+@code {
+
+	public int TheRandomValue { get; set; } = new Random().Next(10000);
+
+	public int ValueFromPage { get; set; }
+
+	protected override Task OnParametersSetAsync()
+	{
+
+		Settings["TestValue"] = TheRandomValue;
+		ValueFromPage = Settings.ContainsKey("ValueFromPage") ? (int)Settings["ValueFromPage"] : 0;
+
+		return base.OnParametersSetAsync();
+
+	}
+}
