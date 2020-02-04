@@ -20,8 +20,8 @@ namespace BlazorWebFormsComponents
 			get { return _Internal[key]; }
 			set {
 				_Internal[key] = value;
-				//PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(key));
-				StateHasChanged?.Invoke();
+				PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(key));
+				//StateHasChanged?.Invoke();
 			}
 		}
 
@@ -35,7 +35,7 @@ namespace BlazorWebFormsComponents
 
 			_Internal.Add(key, value);
 			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(key));
-			StateHasChanged?.Invoke();
+			//StateHasChanged?.Invoke();
 
 		}
 
@@ -44,7 +44,7 @@ namespace BlazorWebFormsComponents
 
 			_Internal.Add(item.Key, item.Value);
 			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(item.Key));
-			StateHasChanged?.Invoke();
+			//StateHasChanged?.Invoke();
 
 		}
 
