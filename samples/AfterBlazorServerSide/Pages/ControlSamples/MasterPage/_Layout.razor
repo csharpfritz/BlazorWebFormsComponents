@@ -9,13 +9,18 @@
 	@Body
 </CascadingValue>
 
+<div style="border: 1px solid red;">
 <p>
 The Random Value:  @TheRandomValue
 </p>
 
+<p>Second random value: @SecondRandomValue</p>
 <p>
 Value from page: @ValueFromPage
 </p>
+
+<button @onclick="() => StateHasChanged()">Click Me!</button>
+</div>
 
 </main>
 
@@ -23,15 +28,31 @@ Value from page: @ValueFromPage
 
 	public int TheRandomValue { get; set; } = new Random().Next(10000);
 
+	public int SecondRandomValue { get; set; } = new Random().Next(10000);
+
 	public int ValueFromPage { get; set; }
 
-	protected override Task OnParametersSetAsync()
+	protected override Task OnInitializedAsync()
 	{
 
 		Settings["TestValue"] = TheRandomValue;
+		Settings["SecondRandomValue"] = SecondRandomValue;
 		ValueFromPage = Settings.ContainsKey("ValueFromPage") ? (int)Settings["ValueFromPage"] : 0;
 
-		return base.OnParametersSetAsync();
+		return base.OnInitializedAsync();
 
 	}
+
+	protected override void Settings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e) {
+
+		switch (e.PropertyName) {
+			case "ValueFromPage":
+				ValueFromPage = (int)Settings["ValueFromPage"];
+				break;
+		}
+
+		StateHasChanged();
+
+	}
+
 }

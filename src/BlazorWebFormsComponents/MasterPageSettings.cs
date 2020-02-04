@@ -1,13 +1,16 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace BlazorWebFormsComponents
 {
-	public class MasterPageSettings : IDictionary<string, object>
+	public class MasterPageSettings : IDictionary<string, object>, INotifyPropertyChanged
 	{
 
 		private Dictionary<string, object> _Internal = new Dictionary<string, object>();
+
+		public event PropertyChangedEventHandler PropertyChanged;
 
 		internal Action StateHasChanged { get; set; }
 
@@ -17,6 +20,7 @@ namespace BlazorWebFormsComponents
 			get { return _Internal[key]; }
 			set {
 				_Internal[key] = value;
+				//PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(key));
 				StateHasChanged?.Invoke();
 			}
 		}
@@ -30,6 +34,7 @@ namespace BlazorWebFormsComponents
 		{
 
 			_Internal.Add(key, value);
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(key));
 			StateHasChanged?.Invoke();
 
 		}
@@ -38,6 +43,7 @@ namespace BlazorWebFormsComponents
 		{
 
 			_Internal.Add(item.Key, item.Value);
+			PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(item.Key));
 			StateHasChanged?.Invoke();
 
 		}

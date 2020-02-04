@@ -136,6 +136,22 @@ namespace BlazorWebFormsComponents
 
 		}
 
+		protected override Task OnParametersSetAsync()
+		{
+
+			if (Settings != null)
+			{
+				Settings.PropertyChanged += Settings_PropertyChanged;
+			}
+
+			return base.OnParametersSetAsync();
+
+		}
+
+		protected virtual void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
+		{
+		}
+
 		protected override async Task OnAfterRenderAsync(bool firstRender)
 		{
 

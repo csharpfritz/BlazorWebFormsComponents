@@ -5,25 +5,35 @@
 <h3>Inner Page</h3>
 
 <p>
-The Random Value: @TheRandomValue
+	The Random Value: @TheRandomValue
 </p>
 
 <p>
-Value created on Page: @ValueOnPage
+	Second Random Value on Page: @SecondRandomValue
 </p>
+
+<p>
+	Value created on Page: @ValueOnPage
+</p>
+
+<button @onclick="@(() => { ValueOnPage = 9999; Settings["ValueOnPage"] = ValueOnPage; })">Set new random value</button>
 
 @code {
 
 	public int TheRandomValue { get; set; }
 
+	public int SecondRandomValue { get; set; }
+
 	public int ValueOnPage { get; set; } = new Random().Next(10000, 100000);
 
-	protected override Task OnParametersSetAsync() {
+	protected override Task OnInitializedAsync()
+	{
 
 		TheRandomValue = (int)Settings["TestValue"];
-		//Settings["ValueFromPage"] = ValueOnPage;
+		SecondRandomValue = (int)Settings["SecondRandomValue"];
+		Settings["ValueFromPage"] = ValueOnPage;
 
-		return base.OnParametersSetAsync();
+		return base.OnInitializedAsync();
 
 	}
 
