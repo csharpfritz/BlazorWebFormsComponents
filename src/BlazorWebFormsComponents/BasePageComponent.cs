@@ -12,7 +12,7 @@ namespace BlazorWebFormsComponents
 	{
 
 		private Queue<Action> _Scheduler = new Queue<Action>();
-		private ScheduledJsRuntime JsRuntime;
+		private IJSRuntime JsRuntime;
 
 		public BasePageComponent()
 		{
@@ -23,8 +23,8 @@ namespace BlazorWebFormsComponents
 			get => JsRuntime;
 			set
 			{
-				JsRuntime = new ScheduledJsRuntime(value);
-			}
+				JsRuntime = value;// new ScheduledJsRuntime(value);
+		 	}
 		}
 
 		/// <summary>
@@ -32,16 +32,26 @@ namespace BlazorWebFormsComponents
 		/// </summary>
 		public string Title
 		{
-			get { return JsRuntime.InvokeAsync<string>("BlazorWebFormsComponents.GetPageTitle").GetAwaiter().GetResult(); }
+			get { return JsRuntime.InvokeAsync<string>("BlazorWebFormsComponents.GetPageTitle", new object[] { }).GetAwaiter().GetResult(); }
 			set { JsRuntime.InvokeVoidAsync("BlazorWebFormsComponents.SetPageTitle", value); }
 		}
+
+		public ValueTask<string> GetTitle() {
+
+			return JsRuntime.InvokeAsync<string>("BlazorWebFormsComponents.GetPageTitle");
+
+		}
+
 
 		protected override Task OnAfterRenderAsync(bool firstRender)
 		{
 
 			base.OnAfterRenderAsync(firstRender);
 
-			JsRuntime?.SetAfterRender(true);
+			if (firstRender)
+			{
+				//JsRuntime?.SetAfterRender(true);
+			}
 
 			return Task.CompletedTask;
 

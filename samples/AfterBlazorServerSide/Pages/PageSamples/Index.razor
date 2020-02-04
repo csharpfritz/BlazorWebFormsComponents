@@ -3,10 +3,11 @@
 
 <h3>Page Sample</h3>
 
-<p>This is the current page title: </p>
-
+<p>This is the current page title: @PageTitle</p>
 
 @code {
+
+	public string PageTitle { get; set; }
 
 	protected override Task OnInitializedAsync()
 	{
@@ -14,6 +15,18 @@
 		base.Title = "Page Title from Blazor";
 
 		return base.OnInitializedAsync();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool first) {
+
+		await base.OnAfterRenderAsync(first);
+
+		if (first)
+		{
+			PageTitle = await GetTitle();
+			StateHasChanged();
+		}
+
 	}
 
 }
