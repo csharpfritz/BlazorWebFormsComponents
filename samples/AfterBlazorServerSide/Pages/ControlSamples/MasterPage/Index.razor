@@ -16,7 +16,7 @@
 	Value created on Page: @ValueOnPage
 </p>
 
-<button @onclick="@(() => { ValueOnPage = 9999; Settings["ValueOnPage"] = ValueOnPage; })">Set new random value</button>
+<button @onclick="@(() => { ValueOnPage = 9999; Settings["ValueFromPage"] = ValueOnPage; })">Set new random value</button>
 
 @code {
 
