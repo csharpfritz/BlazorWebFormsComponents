@@ -1,0 +1,19 @@
+﻿@inherits BlazorWebFormsComponents.BasePageComponent
+@page "/PageSamples"
+
+<h3>Page Sample</h3>
+
+<p>This is the current page title: </p>
+
+
+@code {
+
+	protected override Task OnInitializedAsync()
+	{
+
+		base.Title = "Page Title from Blazor";
+
+		return base.OnInitializedAsync();
+	}
+
+}
