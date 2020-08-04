@@ -1,0 +1,65 @@
+﻿@inherits TestComponentBase
+@using static BlazorWebFormsComponents.WebColor
+@using static BlazorWebFormsComponents.Enums.BorderStyle
+@using BlazorWebFormsComponents
+
+
+<Fixture Test="FirstTest">
+	<ComponentUnderTest>
+		<DataList Items="Widget.SimpleWidgetList"
+							ItemType="Widget"
+							RepeatLayout="Flow"
+							Context="Item">
+			<ChildContent>
+				<HeaderStyle CssClass="myClass"></HeaderStyle>
+			</ChildContent>
+			<HeaderTemplate>My Widget List</HeaderTemplate>
+			<ItemTemplate>@Item.Name</ItemTemplate>
+		</DataList>
+	</ComponentUnderTest>
+</Fixture>
+
+<Fixture Test="NullTest">
+	<ComponentUnderTest>
+		<DataList Items="Widget.SimpleWidgetList"
+							ItemType="Widget"
+							RepeatLayout="Flow"
+							Context="Item">
+			<ChildContent>
+				<HeaderStyle></HeaderStyle>
+			</ChildContent>
+			<HeaderTemplate>My Widget List</HeaderTemplate>
+			<ItemTemplate>@Item.Name</ItemTemplate>
+		</DataList>
+	</ComponentUnderTest>
+</Fixture>
+
+
+@code {
+
+	void FirstTest(Fixture fixture)
+	{
+		var cut = fixture.GetComponentUnderTest();
+			System.Diagnostics.Debug.WriteLine(cut.Markup);
+
+		var theHeaderElement = cut.FindAll("span")[1];
+
+		theHeaderElement.HasAttribute("class").ShouldBeTrue();
+		var theClass = theHeaderElement.GetAttribute("class");
+
+		theClass.ShouldNotBeNull();
+		theClass.ShouldBe("myClass");
+
+	}
+
+	void NullTest(Fixture fixture)
+	{
+		var cut = fixture.GetComponentUnderTest();
+
+		var theHeaderElement = cut.FindAll("span")[1];
+
+		theHeaderElement.HasAttribute("class").ShouldBeFalse();
+		
+	}
+
+}

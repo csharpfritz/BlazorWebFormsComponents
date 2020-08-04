@@ -11,48 +11,81 @@ else if (Items == null || !Items.Any())
 }
 else
 {
-
 	@if (LayoutTemplate is null)
 	{
 		LayoutTemplate = context => builder => builder.AddContent(1, context);
 	}
 
+	Func<bool, RenderFragment<ItemType>> oddOrEvenTemplate =
+		(isEven) => isEven ? ItemTemplate : AlternatingItemTemplate ?? ItemTemplate;
+
 	@LayoutTemplate(
 			@: @if (Items != null)
+			{
+				var even = true;
+				var isBusy = true;
+				var itemIterator = Items.GetEnumerator();
+				itemIterator.Reset();
+				itemIterator.MoveNext();
+				if (GroupItemCount == 0)
+				{
+					OnDataBinding.InvokeAsync(EventArgs.Empty);
+					foreach(var item in Items)
 					{
-						var rowCounter = 0;
-
-						OnDataBinding.InvokeAsync(EventArgs.Empty);
-
-						foreach (var item in Items)
+					  <CascadingValue Name="CurrentDataBoundItem" Value="item">
+						@oddOrEvenTemplate(even)(item)
+						@{ even = !even; }
+						</CascadingValue>
+						if (ItemSeparatorTemplate != null)
 						{
-
-							if (AlternatingItemTemplate == null || rowCounter % 2 == 0)
-							{
-								@ItemTemplate(item)
-							}
-							else
-							{
-								@AlternatingItemTemplate(item)
-							}
-					/**/
-					/**/
-
-							if (ItemSeparatorTemplate != null)
-							{
-								@ItemSeparatorTemplate
-							}
-					/**/
-					/**/
-					/**/
-
-							OnItemDataBound.InvokeAsync(new ListViewItemEventArgs(item));
-
-							rowCounter++;
-
+							@ItemSeparatorTemplate
 						}
-
-						OnDataBound.InvokeAsync(EventArgs.Empty);
+						OnItemDataBound.InvokeAsync(new ListViewItemEventArgs(item));
 					}
-			)
+					OnDataBound.InvokeAsync(EventArgs.Empty);
+				}
+				else
+				{
+					var buildCounter = 1;
+
+					do
+					{
+						RenderFragment renderFragment = builder =>
+						{
+							builder.OpenRegion(buildCounter);
+							buildCounter++;
+							for (var i = 0; i < GroupItemCount ; i++)
+							{
+								var builderTemplate = oddOrEvenTemplate(even);
+								var item = itemIterator.Current;
+										if (item != null)
+										{
+								<CascadingValue Name="CurrentDataBoundItem" Value="item">
+												@builderTemplate(item)
+								</CascadingValue>
+										}
+								if (ItemSeparatorTemplate != null && i < GroupItemCount - 1)
+								{
+									builder.AddContent(buildCounter, @ItemSeparatorTemplate);
+								  buildCounter++;
+								}
+
+								isBusy = itemIterator.MoveNext();
+								even = !even;
+							}
+
+							builder.CloseRegion();
+						};
+
+						@GroupTemplate(renderFragment);
+						if (isBusy)
+						{
+							@GroupSeparatorTemplate
+						}
+						
+					} while (isBusy);
+
+				}
+			}
+		)
 }
