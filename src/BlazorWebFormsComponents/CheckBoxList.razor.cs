@@ -13,27 +13,9 @@ namespace BlazorWebFormsComponents
 	/// Represents a list control that renders a group of checkboxes for multi-select scenarios.
 	/// </summary>
 	/// <typeparam name="TItem">The type of items in the data source.</typeparam>
-	public partial class CheckBoxList<TItem> : DataBoundComponent<TItem>
+	public partial class CheckBoxList<TItem> : BaseListControl<TItem>
 	{
 		private string _baseId = Guid.NewGuid().ToString("N").Substring(0, 8);
-
-		/// <summary>
-		/// Gets or sets the collection of static list items in the CheckBoxList.
-		/// </summary>
-		[Parameter]
-		public ListItemCollection StaticItems { get; set; } = new();
-
-		/// <summary>
-		/// Gets or sets the field of the data source that provides the text content of the list items.
-		/// </summary>
-		[Parameter]
-		public string DataTextField { get; set; }
-
-		/// <summary>
-		/// Gets or sets the field of the data source that provides the value of each list item.
-		/// </summary>
-		[Parameter]
-		public string DataValueField { get; set; }
 
 		/// <summary>
 		/// Gets or sets the number of columns to display in the CheckBoxList.
@@ -143,35 +125,5 @@ namespace BlazorWebFormsComponents
 			await OnSelectedIndexChanged.InvokeAsync(e);
 		}
 
-		private IEnumerable<ListItem> GetItems()
-		{
-			// Return static items first
-			foreach (var item in StaticItems)
-			{
-				yield return item;
-			}
-
-			// Then data-bound items
-			if (Items != null)
-			{
-				foreach (var dataItem in Items)
-				{
-					yield return new ListItem
-					{
-						Text = GetPropertyValue(dataItem, DataTextField),
-						Value = GetPropertyValue(dataItem, DataValueField)
-					};
-				}
-			}
-		}
-
-		private string GetPropertyValue(TItem item, string propertyName)
-		{
-			if (string.IsNullOrEmpty(propertyName))
-				return item?.ToString() ?? string.Empty;
-
-			var prop = typeof(TItem).GetProperty(propertyName);
-			return prop?.GetValue(item)?.ToString() ?? string.Empty;
-		}
 	}
 }
