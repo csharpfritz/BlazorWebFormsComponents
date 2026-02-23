@@ -77,4 +77,10 @@
 - **Nav ordering pattern:** New samples added alphabetically within Chart node: Area, Bar, ChartAreas, Column, DataBinding, Doughnut, Line, MultiSeries, Pie, Scatter, StackedColumn, Styling.
 - **WebColor usage:** Use static fields like `WebColor.DodgerBlue` not `WebColor.FromName("...")` which doesn't exist.
 
+### Milestone 6 — Sample Page Updates for Base Class Features (WI-03, WI-06, WI-09, WI-12)
+
+- **Button AccessKey + ToolTip (WI-03, WI-06):** Added `AccessKey="b"` and `ToolTip="Click to submit"` to the existing Button demo in `Components/Pages/ControlSamples/Button/Index.razor`. Button already had `ToolTip` as a declared parameter rendering `title=` attribute. `AccessKey` goes through `AdditionalAttributes` capture — rendering depends on the component template including `accesskey` in its HTML output.
+- **GridView CssClass (WI-09):** Added `CssClass="table table-striped"` to the GridView default sample. GridView inherits style properties from `BaseStyledComponent` via `DataBoundComponent<T>` → `BaseDataBoundComponent` → `BaseStyledComponent`, and `GridView.razor` already renders `class="@CssClass"` on its `<table>` element — so this works immediately.
+- **Validator Display (WI-12):** Added `Display="ValidatorDisplay.Dynamic"` to the second `RequiredFieldValidator` in the RequiredFieldValidator sample. The `ValidatorDisplay` enum exists in `Enums/ValidatorDisplay.cs` with values `None`, `Static`, `Dynamic`. The attribute compiles via `AdditionalAttributes` capture on `BaseValidator` → `BaseStyledComponent` → `BaseWebFormsComponent`. Actual Display behavior (collapsing vs hidden vs none) depends on Cyclops implementing the `Display` parameter in `BaseValidator.razor.cs` and using it in the template.
+- **Minimal change pattern:** For feature demos on existing samples, just add the new property to one existing component instance plus a brief explanatory note — no need for new sections or pages.
 
