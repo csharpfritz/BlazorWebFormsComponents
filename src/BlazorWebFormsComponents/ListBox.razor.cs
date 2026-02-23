@@ -13,7 +13,7 @@ namespace BlazorWebFormsComponents
 	/// Represents a list box control that allows the user to select one or more items from a list.
 	/// </summary>
 	/// <typeparam name="TItem">The type of items in the data source.</typeparam>
-	public partial class ListBox<TItem> : DataBoundComponent<TItem>, IStyle
+	public partial class ListBox<TItem> : DataBoundComponent<TItem>
 	{
 		/// <summary>
 		/// Gets or sets the collection of list items in the ListBox.
@@ -104,36 +104,6 @@ namespace BlazorWebFormsComponents
 		/// </summary>
 		public IEnumerable<ListItem> SelectedItems =>
 			GetItems().Where(i => SelectedValues.Contains(i.Value));
-
-		// IStyle implementation
-		[Parameter]
-		public WebColor BackColor { get; set; }
-
-		[Parameter]
-		public WebColor BorderColor { get; set; }
-
-		[Parameter]
-		public BorderStyle BorderStyle { get; set; }
-
-		[Parameter]
-		public Unit BorderWidth { get; set; }
-
-		[Parameter]
-		public string CssClass { get; set; }
-
-		[Parameter]
-		public FontInfo Font { get; set; } = new FontInfo();
-
-		[Parameter]
-		public WebColor ForeColor { get; set; }
-
-		[Parameter]
-		public Unit Height { get; set; }
-
-		[Parameter]
-		public Unit Width { get; set; }
-
-		protected string Style => this.ToStyle().NullIfEmpty();
 
 		private bool IsSelected(string value)
 		{

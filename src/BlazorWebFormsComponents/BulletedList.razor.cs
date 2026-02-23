@@ -14,7 +14,7 @@ namespace BlazorWebFormsComponents
 	/// Emulates the ASP.NET Web Forms BulletedList control.
 	/// </summary>
 	/// <typeparam name="TItem">The type of items in the data source.</typeparam>
-	public partial class BulletedList<TItem> : DataBoundComponent<TItem>, IStyle
+	public partial class BulletedList<TItem> : DataBoundComponent<TItem>
 	{
 		private readonly string _baseId = Guid.NewGuid().ToString("N").Substring(0, 8);
 
@@ -72,39 +72,6 @@ namespace BlazorWebFormsComponents
 		/// </summary>
 		[Parameter]
 		public EventCallback<BulletedListEventArgs> OnClick { get; set; }
-
-		// IStyle implementation
-		[Parameter]
-		public WebColor BackColor { get; set; }
-
-		[Parameter]
-		public WebColor BorderColor { get; set; }
-
-		[Parameter]
-		public BorderStyle BorderStyle { get; set; }
-
-		[Parameter]
-		public Unit BorderWidth { get; set; }
-
-		[Parameter]
-		public string CssClass { get; set; }
-
-		[Parameter]
-		public FontInfo Font { get; set; } = new FontInfo();
-
-		[Parameter]
-		public WebColor ForeColor { get; set; }
-
-		[Parameter]
-		public Unit Height { get; set; }
-
-		[Parameter]
-		public Unit Width { get; set; }
-
-		/// <summary>
-		/// Gets the computed style string for the component.
-		/// </summary>
-		protected string Style => this.ToStyle().NullIfEmpty();
 
 		/// <summary>
 		/// Gets a value indicating whether the bullet style renders as an ordered list.

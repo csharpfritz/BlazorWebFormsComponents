@@ -13,7 +13,7 @@ namespace BlazorWebFormsComponents
 	/// Represents a drop-down list control that allows the user to select a single item from a list.
 	/// </summary>
 	/// <typeparam name="TItem">The type of items in the data source.</typeparam>
-	public partial class DropDownList<TItem> : DataBoundComponent<TItem>, IStyle
+	public partial class DropDownList<TItem> : DataBoundComponent<TItem>
 	{
 		/// <summary>
 		/// Gets or sets the collection of list items in the DropDownList.
@@ -74,36 +74,6 @@ namespace BlazorWebFormsComponents
 		/// Gets the currently selected item.
 		/// </summary>
 		public ListItem SelectedItem => GetItems().FirstOrDefault(i => i.Value == SelectedValue);
-
-		// IStyle implementation
-		[Parameter]
-		public WebColor BackColor { get; set; }
-
-		[Parameter]
-		public WebColor BorderColor { get; set; }
-
-		[Parameter]
-		public BorderStyle BorderStyle { get; set; }
-
-		[Parameter]
-		public Unit BorderWidth { get; set; }
-
-		[Parameter]
-		public string CssClass { get; set; }
-
-		[Parameter]
-		public FontInfo Font { get; set; } = new FontInfo();
-
-		[Parameter]
-		public WebColor ForeColor { get; set; }
-
-		[Parameter]
-		public Unit Height { get; set; }
-
-		[Parameter]
-		public Unit Width { get; set; }
-
-		protected string Style => this.ToStyle().NullIfEmpty();
 
 		private async Task HandleChange(ChangeEventArgs e)
 		{

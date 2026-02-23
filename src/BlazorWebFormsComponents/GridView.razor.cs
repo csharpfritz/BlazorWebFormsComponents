@@ -27,11 +27,6 @@ namespace BlazorWebFormsComponents
 		/// </summary>
 		[Parameter] public string DataKeyNames { get; set; }
 
-		/// <summary>
-		/// The css class of the GridView
-		/// </summary>
-		[Parameter] public string CssClass { get; set; }
-
 		///<inheritdoc/>
 		public List<IColumn<ItemType>> ColumnList { get; set; } = new List<IColumn<ItemType>>();
 

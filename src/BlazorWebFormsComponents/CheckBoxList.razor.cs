@@ -13,7 +13,7 @@ namespace BlazorWebFormsComponents
 	/// Represents a list control that renders a group of checkboxes for multi-select scenarios.
 	/// </summary>
 	/// <typeparam name="TItem">The type of items in the data source.</typeparam>
-	public partial class CheckBoxList<TItem> : DataBoundComponent<TItem>, IStyle
+	public partial class CheckBoxList<TItem> : DataBoundComponent<TItem>
 	{
 		private string _baseId = Guid.NewGuid().ToString("N").Substring(0, 8);
 
@@ -127,36 +127,6 @@ namespace BlazorWebFormsComponents
 				return -1;
 			}
 		}
-
-		// IStyle implementation
-		[Parameter]
-		public WebColor BackColor { get; set; }
-
-		[Parameter]
-		public WebColor BorderColor { get; set; }
-
-		[Parameter]
-		public BorderStyle BorderStyle { get; set; }
-
-		[Parameter]
-		public Unit BorderWidth { get; set; }
-
-		[Parameter]
-		public string CssClass { get; set; }
-
-		[Parameter]
-		public FontInfo Font { get; set; } = new FontInfo();
-
-		[Parameter]
-		public WebColor ForeColor { get; set; }
-
-		[Parameter]
-		public Unit Height { get; set; }
-
-		[Parameter]
-		public Unit Width { get; set; }
-
-		protected string Style => this.ToStyle().NullIfEmpty();
 
 		private async Task HandleChange(ListItem item, ChangeEventArgs e)
 		{

@@ -2,12 +2,17 @@
 
 @if (Visible)
 {
-	<span id="@ClientID" class="@GetCssClassOrNull()" style="@Style">@Text</span>
+	<span id="@ClientID" class="@GetCssClassOrNull()" style="@Style" accesskey="@GetAccessKeyOrNull()">@Text</span>
 }
 
 @code {
 	private string GetCssClassOrNull()
 	{
 		return !string.IsNullOrEmpty(CssClass) ? CssClass : null;
+	}
+
+	private string GetAccessKeyOrNull()
+	{
+		return !string.IsNullOrEmpty(AccessKey) ? AccessKey : null;
 	}
 }
