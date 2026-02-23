@@ -111,7 +111,7 @@ namespace BlazorWebFormsComponents.Validations
 			{
 				IsValid = false;
 				// Text is for validator, ErrorMessage is for validation summary
-				_messageStore.Add(fieldIdentifier, Text + "," + ErrorMessage);
+				_messageStore.Add(fieldIdentifier, Text + "," + ErrorMessage + "\x1F" + (ValidationGroup ?? ""));
 
 				if (SetFocusOnError)
 				{
