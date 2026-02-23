@@ -14,6 +14,16 @@ namespace BlazorWebFormsComponents
 		public string DataField { get; set; }
 
 		/// <summary>
+		/// Gets or sets the sort expression for this column. Defaults to DataField if not set.
+		/// </summary>
+		[Parameter]
+		public override string SortExpression
+		{
+			get => base.SortExpression ?? DataField;
+			set => base.SortExpression = value;
+		}
+
+		/// <summary>
 		/// Specifies which string format should be used.
 		/// </summary>
 		[Parameter]

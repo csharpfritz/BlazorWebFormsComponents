@@ -13,6 +13,11 @@ namespace BlazorWebFormsComponents.Interfaces
 		string HeaderText { get; set; }
 
 		/// <summary>
+		/// The sort expression for the column
+		/// </summary>
+		string SortExpression { get; set; }
+
+		/// <summary>
 		/// The parent IColumnCollection where the IColumn resides
 		/// </summary>
 		IColumnCollection<ItemType> ParentColumnsCollection { get; set; }

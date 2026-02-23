@@ -10,7 +10,14 @@
 			<tr>
 				@foreach (IColumn<ItemType> column in ColumnList)
 				{
-					<th>@column.HeaderText</th>
+					@if (AllowSorting && !string.IsNullOrEmpty(column.SortExpression))
+					{
+						<th><a href="javascript:void(0);" @onclick="@(() => Sort(column.SortExpression))" @onclick:preventDefault>@column.HeaderText</a></th>
+					}
+					else
+					{
+						<th>@column.HeaderText</th>
+					}
 				}
 			</tr>
 		</thead>

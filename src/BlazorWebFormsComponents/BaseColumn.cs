@@ -12,6 +12,8 @@ namespace BlazorWebFormsComponents
 		///<inheritdoc/>
 		[Parameter] public string HeaderText { get; set; }
 
+		[Parameter] public virtual string SortExpression { get; set; }
+
 		public void Dispose()
 		{
 			ParentColumnsCollection.RemoveColumn(this);

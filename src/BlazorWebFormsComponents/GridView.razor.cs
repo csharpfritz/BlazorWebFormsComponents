@@ -1,7 +1,9 @@
 ﻿using BlazorWebFormsComponents.DataBinding;
+using BlazorWebFormsComponents.Enums;
 using BlazorWebFormsComponents.Interfaces;
 using Microsoft.AspNetCore.Components;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace BlazorWebFormsComponents
 {
@@ -26,6 +28,31 @@ namespace BlazorWebFormsComponents
 		/// Not supported yet
 		/// </summary>
 		[Parameter] public string DataKeyNames { get; set; }
+
+		/// <summary>
+		/// Enables or disables sorting for the GridView
+		/// </summary>
+		[Parameter] public bool AllowSorting { get; set; }
+
+		/// <summary>
+		/// The current sort direction
+		/// </summary>
+		[Parameter] public SortDirection SortDirection { get; set; } = SortDirection.Ascending;
+
+		/// <summary>
+		/// The current sort expression (column name)
+		/// </summary>
+		[Parameter] public string SortExpression { get; set; }
+
+		/// <summary>
+		/// Fires before sort is applied. Can be cancelled.
+		/// </summary>
+		[Parameter] public EventCallback<GridViewSortEventArgs> Sorting { get; set; }
+
+		/// <summary>
+		/// Fires after sort is applied
+		/// </summary>
+		[Parameter] public EventCallback<GridViewSortEventArgs> Sorted { get; set; }
 
 		///<inheritdoc/>
 		public List<IColumn<ItemType>> ColumnList { get; set; } = new List<IColumn<ItemType>>();
@@ -60,6 +87,25 @@ namespace BlazorWebFormsComponents
 
 		[Parameter]
 		public EventCallback<GridViewCommandEventArgs> OnRowCommand { get; set; }
+
+		/// <summary>
+		/// Initiates a sort operation for the specified sort expression
+		/// </summary>
+		internal async Task Sort(string sortExpression)
+		{
+			var newDirection = (sortExpression == SortExpression && SortDirection == SortDirection.Ascending)
+				? SortDirection.Descending
+				: SortDirection.Ascending;
+
+			var args = new GridViewSortEventArgs(sortExpression, newDirection);
+			await Sorting.InvokeAsync(args);
+			if (args.Cancel) return;
+
+			SortExpression = args.SortExpression;
+			SortDirection = args.SortDirection;
+			await Sorted.InvokeAsync(args);
+			StateHasChanged();
+		}
 
 		///<inheritdoc/>
 		public void AddColumn(IColumn<ItemType> column)
