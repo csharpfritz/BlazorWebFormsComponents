@@ -22,5 +22,10 @@ namespace BlazorWebFormsComponents.Interfaces
 		/// </summary>
 		IColumnCollection<ItemType> ParentColumnsCollection { get; set; }
 		RenderFragment Render(ItemType item);
+
+		/// <summary>
+		/// Renders the column in edit mode. Falls back to Render if not overridden.
+		/// </summary>
+		RenderFragment RenderEdit(ItemType item);
 	}
 }

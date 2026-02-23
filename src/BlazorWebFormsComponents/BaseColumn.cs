@@ -21,6 +21,11 @@ namespace BlazorWebFormsComponents
 
 		public abstract RenderFragment Render(ItemType item);
 
+		/// <summary>
+		/// Renders the column in edit mode. By default falls back to the normal Render method.
+		/// </summary>
+		public virtual RenderFragment RenderEdit(ItemType item) => Render(item);
+
 		///<inheritdoc/>
 		protected override void OnInitialized()
 		{
