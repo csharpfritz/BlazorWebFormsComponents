@@ -2023,3 +2023,13 @@ These components are documented and tested, but lack sample pages. Per team deci
 - Element null check at lines 19-21: `if (!this.element) { return; }`
 - Prevents unhandled JS exceptions from crashing the Blazor circuit
 - Appropriate defensive programming for JS interop scenarios
+
+### 2026-02-24: Upstream promotion flow
+**By:** Jeffrey T. Fritz (via Copilot)
+**What:** All content built locally should follow this promotion flow:
+1. Work on a feature branch locally
+2. Push feature branch to personal repository (csharpfritz/BlazorWebFormsComponents)
+3. PR from personal repo feature branch to upstream dev (FritzAndFriends/BlazorWebFormsComponents:dev)
+4. After merge of PR into upstream/dev, pull upstream/dev locally and push to personal repo's dev branch
+5. A release is a PR from upstream/dev to upstream/main, with a version tag attached
+**Why:** User request  establishes the canonical git promotion and release workflow for the team

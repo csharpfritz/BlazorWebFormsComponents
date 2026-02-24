@@ -64,3 +64,5 @@
  Team update (2026-02-24): PagerSettings shared sub-component created  update docs when component stabilizes  decided by Cyclops
 
  Team update (2026-02-24): v0.14 released  Forge audit: conditional ship, 6 missing sample pages and PagerSettings defaults noted for 1.0  decided by Forge
+
+ Team update (2026-02-24): Upstream promotion flow directive  all work goes feature branch  personal fork  PR to upstream/dev  pull/push dev sync  release PR upstream/dev  upstream/main with tag  decided by Jeffrey T. Fritz
