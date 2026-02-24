@@ -42,3 +42,5 @@ Chart: 8 basic + 4 advanced sample pages (DataBinding, MultiSeries, Styling, Cha
  Team update (2026-02-24): Menu auto-ID pattern  Menu now auto-generates IDs for JS interop  decided by Cyclops
  Team update (2026-02-24): M8 scope excludes version bump to 1.0 and release  decided by Jeffrey T. Fritz
  Team update (2026-02-24): PagerSettings shared sub-component created  samples may need PagerSettings demos  decided by Cyclops
+
+ Team update (2026-02-24): v0.14 released  Forge audit: conditional ship, 6 missing sample pages and PagerSettings defaults noted for 1.0  decided by Forge

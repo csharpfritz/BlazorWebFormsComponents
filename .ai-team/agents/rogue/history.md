@@ -91,3 +91,5 @@ Wrote 41 bUnit tests across 6 new test files for P2 features:
 
  Team update (2026-02-24): M8 scope excludes version bump to 1.0 and release  decided by Jeffrey T. Fritz
  Team update (2026-02-24): PagerSettings shared sub-component created  may need bUnit tests  decided by Cyclops
+
+ Team update (2026-02-24): v0.14 released  Forge audit: conditional ship, 6 missing sample pages and PagerSettings defaults noted for 1.0  decided by Forge

@@ -89,3 +89,5 @@ Planned M7: "Control Depth & Navigation Overhaul" — 51 work items targeting ~1
  Team update (2026-02-24): Substitution/Xml formally deferred in status.md and README  decided by Beast
  Team update (2026-02-24): M8 scope excludes version bump to 1.0 and release  decided by Jeffrey T. Fritz
  Team update (2026-02-24): PagerSettings shared sub-component created for GridView/FormView/DetailsView  decided by Cyclops
+
+ Team update (2026-02-24): v0.14 released  Forge audit: conditional ship, 6 missing sample pages and PagerSettings defaults noted for 1.0  decided by Forge
