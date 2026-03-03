@@ -22,5 +22,10 @@ namespace BlazorWebFormsComponents
 		/// Gets the maximum number of items to display on each page.
 		/// </summary>
 		public int MaximumRows { get; }
+
+		/// <summary>
+		/// Gets or sets the total number of rows in the underlying data source.
+		/// </summary>
+		public int TotalRowCount { get; set; }
 	}
 }

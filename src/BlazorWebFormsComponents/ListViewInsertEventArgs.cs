@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Specialized;
 
 namespace BlazorWebFormsComponents
 {
@@ -9,6 +10,7 @@ namespace BlazorWebFormsComponents
 	{
 		public ListViewInsertEventArgs()
 		{
+			Values = new OrderedDictionary();
 		}
 
 		/// <summary>
@@ -20,5 +22,10 @@ namespace BlazorWebFormsComponents
 		/// Gets the item to be inserted.
 		/// </summary>
 		public object Item { get; set; }
+
+		/// <summary>
+		/// Gets the values for the record to insert.
+		/// </summary>
+		public IOrderedDictionary Values { get; }
 	}
 }
