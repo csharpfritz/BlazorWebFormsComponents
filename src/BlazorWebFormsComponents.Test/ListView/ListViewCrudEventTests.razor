@@ -1,0 +1,953 @@
+@using BlazorWebFormsComponents.Enums
+@using SortDirection = BlazorWebFormsComponents.Enums.SortDirection
+
+@* Comprehensive tests for all 16 ListView CRUD events (#356).
+   Covers: event firing, EventArgs data, Cancel property, event ordering,
+   HandleCommand routing, and edge cases. *@
+
+@code {
+
+	ListView<Widget> theListView;
+
+	// ── Event tracking ──
+	List<string> _eventOrder = new();
+	ListViewEditEventArgs _editingArgs;
+	ListViewCancelEventArgs _cancelingArgs;
+	ListViewDeleteEventArgs _deletingArgs;
+	ListViewDeletedEventArgs _deletedArgs;
+	ListViewInsertEventArgs _insertingArgs;
+	ListViewInsertedEventArgs _insertedArgs;
+	ListViewUpdateEventArgs _updatingArgs;
+	ListViewUpdatedEventArgs _updatedArgs;
+	ListViewCommandEventArgs _commandArgs;
+	ListViewSortEventArgs _sortingArgs;
+	ListViewSortEventArgs _sortedArgs;
+	ListViewSelectEventArgs _selectingArgs;
+	ListViewPagePropertiesChangingEventArgs _pageChangingArgs;
+	bool _pageChangedFired;
+	bool _selectedChangedFired;
+	bool _layoutCreatedFired;
+	bool _itemCreatedFired;
+	int _dataBoundCount;
+	int _itemDataBoundCount;
+
+	// ═════════════════════════════════════════════════════════════════
+	// INSERT: ItemInserting / ItemInserted
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_Insert_FiresItemInsertingBeforeItemInserted()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemInserting="OnInsertingTrackOrder"
+						ItemInserted="OnInsertedTrackOrder"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Insert", null, 0));
+
+		_eventOrder.Count.ShouldBe(2);
+		_eventOrder[0].ShouldBe("ItemInserting");
+		_eventOrder[1].ShouldBe("ItemInserted");
+	}
+
+	[Fact]
+	public void HandleCommand_Insert_Cancellation_PreventsItemInserted()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemInserting="OnInsertingCancel"
+						ItemInserted="OnInserted"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Insert", null, 0));
+
+		_insertingArgs.ShouldNotBeNull();
+		_insertingArgs.Cancel.ShouldBeTrue();
+		_insertedArgs.ShouldBeNull();
+	}
+
+	[Fact]
+	public void HandleCommand_Insert_InsertedArgs_HasAffectedRows()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemInserted="OnInserted"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Insert", null, 0));
+
+		_insertedArgs.ShouldNotBeNull();
+		_insertedArgs.AffectedRows.ShouldBe(1);
+		_insertedArgs.Exception.ShouldBeNull();
+		_insertedArgs.ExceptionHandled.ShouldBeFalse();
+		_insertedArgs.KeepInsertedValues.ShouldBeFalse();
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// UPDATE: ItemUpdating / ItemUpdated
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_Update_FiresItemUpdatingBeforeItemUpdated()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemUpdating="OnUpdatingTrackOrder"
+						ItemUpdated="OnUpdatedTrackOrder"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Update", null, 1));
+
+		_eventOrder.Count.ShouldBe(2);
+		_eventOrder[0].ShouldBe("ItemUpdating");
+		_eventOrder[1].ShouldBe("ItemUpdated");
+	}
+
+	[Fact]
+	public void HandleCommand_Update_Cancellation_PreventsItemUpdated()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemUpdating="OnUpdatingCancel"
+						ItemUpdated="OnUpdated"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Update", null, 1));
+
+		_updatingArgs.ShouldNotBeNull();
+		_updatingArgs.Cancel.ShouldBeTrue();
+		_updatedArgs.ShouldBeNull();
+	}
+
+	[Fact]
+	public void HandleCommand_Update_UpdatedArgs_HasAffectedRows()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemUpdated="OnUpdated"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Update", null, 0));
+
+		_updatedArgs.ShouldNotBeNull();
+		_updatedArgs.AffectedRows.ShouldBe(1);
+		_updatedArgs.Exception.ShouldBeNull();
+		_updatedArgs.ExceptionHandled.ShouldBeFalse();
+	}
+
+	[Fact]
+	public void HandleCommand_Update_KeepInEditMode_PreservesEditIndex()
+	{
+		int editIdx = 2;
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						EditIndex="editIdx"
+						ItemUpdated="OnUpdatedKeepEditMode"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<EditItemTemplate><input value="@Item.Name" /></EditItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Update", null, 2));
+
+		_updatedArgs.ShouldNotBeNull();
+		_updatedArgs.KeepInEditMode.ShouldBeTrue();
+		// EditIndex should remain at 2 since KeepInEditMode was set
+		theListView.EditIndex.ShouldNotBe(-1);
+	}
+
+	[Fact]
+	public void HandleCommand_Update_DefaultKeepInEditMode_ClearsEditIndex()
+	{
+		int editIdx = 1;
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						EditIndex="editIdx"
+						ItemUpdated="OnUpdated"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<EditItemTemplate><input value="@Item.Name" /></EditItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Update", null, 1));
+
+		theListView.EditIndex.ShouldBe(-1);
+	}
+
+	[Fact]
+	public void HandleCommand_Update_EventArgsContainItemIndex()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemUpdating="OnUpdating"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Update", null, 3));
+
+		_updatingArgs.ShouldNotBeNull();
+		_updatingArgs.ItemIndex.ShouldBe(3);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// DELETE: ItemDeleting / ItemDeleted
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_Delete_FiresItemDeletingBeforeItemDeleted()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemDeleting="OnDeletingTrackOrder"
+						ItemDeleted="OnDeletedTrackOrder"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Delete", null, 0));
+
+		_eventOrder.Count.ShouldBe(2);
+		_eventOrder[0].ShouldBe("ItemDeleting");
+		_eventOrder[1].ShouldBe("ItemDeleted");
+	}
+
+	[Fact]
+	public void HandleCommand_Delete_Cancellation_PreventsItemDeleted()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemDeleting="OnDeletingCancel"
+						ItemDeleted="OnDeleted"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Delete", null, 0));
+
+		_deletingArgs.ShouldNotBeNull();
+		_deletingArgs.Cancel.ShouldBeTrue();
+		_deletedArgs.ShouldBeNull();
+	}
+
+	[Fact]
+	public void HandleCommand_Delete_EventArgsContainItemIndex()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemDeleting="OnDeleting"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Delete", null, 4));
+
+		_deletingArgs.ShouldNotBeNull();
+		_deletingArgs.ItemIndex.ShouldBe(4);
+	}
+
+	[Fact]
+	public void HandleCommand_Delete_DeletedArgs_HasAffectedRowsAndNoException()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemDeleted="OnDeleted"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Delete", null, 0));
+
+		_deletedArgs.ShouldNotBeNull();
+		_deletedArgs.AffectedRows.ShouldBe(1);
+		_deletedArgs.Exception.ShouldBeNull();
+		_deletedArgs.ExceptionHandled.ShouldBeFalse();
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// EDIT: ItemEditing
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_Edit_EventArgsContainNewEditIndex()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemEditing="OnEditing"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Edit", null, 3));
+
+		_editingArgs.ShouldNotBeNull();
+		_editingArgs.NewEditIndex.ShouldBe(3);
+		_editingArgs.Cancel.ShouldBeFalse();
+		theListView.EditIndex.ShouldBe(3);
+	}
+
+	[Fact]
+	public void HandleCommand_Edit_ModifiedNewEditIndex_UsesModifiedValue()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemEditing="OnEditingModifyIndex"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<EditItemTemplate><input value="@Item.Name" /></EditItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Edit", null, 1));
+
+		// Handler modified NewEditIndex to 4
+		theListView.EditIndex.ShouldBe(4);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// CANCEL: ItemCanceling
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_Cancel_InEditMode_SetsCancelModeToEdit()
+	{
+		int editIdx = 1;
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						EditIndex="editIdx"
+						ItemCanceling="OnCanceling"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<EditItemTemplate><input value="@Item.Name" /></EditItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Cancel", null, 1));
+
+		_cancelingArgs.ShouldNotBeNull();
+		_cancelingArgs.CancelMode.ShouldBe(ListViewCancelMode.CancelingEdit);
+		_cancelingArgs.ItemIndex.ShouldBe(1);
+		theListView.EditIndex.ShouldBe(-1);
+	}
+
+	[Fact]
+	public void HandleCommand_Cancel_InInsertMode_SetsCancelModeToInsert()
+	{
+		InsertItemPosition pos = InsertItemPosition.FirstItem;
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						InsertItemPosition="pos"
+						ItemCanceling="OnCanceling"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<InsertItemTemplate><div>Insert</div></InsertItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Cancel", null, 0));
+
+		_cancelingArgs.ShouldNotBeNull();
+		_cancelingArgs.CancelMode.ShouldBe(ListViewCancelMode.CancelingInsert);
+	}
+
+	[Fact]
+	public void HandleCommand_Cancel_Cancellation_PreventsEditIndexReset()
+	{
+		int editIdx = 2;
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						EditIndex="editIdx"
+						ItemCanceling="OnCancelingCancel"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<EditItemTemplate><input value="@Item.Name" /></EditItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Cancel", null, 2));
+
+		_cancelingArgs.ShouldNotBeNull();
+		_cancelingArgs.Cancel.ShouldBeTrue();
+		// EditIndex should remain since the cancel was vetoed
+		theListView.EditIndex.ShouldNotBe(-1);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// SORTING: Sorting / Sorted
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_Sort_FiresSortingBeforeSorted()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						Sorting="OnSortingTrackOrder"
+						Sorted="OnSortedTrackOrder"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Sort", "Name", 0));
+
+		_eventOrder.Count.ShouldBe(2);
+		_eventOrder[0].ShouldBe("Sorting");
+		_eventOrder[1].ShouldBe("Sorted");
+	}
+
+	[Fact]
+	public void HandleCommand_Sort_Cancellation_PreventsSortedAndPropertyUpdate()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						Sorting="OnSortingCancel"
+						Sorted="OnSorted"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Sort", "Name", 0));
+
+		_sortingArgs.ShouldNotBeNull();
+		_sortingArgs.Cancel.ShouldBeTrue();
+		_sortedArgs.ShouldBeNull();
+		theListView.SortExpression.ShouldBeNull();
+	}
+
+	[Fact]
+	public void HandleCommand_Sort_NewExpression_DefaultsToAscending()
+	{
+		SortDirection dir = SortDirection.Ascending;
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						SortExpression="Name"
+						SortDirection="dir"
+						Sorting="OnSorting"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		// Sort by a DIFFERENT expression
+		cut.InvokeAsync(() => theListView.HandleCommand("Sort", "Price", 0));
+
+		_sortingArgs.ShouldNotBeNull();
+		_sortingArgs.SortExpression.ShouldBe("Price");
+		_sortingArgs.SortDirection.ShouldBe(SortDirection.Ascending);
+		theListView.SortExpression.ShouldBe("Price");
+	}
+
+	[Fact]
+	public void HandleCommand_Sort_SameExpression_TogglesDirection()
+	{
+		SortDirection dir = SortDirection.Ascending;
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						SortExpression="Name"
+						SortDirection="dir"
+						Sorting="OnSorting"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Sort", "Name", 0));
+
+		_sortingArgs.SortDirection.ShouldBe(SortDirection.Descending);
+		theListView.SortDirection.ShouldBe(SortDirection.Descending);
+	}
+
+	[Fact]
+	public void HandleCommand_Sort_SortedArgs_MatchSortingArgs()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						Sorting="OnSorting"
+						Sorted="OnSorted"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Sort", "Name", 0));
+
+		// Both events receive the same args instance
+		_sortingArgs.ShouldNotBeNull();
+		_sortedArgs.ShouldNotBeNull();
+		_sortedArgs.SortExpression.ShouldBe(_sortingArgs.SortExpression);
+		_sortedArgs.SortDirection.ShouldBe(_sortingArgs.SortDirection);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// PAGING: PagePropertiesChanging / PagePropertiesChanged
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void SetPageProperties_FiresChangingBeforeChanged()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						PagePropertiesChanging="OnPageChangingTrackOrder"
+						PagePropertiesChanged="OnPageChangedTrackOrder"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.SetPageProperties(10, 5));
+
+		_eventOrder.Count.ShouldBe(2);
+		_eventOrder[0].ShouldBe("PagePropertiesChanging");
+		_eventOrder[1].ShouldBe("PagePropertiesChanged");
+	}
+
+	[Fact]
+	public void SetPageProperties_EventArgsContainCorrectValues()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						PagePropertiesChanging="OnPageChanging"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.SetPageProperties(20, 10));
+
+		_pageChangingArgs.ShouldNotBeNull();
+		_pageChangingArgs.StartRowIndex.ShouldBe(20);
+		_pageChangingArgs.MaximumRows.ShouldBe(10);
+		theListView.StartRowIndex.ShouldBe(20);
+		theListView.MaximumRows.ShouldBe(10);
+	}
+
+	[Fact]
+	public void SetPageProperties_ZeroValues_Accepted()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						PagePropertiesChanging="OnPageChanging"
+						PagePropertiesChanged="OnPageChanged"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.SetPageProperties(0, 0));
+
+		_pageChangingArgs.ShouldNotBeNull();
+		_pageChangingArgs.StartRowIndex.ShouldBe(0);
+		_pageChangingArgs.MaximumRows.ShouldBe(0);
+		_pageChangedFired.ShouldBeTrue();
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// SELECTION: SelectedIndexChanging / SelectedIndexChanged
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_Select_FiresChangingBeforeChanged()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						SelectedIndexChanging="OnSelectingTrackOrder"
+						SelectedIndexChanged="OnSelectedTrackOrder"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Select", null, 1));
+
+		_eventOrder.Count.ShouldBe(2);
+		_eventOrder[0].ShouldBe("SelectedIndexChanging");
+		_eventOrder[1].ShouldBe("SelectedIndexChanged");
+	}
+
+	[Fact]
+	public void HandleCommand_Select_Cancellation_PreventsSelectedIndexChanged()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						SelectedIndexChanging="OnSelectingCancel"
+						SelectedIndexChanged="OnSelectedChanged"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Select", null, 2));
+
+		_selectingArgs.ShouldNotBeNull();
+		_selectingArgs.Cancel.ShouldBeTrue();
+		_selectedChangedFired.ShouldBeFalse();
+		theListView.SelectedIndex.ShouldBe(0);
+	}
+
+	[Fact]
+	public void HandleCommand_Select_ModifiedIndex_UsesModifiedNewSelectedIndex()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						SelectedIndexChanging="OnSelectingModifyIndex"
+						SelectedIndexChanged="OnSelectedChanged"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Select", null, 1));
+
+		// Handler set NewSelectedIndex to 99
+		theListView.SelectedIndex.ShouldBe(99);
+		_selectedChangedFired.ShouldBeTrue();
+	}
+
+	[Fact]
+	public void HandleCommand_Select_EventArgsContainRequestedIndex()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						SelectedIndexChanging="OnSelecting"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Select", null, 3));
+
+		_selectingArgs.ShouldNotBeNull();
+		_selectingArgs.NewSelectedIndex.ShouldBe(3);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// LAYOUT CREATED
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void LayoutCreated_FiresWhenItemsExist()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						OnLayoutCreated="OnLayoutCreated"
+						Context="Item">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		_layoutCreatedFired.ShouldBeTrue();
+	}
+
+	[Fact]
+	public void LayoutCreated_DoesNotFireWhenItemsEmpty()
+	{
+		Widget[] emptyItems = Array.Empty<Widget>();
+		var cut = Render(@<ListView Items="emptyItems"
+						ItemType="Widget"
+						OnLayoutCreated="OnLayoutCreated"
+						Context="Item">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<EmptyItemTemplate><div>No data</div></EmptyItemTemplate>
+		</ListView>);
+
+		_layoutCreatedFired.ShouldBeFalse();
+	}
+
+	[Fact]
+	public void LayoutCreated_FiresWithCustomLayoutTemplate()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						OnLayoutCreated="OnLayoutCreated"
+						Context="Item">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<LayoutTemplate Context="itemPlaceholder">
+				<div class="custom-layout">@itemPlaceholder</div>
+			</LayoutTemplate>
+		</ListView>);
+
+		_layoutCreatedFired.ShouldBeTrue();
+		cut.FindAll("div.custom-layout").Count.ShouldBe(1);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// ITEM CREATED
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public async Task ItemCreated_FiresOnFirstRender()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemCreated="OnItemCreated"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		// ItemCreated fires in OnAfterRenderAsync(firstRender: true)
+		// Trigger a render cycle to ensure the event fires
+		await cut.InvokeAsync(() => { });
+
+		_itemCreatedFired.ShouldBeTrue();
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// DATA BOUND (override)
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void DataBound_FiresAfterAllItemsRendered()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						OnDataBound="OnDataBound"
+						OnItemDataBound="OnItemDataBound"
+						Context="Item">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		_dataBoundCount.ShouldBeGreaterThan(0);
+		_itemDataBoundCount.ShouldBeGreaterThanOrEqualTo(Widget.SimpleWidgetList.Length);
+	}
+
+	[Fact]
+	public void DataBound_ItemDataBound_FiresPerItem()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						OnItemDataBound="OnItemDataBound"
+						Context="Item">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		// bUnit may trigger multiple render cycles; ensure at least one fire per item
+		_itemDataBoundCount.ShouldBeGreaterThanOrEqualTo(Widget.SimpleWidgetList.Length);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// COMMAND ROUTING: HandleCommand dispatches to correct event
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_UnknownCommand_FiresItemCommandWithArgs()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemCommand="OnCommand"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Approve", "request-42", 0));
+
+		_commandArgs.ShouldNotBeNull();
+		_commandArgs.CommandName.ShouldBe("Approve");
+		_commandArgs.CommandArgument.ShouldBe("request-42");
+	}
+
+	[Fact]
+	public void HandleCommand_CaseInsensitive_RoutesCorrectly()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemEditing="OnEditing"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("EDIT", null, 0));
+
+		_editingArgs.ShouldNotBeNull();
+		_editingArgs.NewEditIndex.ShouldBe(0);
+	}
+
+	[Fact]
+	public void HandleCommand_Sort_PassesCommandArgumentAsSortExpression()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						Sorting="OnSorting"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Sort", "Price", 0));
+
+		_sortingArgs.ShouldNotBeNull();
+		_sortingArgs.SortExpression.ShouldBe("Price");
+	}
+
+	[Fact]
+	public void HandleCommand_Sort_NullArgument_UsesEmptyString()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						Sorting="OnSorting"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Sort", null, 0));
+
+		_sortingArgs.ShouldNotBeNull();
+		_sortingArgs.SortExpression.ShouldBe(string.Empty);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// EDGE CASES
+	// ═════════════════════════════════════════════════════════════════
+
+	[Fact]
+	public void HandleCommand_Delete_ThenInsert_BothEventPairsFire()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemDeleting="OnDeleting"
+						ItemDeleted="OnDeleted"
+						ItemInserting="OnInserting"
+						ItemInserted="OnInserted"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+		</ListView>);
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Delete", null, 0));
+		_deletingArgs.ShouldNotBeNull();
+		_deletedArgs.ShouldNotBeNull();
+
+		cut.InvokeAsync(() => theListView.HandleCommand("Insert", null, 0));
+		_insertingArgs.ShouldNotBeNull();
+		_insertedArgs.ShouldNotBeNull();
+	}
+
+	[Fact]
+	public void HandleCommand_Edit_ThenUpdate_FullCrudCycle()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemEditing="OnEditing"
+						ItemUpdating="OnUpdating"
+						ItemUpdated="OnUpdated"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<EditItemTemplate><input value="@Item.Name" /></EditItemTemplate>
+		</ListView>);
+
+		// Edit item 1
+		cut.InvokeAsync(() => theListView.HandleCommand("Edit", null, 1));
+		theListView.EditIndex.ShouldBe(1);
+
+		// Update item 1
+		cut.InvokeAsync(() => theListView.HandleCommand("Update", null, 1));
+		theListView.EditIndex.ShouldBe(-1);
+		_updatedArgs.ShouldNotBeNull();
+	}
+
+	[Fact]
+	public void HandleCommand_Edit_ThenCancel_FullCrudCycle()
+	{
+		var cut = Render(@<ListView Items="Widget.SimpleWidgetList"
+						ItemType="Widget"
+						ItemEditing="OnEditing"
+						ItemCanceling="OnCanceling"
+						Context="Item"
+						@ref="theListView">
+			<ItemTemplate><span>@Item.Name</span></ItemTemplate>
+			<EditItemTemplate><input value="@Item.Name" /></EditItemTemplate>
+		</ListView>);
+
+		// Edit item 2
+		cut.InvokeAsync(() => theListView.HandleCommand("Edit", null, 2));
+		theListView.EditIndex.ShouldBe(2);
+
+		// Cancel
+		cut.InvokeAsync(() => theListView.HandleCommand("Cancel", null, 2));
+		theListView.EditIndex.ShouldBe(-1);
+		_cancelingArgs.CancelMode.ShouldBe(ListViewCancelMode.CancelingEdit);
+	}
+
+	// ═════════════════════════════════════════════════════════════════
+	// Event Handlers
+	// ═════════════════════════════════════════════════════════════════
+
+	// Order-tracking handlers
+	void OnInsertingTrackOrder(ListViewInsertEventArgs args) { _insertingArgs = args; _eventOrder.Add("ItemInserting"); }
+	void OnInsertedTrackOrder(ListViewInsertedEventArgs args) { _insertedArgs = args; _eventOrder.Add("ItemInserted"); }
+	void OnUpdatingTrackOrder(ListViewUpdateEventArgs args) { _updatingArgs = args; _eventOrder.Add("ItemUpdating"); }
+	void OnUpdatedTrackOrder(ListViewUpdatedEventArgs args) { _updatedArgs = args; _eventOrder.Add("ItemUpdated"); }
+	void OnDeletingTrackOrder(ListViewDeleteEventArgs args) { _deletingArgs = args; _eventOrder.Add("ItemDeleting"); }
+	void OnDeletedTrackOrder(ListViewDeletedEventArgs args) { _deletedArgs = args; _eventOrder.Add("ItemDeleted"); }
+	void OnSortingTrackOrder(ListViewSortEventArgs args) { _sortingArgs = args; _eventOrder.Add("Sorting"); }
+	void OnSortedTrackOrder(ListViewSortEventArgs args) { _sortedArgs = args; _eventOrder.Add("Sorted"); }
+	void OnSelectingTrackOrder(ListViewSelectEventArgs args) { _selectingArgs = args; _eventOrder.Add("SelectedIndexChanging"); }
+	void OnSelectedTrackOrder(EventArgs args) { _selectedChangedFired = true; _eventOrder.Add("SelectedIndexChanged"); }
+	void OnPageChangingTrackOrder(ListViewPagePropertiesChangingEventArgs args) { _pageChangingArgs = args; _eventOrder.Add("PagePropertiesChanging"); }
+	void OnPageChangedTrackOrder(EventArgs args) { _pageChangedFired = true; _eventOrder.Add("PagePropertiesChanged"); }
+
+	// Cancellation handlers
+	void OnInsertingCancel(ListViewInsertEventArgs args) { _insertingArgs = args; args.Cancel = true; }
+	void OnUpdatingCancel(ListViewUpdateEventArgs args) { _updatingArgs = args; args.Cancel = true; }
+	void OnDeletingCancel(ListViewDeleteEventArgs args) { _deletingArgs = args; args.Cancel = true; }
+	void OnCancelingCancel(ListViewCancelEventArgs args) { _cancelingArgs = args; args.Cancel = true; }
+	void OnSortingCancel(ListViewSortEventArgs args) { _sortingArgs = args; args.Cancel = true; }
+	void OnSelectingCancel(ListViewSelectEventArgs args) { _selectingArgs = args; args.Cancel = true; }
+
+	// Simple capture handlers
+	void OnEditing(ListViewEditEventArgs args) => _editingArgs = args;
+	void OnCanceling(ListViewCancelEventArgs args) => _cancelingArgs = args;
+	void OnDeleting(ListViewDeleteEventArgs args) => _deletingArgs = args;
+	void OnDeleted(ListViewDeletedEventArgs args) => _deletedArgs = args;
+	void OnInserting(ListViewInsertEventArgs args) => _insertingArgs = args;
+	void OnInserted(ListViewInsertedEventArgs args) => _insertedArgs = args;
+	void OnUpdating(ListViewUpdateEventArgs args) => _updatingArgs = args;
+	void OnUpdated(ListViewUpdatedEventArgs args) => _updatedArgs = args;
+	void OnCommand(ListViewCommandEventArgs args) => _commandArgs = args;
+	void OnSorting(ListViewSortEventArgs args) => _sortingArgs = args;
+	void OnSorted(ListViewSortEventArgs args) => _sortedArgs = args;
+	void OnSelecting(ListViewSelectEventArgs args) => _selectingArgs = args;
+	void OnSelectedChanged(EventArgs args) => _selectedChangedFired = true;
+	void OnPageChanging(ListViewPagePropertiesChangingEventArgs args) => _pageChangingArgs = args;
+	void OnPageChanged(EventArgs args) => _pageChangedFired = true;
+	void OnLayoutCreated(EventArgs args) => _layoutCreatedFired = true;
+	void OnItemCreated() => _itemCreatedFired = true;
+	void OnDataBound(EventArgs args) => _dataBoundCount++;
+	void OnItemDataBound(ListViewItemEventArgs args) => _itemDataBoundCount++;
+
+	// Modifier handlers
+	void OnEditingModifyIndex(ListViewEditEventArgs args) { _editingArgs = args; args.NewEditIndex = 4; }
+	void OnUpdatedKeepEditMode(ListViewUpdatedEventArgs args) { _updatedArgs = args; args.KeepInEditMode = true; }
+	void OnSelectingModifyIndex(ListViewSelectEventArgs args) { _selectingArgs = args; args.NewSelectedIndex = 99; }
+}
