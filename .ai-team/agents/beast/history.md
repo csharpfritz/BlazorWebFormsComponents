@@ -94,3 +94,18 @@
   - Structured for non-technical readers: bottom-line callout, business value lead, tables for data, minimal jargon
   - Sections: What is BWFC, Migration Scope, Component Coverage, Three-Layer Pipeline, Time & Cost Impact, Layer 1 Results, Page Readiness, Risk Reduction, What's Next
 
+- **Issue #356 — ListView CRUD Events documentation:**
+  - Updated `docs/DataControls/ListView.md` with comprehensive CRUD events section covering all 16 lifecycle events.
+  - Events organized into 7 sub-sections: Insert, Update, Delete, Edit/Cancel, Sorting, Paging, Selection, and Lifecycle.
+  - Each event sub-section includes: EventArgs property reference table, Web Forms → Blazor tabbed comparison (using `pymdownx.tabbed`), and practical code examples.
+  - EventArgs types documented from source: `ListViewInsertEventArgs`, `ListViewInsertedEventArgs`, `ListViewUpdateEventArgs`, `ListViewUpdatedEventArgs`, `ListViewDeleteEventArgs`, `ListViewDeletedEventArgs`, `ListViewEditEventArgs`, `ListViewCancelEventArgs`, `ListViewSortEventArgs`, `ListViewPagePropertiesChangingEventArgs`, `ListViewSelectEventArgs`, `ListViewItemEventArgs`.
+  - Added `ListViewCancelMode` enum documentation (`CancelingEdit`, `CancelingInsert`).
+  - Updated Features Supported section with full event listing grouped by category.
+  - Updated Blazor Syntax block to show all 16 event parameters.
+  - Added complete CRUD example demonstrating insert/update/delete workflow with all events wired up.
+  - Added See Also section with cross-references to FormView, DetailsView, GridView, DataPager, and Microsoft Docs.
+  - Used admonitions (`!!! tip`, `!!! note`) for command routing, automatic EditIndex management, sort direction toggle, and paging via SetPageProperties.
+  - **Key file:** `docs/DataControls/ListView.md` (grew from ~285 lines to ~840 lines).
+  - **Pattern used:** Tabbed Web Forms → Blazor comparison (pymdownx.tabbed), property reference tables, grouped event sub-sections. Follows FormView CRUD events documentation pattern.
+  - **Branch:** `squad/356-listview-crud-events`
+
