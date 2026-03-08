@@ -248,3 +248,24 @@ Added `Convert-TemplatePlaceholders` function in new `#region --- Template Place
  Team update (2026-03-08): Component audit priorities  BulletedList/Panel/id-rendering fixes, field column docs, zero-touch migration script  decided by Forge
 
  Team update (2026-03-08): Documentation refreshed  Runs 8-13 summaries, SSR-as-default guidance, package pinning, component coverage gap analysis  decided by Beast
+
+### Layer 2 Automation Script + Script Fixes (2026-03-09)
+
+**Task 1: Fixed [Parameter] // TODO comment bug (bwfc-migrate.ps1 line 1240)**
+The `[RouteData]` → `[Parameter]` conversion put a `// TODO` comment on the same line as `[Parameter]`, which swallowed everything after it when used on method parameters. Fix: moved TODO to a separate line above `[Parameter]` using `\n` in the replacement string.
+
+**Task 3: Fixed route generation for subdirectory pages (bwfc-migrate.ps1 line 621)**
+`ConvertFrom-PageDirective` used `$FileName` (just the filename) for route generation, producing `/Login` instead of `/Account/Login`. Fix: switched to `$RelPath` with backslash-to-forward-slash conversion, matching the pattern already used in `New-CompilableStub`. Also handles Default/Index at any directory depth.
+
+**Task 2: Created bwfc-migrate-layer2.ps1 — Layer 2 automation**
+New script applying 3 persistent semantic transforms stable across Runs 12–15:
+- **Pattern A:** Detects Layer 1 code-behinds with FormView/SelectMethod/Page_Load patterns → rewrites to `ComponentBase` with `IDbContextFactory<T>` injection, `[SupplyParameterFromQuery]`, and `OnInitializedAsync`
+- **Pattern B:** Detects auth .razor files with SignInManager/UserManager → generates simplified forms with individual `[SupplyParameterFromForm]` string properties, `<AntiforgeryToken />`, and `@formname`
+- **Pattern C:** Detects presence of .razor files → generates .NET 9 SSR `Program.cs` with configurable DbProvider (SQLite default), Identity support auto-detected from `IdentityDbContext`, seed data auto-detected from initializer classes
+
+Key design decisions:
+- Idempotency via `// Layer2-transformed` marker — checked before every write
+- `-TestMode` writes to `Layer2Output/` subdirectory instead of in-place
+- SupportsShouldProcess for `-WhatIf` dry-run
+- Auto-detects DbContext name, namespace, and Identity context from project files
+- Transform log exported to `layer2-transforms.log`

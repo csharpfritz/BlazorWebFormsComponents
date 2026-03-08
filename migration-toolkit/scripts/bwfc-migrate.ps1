@@ -617,9 +617,11 @@ function Invoke-ScriptAutoDetection {
 function ConvertFrom-PageDirective {
     param([string]$Content, [string]$FileName, [string]$RelPath)
 
-    # <%@ Page ... %> → @page "/route"
-    $route = '/' + [System.IO.Path]::GetFileNameWithoutExtension($FileName)
-    if ($route -eq '/Default' -or $route -eq '/default' -or $route -eq '/Index' -or $route -eq '/index') {
+    # <%@ Page ... %> → @page "/route" — use RelPath for subdirectory-aware routes
+    $route = '/' + ($RelPath -replace '\\', '/' -replace '\.aspx$', '')
+    # Handle Default/Index special cases at any directory level
+    $route = $route -replace '/Default$', '' -replace '/default$', '' -replace '/Index$', '' -replace '/index$', ''
+    if ($route -eq '' -or $route -eq '/') {
         $route = '/'
     }
 
@@ -1237,7 +1239,7 @@ function Copy-CodeBehind {
         $rdRegex = [regex]'\[RouteData\]'
         $rdMatches = $rdRegex.Matches($annotatedContent)
         if ($rdMatches.Count -gt 0) {
-            $annotatedContent = $rdRegex.Replace($annotatedContent, "[Parameter] // TODO: Verify RouteData → [Parameter] conversion — ensure @page route template has matching {parameter}")
+            $annotatedContent = $rdRegex.Replace($annotatedContent, "// TODO: Verify RouteData → [Parameter] conversion — ensure @page route has matching {parameter}`n[Parameter]")
             Write-TransformLog -File $RelPath -Transform 'ParameterAttr' -Detail "Converted $($rdMatches.Count) [RouteData] to [Parameter]"
         }
 
