@@ -97,6 +97,22 @@ Key patterns: Response event interception for network-level asset checks. `Evalu
 
  Team update (2026-03-08): Migration-test reports use standalone `{project-name}-runNN.md` files (zero-padded). Old run folders are read-only archives.  decided by Beast
 
+### ContosoUniversity Acceptance Tests (2026-03-08)
+
+**40 Playwright acceptance tests for ContosoUniversity Web Forms app:** Mirrors the WingtipToys.AcceptanceTests pattern exactly — same csproj structure, PlaywrightFixture, TestConfiguration, xUnit collection. 6 test classes covering all 5 pages + master page navigation.
+
+- **NavigationTests (11):** Master page nav links present, each nav link navigates correctly (×5 Theory), all pages return HTTP 200 (×5 Theory).
+- **HomePageTests (4):** Page loads, welcome text, site branding, footer.
+- **AboutPageTests (5):** Page loads, title text, GridView renders as table, expected columns (Date + Count), data rows present.
+- **StudentsPageTests (9):** Full CRUD coverage — page load, GridView display, column headers, search by name, DetailsView details, add new student, edit student, delete student, clear button.
+- **CoursesPageTests (6):** Page load, department dropdown options, department filter, course columns, search with DetailsView, pagination.
+- **InstructorsPageTests (5):** Page load, GridView display, column headers, sort by click, sort toggle direction.
+
+Key patterns: `[id*='...']` partial attribute selectors for Web Forms naming container resilience. `WaitForLoadStateAsync(LoadState.NetworkIdle)` for UpdatePanel AJAX. Fallback selectors (ID → container → generic table) for robustness. Dialog handler for delete confirmations. `CONTOSO_BASE_URL` env var (default `http://localhost:44380`).
+
+Tests written proactively from page inventory — selectors may need minor tuning once app is running live. File: `src/ContosoUniversity.AcceptanceTests/`.
+
 
  Team update (2026-03-08): P0 HTML fidelity fixes complete  CheckBox span wrapper, BaseValidator id/class, FormView CssClass. 1488 tests pass.  decided by Cyclops, Forge
  Team update (2026-03-08): ASPX URL rewriting goes in migration-toolkit docs (RewriteOptions.AddRedirect snippet), not BWFC NuGet  decided by Forge
+ Team update (2026-03-08): ContosoUniversity local setup  LocalDB connection strings, AjaxControlToolkit HintPath fix, NBGV block — decided by Colossus

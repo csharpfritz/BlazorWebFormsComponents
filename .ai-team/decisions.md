@@ -6883,3 +6883,15 @@ The Layer 2 script (`bwfc-migrate-layer2.ps1`) introduced in Run 16 creates a ne
 **By:** Forge
 **What:** ASPX URL preservation should be a documented `RewriteOptions.AddRedirect` snippet in `migration-toolkit/METHODOLOGY.md` and `migration-toolkit/CHECKLIST.md`, not a NuGet-installable middleware in the BWFC library. Recommended code: `new RewriteOptions().AddRedirect(@"^(.+)\.aspx$", "$1", statusCode: 301)` placed before `app.UseRouting()`. Includes `Default.aspx → /` special case. Query strings are automatically preserved. 301 redirect preferred over transparent rewrite for SEO.
 **Why:** URL rewriting is a migration infrastructure concern (~20 lines of code), not a Blazor component. It belongs in the migration toolkit as guidance developers understand, apply, and eventually remove. The BWFC NuGet package should remain focused on components. No existing NuGet package targets this use case. All five approaches were evaluated (RewriteOptions, custom middleware, IRule, @page directive, catch-all route) — RewriteOptions with AddRedirect is the simplest and most correct.
+
+### 2026-03-08: ContosoUniversity Acceptance Test Patterns
+
+**By:** Rogue
+**What:** Created `src/ContosoUniversity.AcceptanceTests/` with 40 Playwright acceptance tests covering all 5 ContosoUniversity pages. Patterns: partial ID selectors (`[id*='...']`) for naming container resilience, cascading fallback selectors (specific  container  generic), `CONTOSO_BASE_URL` env var defaulting to `http://localhost:44380`, proactive test authoring from .aspx source analysis before live app.
+**Why:** ContosoUniversity is the second sample app for migration validation. Acceptance tests for the original Web Forms app establish the quality baseline before Blazor migration begins.
+
+### 2026-03-08: ContosoUniversity Local Setup Configuration
+
+**By:** Colossus
+**What:** Configured ContosoUniversity Web Forms sample for local development using IIS Express + LocalDB. Three source-level fixes: (1) connection strings changed from `.\SQLEXPRESS` to `(localdb)\MSSQLLocalDB` in Web.config, (2) AjaxControlToolkit HintPath updated to NuGet packages folder in .csproj, (3) empty `Directory.Build.props` at `samples/ContosoUniversity/` to block NBGV inheritance. All 5 pages verified with screenshots in `dev-docs/contoso-screenshots/`. Setup documented in `dev-docs/contoso-university-setup.md`.
+**Why:** Sample project ships with assumptions about original developer's environment. These fixes make it reproducible on any machine with LocalDB and compatible MSBuild.

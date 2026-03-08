@@ -122,3 +122,6 @@ The `-TestMode` switch redirected all output to a `Layer2Output/` subdirectory i
 
 
  Team update (2026-03-08): Second sample project will be purpose-built 'EventManager' Control Gallery targeting ~12-15 pages with controls WingtipToys doesn't cover  decided by Forge
+ Team update (2026-03-08): ContosoUniversity acceptance test patterns  partial ID selectors, cascading fallbacks, CONTOSO_BASE_URL env var  decided by Rogue
+
+ Team update (2026-03-08): ContosoUniversity local setup  LocalDB connection strings, AjaxControlToolkit HintPath fix, NBGV block — decided by Colossus

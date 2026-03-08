@@ -133,3 +133,4 @@ Set up the ContosoUniversity ASP.NET Web Forms sample project for local developm
 - Screenshots: `dev-docs/contoso-screenshots/` (5 PNG files)
 - Setup guide: `dev-docs/contoso-university-setup.md`
 - Commit: `ce2e90fc` on `squad/audit-docs-perf`
+ Team update (2026-03-08): ContosoUniversity acceptance test patterns  partial ID selectors, cascading fallbacks, CONTOSO_BASE_URL env var  decided by Rogue

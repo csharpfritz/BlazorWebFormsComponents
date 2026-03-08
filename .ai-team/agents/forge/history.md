@@ -120,3 +120,6 @@ Key learning: `Microsoft.AspNetCore.Rewrite` regex rules operate on path only, n
 
 
  Team update (2026-03-08): P0 HTML fidelity fixes complete  CheckBox span wrapper, BaseValidator id/class, FormView CssClass. 1488 tests pass.  decided by Cyclops, Forge
+ Team update (2026-03-08): ContosoUniversity acceptance test patterns  partial ID selectors, cascading fallbacks, CONTOSO_BASE_URL env var  decided by Rogue
+
+ Team update (2026-03-08): ContosoUniversity local setup  LocalDB connection strings, AjaxControlToolkit HintPath fix, NBGV block — decided by Colossus
