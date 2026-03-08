@@ -118,3 +118,5 @@ Two research items completed for Jeff:
 Key learning: The Web Forms sample ecosystem is effectively dead — WingtipToys is the only maintained Microsoft sample. Any second sample will need to be purpose-built.
 Key learning: `Microsoft.AspNetCore.Rewrite` regex rules operate on path only, not query string — this means query string preservation is automatic and free.
 
+
+ Team update (2026-03-08): P0 HTML fidelity fixes complete  CheckBox span wrapper, BaseValidator id/class, FormView CssClass. 1488 tests pass.  decided by Cyclops, Forge

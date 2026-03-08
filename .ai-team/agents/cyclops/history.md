@@ -106,3 +106,19 @@ The `-TestMode` switch redirected all output to a `Layer2Output/` subdirectory i
 
  Team update (2026-03-08): Three P0 HTML fidelity fixes identified  CheckBox needs span wrapper, BaseValidator needs id/class, FormView needs class on table. Audit scored 87%.  decided by Forge
 
+### P0 HTML Output Fidelity Fixes (2026-03-09)
+
+**Fixed 3 P0 structural divergences from Forge's HTML output audit.**
+
+**Bug 1: CheckBox missing wrapper `<span>`** — Added `<span class="@CssClass" style="@Style" title="@ToolTip">` around `<input>` + `<label>` when Text is present, matching RadioButton's pattern. No-text path unchanged (styles stay on input directly). CssClass/Style/ToolTip moved from `<input>` to wrapper `<span>`.
+
+**Bug 2: BaseValidator `<span>` missing `id` and `class`** — Added `id="@ClientID"` and `class="@CssClass"` to the validator `<span>` element in `BaseValidator.razor`. All 5 validators (RequiredField, RegularExpression, Compare, Range, Custom) inherit this fix.
+
+**Bug 3: FormView `<table>` missing `class="@CssClass"`** — Added `class="@CssClass"` to the outer `<table>` element, matching GridView/DetailsView pattern.
+
+**Tests updated:** 4 test files (NoSpanWrapper.razor, TextAlign.razor, Style.razor, ToolTipTests.razor) updated to match corrected HTML. 1488 tests pass.
+
+**Key learning:** When CheckBox and RadioButton are in the same family, their HTML structure should match. RadioButton already had the span wrapper — CheckBox was the inconsistency.
+
+
+ Team update (2026-03-08): Second sample project will be purpose-built 'EventManager' Control Gallery targeting ~12-15 pages with controls WingtipToys doesn't cover  decided by Forge

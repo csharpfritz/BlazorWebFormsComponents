@@ -97,3 +97,6 @@ Key patterns: Response event interception for network-level asset checks. `Evalu
 
  Team update (2026-03-08): Migration-test reports use standalone `{project-name}-runNN.md` files (zero-padded). Old run folders are read-only archives.  decided by Beast
 
+
+ Team update (2026-03-08): P0 HTML fidelity fixes complete  CheckBox span wrapper, BaseValidator id/class, FormView CssClass. 1488 tests pass.  decided by Cyclops, Forge
+ Team update (2026-03-08): ASPX URL rewriting goes in migration-toolkit docs (RewriteOptions.AddRedirect snippet), not BWFC NuGet  decided by Forge
