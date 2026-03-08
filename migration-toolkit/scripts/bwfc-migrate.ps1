@@ -833,13 +833,25 @@ function ConvertFrom-MasterPage {
         }
 
         # Fix 1a: Preserve CDN references (Bootstrap, jQuery) from <head>
-        $cdnLinkRegex = [regex]'<(?:link|script)\s[^>]*(?:cdn\.|cloudflare|bootstrapcdn|googleapis|jsdelivr|unpkg|cdnjs)[^>]*>'
+        # Handle <link> tags (self-closing)
+        $cdnLinkRegex = [regex]'<link\s[^>]*(?:cdn\.|cloudflare|bootstrapcdn|googleapis|jsdelivr|unpkg|cdnjs)[^>]*>'
         foreach ($m in $cdnLinkRegex.Matches($headInner)) {
             $tag = $m.Value.Trim()
-            # Skip if already captured as a <link> tag
-            if ($tag -match '^<link' -and $extractedTags -contains ("    " + $tag)) { continue }
+            # Skip if already captured
+            if ($extractedTags -contains ("    " + $tag)) { continue }
             $extractedTags.Add("    " + $tag)
-            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Preserved CDN reference: $($tag.Substring(0, [Math]::Min(80, $tag.Length)))"
+            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Preserved CDN link: $($tag.Substring(0, [Math]::Min(80, $tag.Length)))"
+        }
+        # Handle <script>...</script> tags (including closing tag)
+        $cdnScriptRegex = [regex]'<script\s[^>]*(?:cdn\.|cloudflare|bootstrapcdn|googleapis|jsdelivr|unpkg|cdnjs)[^>]*>(?:</script>)?'
+        foreach ($m in $cdnScriptRegex.Matches($headInner)) {
+            $tag = $m.Value.Trim()
+            # Ensure script tag is properly closed
+            if ($tag -notmatch '</script>$') {
+                $tag = $tag + '</script>'
+            }
+            $extractedTags.Add("    " + $tag)
+            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Preserved CDN script: $($tag.Substring(0, [Math]::Min(80, $tag.Length)))"
         }
 
         if ($extractedTags.Count -gt 0) {
@@ -861,16 +873,20 @@ function ConvertFrom-MasterPage {
     Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail 'Stripped document wrapper (DOCTYPE, html, body)'
 
     # 4. Replace <asp:ContentPlaceHolder ID="MainContent"> → @Body
-    $mainCphRegex = [regex]'(?si)<asp:ContentPlaceHolder\s+[^>]*ID\s*=\s*"MainContent"[^>]*>.*?</asp:ContentPlaceHolder>'
-    if ($mainCphRegex.IsMatch($Content)) {
-        $Content = $mainCphRegex.Replace($Content, '@Body')
-        Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail 'ContentPlaceHolder MainContent → @Body'
-    }
-    # Self-closing MainContent
-    $mainCphSelfRegex = [regex]'(?i)<asp:ContentPlaceHolder\s+[^>]*ID\s*=\s*"MainContent"[^>]*/>'
-    if ($mainCphSelfRegex.IsMatch($Content)) {
-        $Content = $mainCphSelfRegex.Replace($Content, '@Body')
-        Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail 'ContentPlaceHolder MainContent → @Body (self-closing)'
+    # Also handle common variants like ContentPlaceHolder1
+    $mainCphPatterns = @('MainContent', 'ContentPlaceHolder1', 'BodyContent', 'Body')
+    foreach ($mainCphName in $mainCphPatterns) {
+        $mainCphRegex = [regex]"(?si)<asp:ContentPlaceHolder\s+[^>]*ID\s*=\s*`"$mainCphName`"[^>]*>.*?</asp:ContentPlaceHolder>"
+        if ($mainCphRegex.IsMatch($Content)) {
+            $Content = $mainCphRegex.Replace($Content, '@Body')
+            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "ContentPlaceHolder $mainCphName → @Body"
+        }
+        # Self-closing variant
+        $mainCphSelfRegex = [regex]"(?i)<asp:ContentPlaceHolder\s+[^>]*ID\s*=\s*`"$mainCphName`"[^>]*/>"
+        if ($mainCphSelfRegex.IsMatch($Content)) {
+            $Content = $mainCphSelfRegex.Replace($Content, '@Body')
+            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "ContentPlaceHolder $mainCphName → @Body (self-closing)"
+        }
     }
 
     # Other ContentPlaceHolders → TODO comment
@@ -1097,6 +1113,348 @@ function ConvertFrom-SelectMethod {
         foreach ($m in $selectMethodMatches) {
             Write-ManualItem -File $RelPath -Category 'SelectMethod' -Detail "SelectMethod='$($m.Groups[2].Value)' preserved — adapt method signature to BWFC SelectHandler<T> (add 4 parameters: maxRows, startRowIndex, sortByExpression, out totalRowCount)"
         }
+    }
+
+    return $Content
+}
+
+#endregion
+
+#region --- GridView Columns Wrapper ---
+
+function Wrap-GridViewColumns {
+    <#
+    .SYNOPSIS
+        Wraps BoundField, TemplateField, and other column field elements in <Columns> when they appear
+        directly inside GridView without the Columns wrapper.
+    .DESCRIPTION
+        In ASP.NET Web Forms, field elements (BoundField, TemplateField, CommandField, etc.) can appear
+        directly inside GridView:
+            <asp:GridView ...>
+                <asp:BoundField DataField="Name" />
+            </asp:GridView>
+
+        In BWFC Blazor, these must be wrapped in a <Columns> element:
+            <GridView ...>
+                <Columns>
+                    <BoundField DataField="Name" />
+                </Columns>
+            </GridView>
+
+        This function finds GridView elements that contain field elements NOT already wrapped in Columns
+        and adds the Columns wrapper. It handles both asp:-prefixed and unprefixed tags.
+
+        Must run BEFORE ConvertFrom-AspPrefix so asp: prefix is still present for detection.
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    # Field types that should be inside <Columns>
+    $fieldTypes = @(
+        'BoundField',
+        'TemplateField',
+        'ButtonField',
+        'HyperLinkField',
+        'ImageField',
+        'CommandField',
+        'CheckBoxField'
+    )
+    $fieldPattern = ($fieldTypes -join '|')
+
+    # Match GridView blocks (both asp:GridView and GridView after prefix removal)
+    # Use a non-greedy match for the inner content
+    $gridViewRegex = [regex]"(?si)(<(?:asp:)?GridView\b[^>]*>)(.*?)(</(?:asp:)?GridView\s*>)"
+    $gridViewMatches = $gridViewRegex.Matches($Content)
+
+    if ($gridViewMatches.Count -eq 0) { return $Content }
+
+    $wrapCount = 0
+
+    # Process in reverse order to preserve string positions
+    for ($i = $gridViewMatches.Count - 1; $i -ge 0; $i--) {
+        $m = $gridViewMatches[$i]
+        $openTag = $m.Groups[1].Value
+        $innerContent = $m.Groups[2].Value
+        $closeTag = $m.Groups[3].Value
+
+        # Check if inner content has field elements that are NOT inside <Columns>
+        # First, check if <Columns> already exists
+        if ($innerContent -match '(?si)<Columns\b') {
+            # Columns wrapper already exists — skip this GridView
+            continue
+        }
+
+        # Check if there are any field elements directly in the inner content
+        $fieldRegex = [regex]"(?si)<(?:asp:)?(?:$fieldPattern)\b"
+        if (-not $fieldRegex.IsMatch($innerContent)) {
+            # No field elements found — skip
+            continue
+        }
+
+        # We need to wrap field elements in <Columns>
+        # Strategy: Find all field elements and style elements, wrap only the fields
+
+        # Collect field elements (opening and self-closing tags with their content)
+        $fieldsToWrap = [System.Collections.Generic.List[string]]::new()
+        $remainingContent = $innerContent
+
+        # Match each field type — both self-closing and open+close variants
+        foreach ($fieldType in $fieldTypes) {
+            # Self-closing: <BoundField ... />
+            $selfClosingRegex = [regex]"(?si)<(?:asp:)?$fieldType\b[^>]*/>"
+            foreach ($fm in $selfClosingRegex.Matches($remainingContent)) {
+                $fieldsToWrap.Add($fm.Value)
+            }
+            $remainingContent = $selfClosingRegex.Replace($remainingContent, "<<<FIELD_PLACEHOLDER_$fieldType>>>")
+
+            # Open+close: <BoundField ...>...</BoundField>
+            $openCloseRegex = [regex]"(?si)<(?:asp:)?$fieldType\b[^>]*>.*?</(?:asp:)?$fieldType\s*>"
+            foreach ($fm in $openCloseRegex.Matches($remainingContent)) {
+                $fieldsToWrap.Add($fm.Value)
+            }
+            $remainingContent = $openCloseRegex.Replace($remainingContent, "<<<FIELD_PLACEHOLDER_$fieldType>>>")
+        }
+
+        if ($fieldsToWrap.Count -eq 0) {
+            continue
+        }
+
+        # Now rebuild the inner content:
+        # - Find where the first field placeholder is and insert <Columns> before it
+        # - Find where the last field placeholder is and insert </Columns> after it
+
+        # Extract non-field content before, between, and after field placeholders
+        $parts = [regex]::Split($remainingContent, '<<<FIELD_PLACEHOLDER_\w+>>>')
+
+        # Reconstruct: non-field-stuff + <Columns> + all-fields + </Columns> + remaining-non-field-stuff
+        $beforeFields = $parts[0]
+        $afterFields = if ($parts.Count -gt 1) { $parts[$parts.Count - 1] } else { '' }
+
+        # Join all fields
+        $fieldsBlock = $fieldsToWrap -join "`n                        "
+
+        # Determine indentation from inner content
+        $indent = ''
+        if ($innerContent -match '(?m)^(\s+)<(?:asp:)?(?:BoundField|TemplateField)') {
+            $indent = $Matches[1]
+        }
+        elseif ($innerContent -match '(?m)^(\s+)<') {
+            $indent = $Matches[1]
+        }
+
+        $newInnerContent = $beforeFields.TrimEnd() + "`n$indent<Columns>`n$indent    " + $fieldsBlock + "`n$indent</Columns>" + $afterFields
+
+        # Replace the GridView in the content
+        $newGridView = $openTag + $newInnerContent + $closeTag
+        $Content = $Content.Substring(0, $m.Index) + $newGridView + $Content.Substring($m.Index + $m.Length)
+        $wrapCount++
+    }
+
+    if ($wrapCount -gt 0) {
+        Write-TransformLog -File $RelPath -Transform 'GridViewColumns' -Detail "Wrapped field elements in <Columns> for $wrapCount GridView(s)"
+    }
+
+    return $Content
+}
+
+#endregion
+
+#region --- GridView/DetailsView Style Element Conversion ---
+
+function Convert-StyleElementsInSection {
+    <#
+    .SYNOPSIS
+        Helper to convert style elements in a content section, excluding nested protected areas.
+    #>
+    param(
+        [string]$Content,
+        [hashtable]$Mappings,
+        [string[]]$UnsupportedStyles,
+        [string]$RelPath,
+        [ref]$ConversionCount
+    )
+
+    # Protect <Columns>...</Columns> and <Fields>...</Fields> sections from conversion
+    # because style elements inside columns/fields are per-column styles, not grid-level styles
+    $columnsRegex = [regex]'(?si)(<Columns\b[^>]*>.*?</Columns\s*>)'
+    $fieldsRegex = [regex]'(?si)(<Fields\b[^>]*>.*?</Fields\s*>)'
+    
+    # Replace protected sections with placeholders
+    $protectedSections = @{}
+    $placeholderIndex = 0
+    
+    foreach ($cm in $columnsRegex.Matches($Content)) {
+        $placeholder = "<<<PROTECTED_SECTION_$placeholderIndex>>>"
+        $protectedSections[$placeholder] = $cm.Value
+        $Content = $Content.Substring(0, $cm.Index) + $placeholder + $Content.Substring($cm.Index + $cm.Length)
+        $placeholderIndex++
+        # Re-match since content changed
+        break
+    }
+    while ($columnsRegex.IsMatch($Content)) {
+        $cm = $columnsRegex.Match($Content)
+        $placeholder = "<<<PROTECTED_SECTION_$placeholderIndex>>>"
+        $protectedSections[$placeholder] = $cm.Value
+        $Content = $Content.Substring(0, $cm.Index) + $placeholder + $Content.Substring($cm.Index + $cm.Length)
+        $placeholderIndex++
+    }
+    while ($fieldsRegex.IsMatch($Content)) {
+        $cm = $fieldsRegex.Match($Content)
+        $placeholder = "<<<PROTECTED_SECTION_$placeholderIndex>>>"
+        $protectedSections[$placeholder] = $cm.Value
+        $Content = $Content.Substring(0, $cm.Index) + $placeholder + $Content.Substring($cm.Index + $cm.Length)
+        $placeholderIndex++
+    }
+
+    # Now convert style elements in the unprotected content
+    foreach ($oldName in $Mappings.Keys) {
+        $mapping = $Mappings[$oldName]
+        $wrapperName = $mapping.Wrapper
+        $componentName = $mapping.Component
+
+        # Self-closing
+        $selfClosingRegex = [regex]"(?s)<$oldName\b([^>]*)(/\s*>)"
+        while ($selfClosingRegex.IsMatch($Content)) {
+            $sm = $selfClosingRegex.Match($Content)
+            $attrs = $sm.Groups[1].Value
+            $replacement = "<$wrapperName><$componentName$attrs /></$wrapperName>"
+            $Content = $Content.Substring(0, $sm.Index) + $replacement + $Content.Substring($sm.Index + $sm.Length)
+            $ConversionCount.Value++
+        }
+
+        # Open+close
+        $openCloseRegex = [regex]"(?s)<$oldName\b([^>]*)>(.*?)</$oldName\s*>"
+        while ($openCloseRegex.IsMatch($Content)) {
+            $sm = $openCloseRegex.Match($Content)
+            $attrs = $sm.Groups[1].Value
+            $innerStyleContent = $sm.Groups[2].Value
+            $replacement = "<$wrapperName><$componentName$attrs>$innerStyleContent</$componentName></$wrapperName>"
+            $Content = $Content.Substring(0, $sm.Index) + $replacement + $Content.Substring($sm.Index + $sm.Length)
+            $ConversionCount.Value++
+        }
+    }
+
+    # Comment out unsupported style elements
+    foreach ($unsupportedStyle in $UnsupportedStyles) {
+        $selfClosingRegex = [regex]"(<$unsupportedStyle\b[^>]*/?>)"
+        if ($selfClosingRegex.IsMatch($Content)) {
+            $Content = $selfClosingRegex.Replace($Content, "@* TODO: <$unsupportedStyle> is not supported by BWFC — apply via CSS. `$1 *@")
+            Write-ManualItem -File $RelPath -Category 'UnsupportedStyle' -Detail "<$unsupportedStyle> not supported by BWFC — use CSS to style sorted columns"
+        }
+    }
+
+    # Restore protected sections
+    foreach ($placeholder in $protectedSections.Keys) {
+        $Content = $Content.Replace($placeholder, $protectedSections[$placeholder])
+    }
+
+    return $Content
+}
+
+function Convert-GridViewStyleElements {
+    <#
+    .SYNOPSIS
+        Converts GridView and DetailsView style child elements to BWFC format.
+    .DESCRIPTION
+        In ASP.NET Web Forms, GridView style elements use short names:
+            <AlternatingRowStyle BackColor="White" />
+
+        In BWFC, these must be wrapped in a *StyleContent RenderFragment containing the prefixed component:
+            <AlternatingRowStyleContent>
+                <GridViewAlternatingRowStyle BackColor="White" />
+            </AlternatingRowStyleContent>
+
+        Style elements INSIDE <Columns> or <Fields> are NOT converted because they are
+        per-column styles which BWFC doesn't support via child components.
+
+        Must run AFTER asp: prefix has been stripped.
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    # GridView style element mappings (Web Forms name -> wrapper name, component name)
+    $gridViewStyleMappings = @{
+        'AlternatingRowStyle' = @{ Wrapper = 'AlternatingRowStyleContent'; Component = 'GridViewAlternatingRowStyle' }
+        'EditRowStyle' = @{ Wrapper = 'EditRowStyleContent'; Component = 'GridViewEditRowStyle' }
+        'EmptyDataRowStyle' = @{ Wrapper = 'EmptyDataRowStyleContent'; Component = 'GridViewEmptyDataRowStyle' }
+        'FooterStyle' = @{ Wrapper = 'FooterStyleContent'; Component = 'GridViewFooterStyle' }
+        'HeaderStyle' = @{ Wrapper = 'HeaderStyleContent'; Component = 'GridViewHeaderStyle' }
+        'PagerStyle' = @{ Wrapper = 'PagerStyleContent'; Component = 'GridViewPagerStyle' }
+        'RowStyle' = @{ Wrapper = 'RowStyleContent'; Component = 'GridViewRowStyle' }
+        'SelectedRowStyle' = @{ Wrapper = 'SelectedRowStyleContent'; Component = 'GridViewSelectedRowStyle' }
+    }
+
+    # Unsupported GridView style elements (comment out with TODO)
+    $unsupportedGridViewStyles = @(
+        'SortedAscendingCellStyle',
+        'SortedAscendingHeaderStyle',
+        'SortedDescendingCellStyle',
+        'SortedDescendingHeaderStyle'
+    )
+
+    # DetailsView style element mappings
+    $detailsViewStyleMappings = @{
+        'AlternatingRowStyle' = @{ Wrapper = 'AlternatingRowStyleContent'; Component = 'DetailsViewAlternatingRowStyle' }
+        'CommandRowStyle' = @{ Wrapper = 'CommandRowStyleContent'; Component = 'DetailsViewCommandRowStyle' }
+        'EditRowStyle' = @{ Wrapper = 'EditRowStyleContent'; Component = 'DetailsViewEditRowStyle' }
+        'EmptyDataRowStyle' = @{ Wrapper = 'EmptyDataRowStyleContent'; Component = 'DetailsViewEmptyDataRowStyle' }
+        'FieldHeaderStyle' = @{ Wrapper = 'FieldHeaderStyleContent'; Component = 'DetailsViewFieldHeaderStyle' }
+        'FooterStyle' = @{ Wrapper = 'FooterStyleContent'; Component = 'DetailsViewFooterStyle' }
+        'HeaderStyle' = @{ Wrapper = 'HeaderStyleContent'; Component = 'DetailsViewHeaderStyle' }
+        'InsertRowStyle' = @{ Wrapper = 'InsertRowStyleContent'; Component = 'DetailsViewInsertRowStyle' }
+        'PagerStyle' = @{ Wrapper = 'PagerStyleContent'; Component = 'DetailsViewPagerStyle' }
+        'RowStyle' = @{ Wrapper = 'RowStyleContent'; Component = 'DetailsViewRowStyle' }
+    }
+
+    $totalConversions = 0
+
+    # Process GridView blocks
+    $gridViewRegex = [regex]"(?si)(<GridView\b[^>]*>)(.*?)(</GridView\s*>)"
+    $gridViewMatches = $gridViewRegex.Matches($Content)
+
+    # Process in reverse order
+    for ($i = $gridViewMatches.Count - 1; $i -ge 0; $i--) {
+        $m = $gridViewMatches[$i]
+        $openTag = $m.Groups[1].Value
+        $innerContent = $m.Groups[2].Value
+        $closeTag = $m.Groups[3].Value
+        
+        $convCount = [ref]0
+        $newInnerContent = Convert-StyleElementsInSection -Content $innerContent -Mappings $gridViewStyleMappings -UnsupportedStyles $unsupportedGridViewStyles -RelPath $RelPath -ConversionCount $convCount
+
+        if ($convCount.Value -gt 0 -or $newInnerContent -ne $innerContent) {
+            $newGridView = $openTag + $newInnerContent + $closeTag
+            $Content = $Content.Substring(0, $m.Index) + $newGridView + $Content.Substring($m.Index + $m.Length)
+            $totalConversions += $convCount.Value
+        }
+    }
+
+    # Process DetailsView blocks
+    $detailsViewRegex = [regex]"(?si)(<DetailsView\b[^>]*>)(.*?)(</DetailsView\s*>)"
+    $detailsViewMatches = $detailsViewRegex.Matches($Content)
+
+    for ($i = $detailsViewMatches.Count - 1; $i -ge 0; $i--) {
+        $m = $detailsViewMatches[$i]
+        $openTag = $m.Groups[1].Value
+        $innerContent = $m.Groups[2].Value
+        $closeTag = $m.Groups[3].Value
+        
+        $convCount = [ref]0
+        $newInnerContent = Convert-StyleElementsInSection -Content $innerContent -Mappings $detailsViewStyleMappings -UnsupportedStyles @() -RelPath $RelPath -ConversionCount $convCount
+
+        if ($convCount.Value -gt 0 -or $newInnerContent -ne $innerContent) {
+            $newDetailsView = $openTag + $newInnerContent + $closeTag
+            $Content = $Content.Substring(0, $m.Index) + $newDetailsView + $Content.Substring($m.Index + $m.Length)
+            $totalConversions += $convCount.Value
+        }
+    }
+
+    if ($totalConversions -gt 0) {
+        Write-TransformLog -File $RelPath -Transform 'StyleElements' -Detail "Converted $totalConversions GridView/DetailsView style element(s) to BWFC format"
     }
 
     return $Content
@@ -2019,8 +2377,15 @@ function Convert-WebFormsFile {
         Write-ManualItem -File $relativePath -Category 'ListView-GroupItemCount' -Detail "ListView with GroupItemCount=$groupCount — use BWFC <ListView GroupItemCount='$groupCount' Items='...' TItem='...'> with GroupTemplate and ItemTemplate"
     }
 
+    # Wrap field elements (BoundField, TemplateField, etc.) in <Columns> inside GridView
+    # Must run before asp: prefix is stripped
+    $content = Wrap-GridViewColumns -Content $content -RelPath $relativePath
+
     $content = ConvertFrom-AspPrefix -Content $content -RelPath $relativePath
     $content = Remove-WebFormsAttributes -Content $content -RelPath $relativePath
+
+    # Convert GridView/DetailsView style elements to BWFC component names (must run after asp: prefix removal)
+    $content = Convert-GridViewStyleElements -Content $content -RelPath $relativePath
 
     # Convert Button OnClick handlers to @onclick (must run after asp: prefix removal)
     $content = ConvertFrom-ButtonOnClick -Content $content -RelPath $relativePath
