@@ -1,3 +1,5 @@
+// TODO: Review — auto-copied from Web Forms source
+
 using System.ComponentModel.DataAnnotations;
 
 namespace WingtipToys.Models
@@ -5,9 +7,9 @@ namespace WingtipToys.Models
   public class CartItem
   {
     [Key]
-    public string ItemId { get; set; } = "";
+    public string ItemId { get; set; }
 
-    public string CartId { get; set; } = "";
+    public string CartId { get; set; }
 
     public int Quantity { get; set; }
 
@@ -15,6 +17,7 @@ namespace WingtipToys.Models
 
     public int ProductId { get; set; }
 
-    public virtual Product? Product { get; set; }
+    public virtual Product Product { get; set; }
+
   }
 }

@@ -3,13 +3,13 @@
 	<section>
         <div>
             <hgroup>
-                <h2>Products</h2>
+                <h2>@(Page.Title)</h2>
             </hgroup>
 
             <ListView ID="productList" 
                 DataKeyNames="ProductID" GroupItemCount="4"
-                Items="@_products"
                 TItem="Product">
+@* TODO: Replace SelectMethod="GetProducts" with Items="@_data" parameter on this BWFC data control. Load _data in OnInitializedAsync: _data = await yourDbContext.YourEntities.ToListAsync(); *@
                 <EmptyDataTemplate>
                     <table >
                         <tr>
@@ -30,15 +30,15 @@
                         <table>
                             <tr>
                                 <td>
-                                  <a href="/ProductDetails?ProductID=@context.ProductID">
-                                    <img src="/Catalog/Images/Thumbs/@context.ImagePath"
-                                      width="100" height="75" style="border-width:1px;border-style:solid" />
+                                  <a href="<%#: GetRouteUrlHelper.GetRouteUrl("ProductByNameRoute", new {productName = Item.ProductName}) %>">
+                                    <image src='/Catalog/Images/Thumbs/@context.ImagePath'
+                                      width="100" height="75" border="1" />
                                   </a>
                                 </td>
                             </tr>
                             <tr>
                                 <td>
-                                    <a href="/ProductDetails?ProductID=@context.ProductID">
+                                    <a href="<%#: GetRouteUrlHelper.GetRouteUrl("ProductByNameRoute", new {productName = Item.ProductName}) %>">
                                       @context.ProductName
                                     </a>
                                     <br />
@@ -46,10 +46,10 @@
                                         <b>Price: </b>@($"{context.UnitPrice:c}")
                                     </span>
                                     <br />
-                                    <a href="/AddToCart?productID=@context.ProductID" data-enhance-nav="false">
+                                    <a href="/AddToCart.aspx?productID=@context.ProductID" data-enhance-nav="false">               
                                         <span class="ProductListItem">
-                                            <b>Add To Cart</b>
-                                        </span>
+                                            <b>Add To Cart<b>
+                                        </span>           
                                     </a>
                                 </td>
                             </tr>
@@ -57,6 +57,7 @@
                                 <td>&nbsp;</td>
                             </tr>
                         </table>
+                        </p>
                     </td>
                 </ItemTemplate>
                 <LayoutTemplate>

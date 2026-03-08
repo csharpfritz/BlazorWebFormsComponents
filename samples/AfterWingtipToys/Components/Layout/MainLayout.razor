@@ -1,7 +1,15 @@
 @inherits LayoutComponentBase
 
+<HeadContent>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(Page.Title) - Wingtip Toys</title>
+    <link href="/favicon.ico" rel="shortcut icon" type="image/x-icon" />
+    @* TODO: CSS bundle reference '~/Content/css' — convert to explicit <link> tags for each CSS file *@
+</HeadContent>
+
 <div class="navbar navbar-inverse navbar-fixed-top">
-            <div class="container-fluid">
+            <div class="container">
                 <div class="navbar-header">
                     <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
                         <span class="icon-bar"></span>
@@ -12,11 +20,13 @@
                 </div>
                 <div class="navbar-collapse collapse">
                     <ul class="nav navbar-nav">
+                        <li><a id="adminLink" visible="false" 
+                          href="/Admin/AdminPage">Admin</a></li>
                         <li><a href="/">Home</a></li>
                         <li><a href="/About">About</a></li>
                         <li><a href="/Contact">Contact</a></li>
                         <li><a href="/ProductList">Products</a></li>
-                        <li><a href="/ShoppingCart">Cart (@_cartCount)</a></li>
+                        <li><a href="/ShoppingCart" ID="cartCount">&nbsp;</a></li>
                     </ul>
                     <LoginView>
                         <AnonymousTemplate>
@@ -27,9 +37,10 @@
                         </AnonymousTemplate>
                         <LoggedInTemplate>
                             <ul class="nav navbar-nav navbar-right">
-                                <li><a href="/Account/Manage" title="Manage your account">Hello, @_userName !</a></li>
+                                <li><a href="/Account/Manage" title="Manage your account">Hello, @(Context.User.Identity.GetUserName()) !</a></li>
                                 <li>
                                     <a href="/account/logout" data-enhance-nav="false">Log off</a>
+@* MIGRATION NOTE: <LoginStatus> converted to logout link for SSR compatibility. Configure endpoint in Program.cs: app.MapGet("/account/logout", async (HttpContext ctx) => { await ctx.SignOutAsync(); return Results.Redirect("/"); }); *@
                                 </li>
                             </ul>
                         </LoggedInTemplate>
@@ -39,31 +50,29 @@
         </div>
         <div id="TitleContent" style="text-align: center">
             <a href="/">
-                <img src="/Images/logo.jpg" style="border-style:none" alt="Wingtip Toys" />
+                <Image  ID="Image1" ImageUrl="/Images/logo.jpg" BorderStyle="None" />
             </a>  
             <br />  
         </div>
         <div id="CategoryMenu" style="text-align: center">       
-            @if (_categories != null && _categories.Any())
-            {
-                @for (int i = 0; i < _categories.Count; i++)
-                {
-                    var cat = _categories[i];
+            <ListView ID="categoryList"  
+                TItem="Category" >
+@* TODO: Replace SelectMethod="GetCategories" with Items="@_data" parameter on this BWFC data control. Load _data in OnInitializedAsync: _data = await yourDbContext.YourEntities.ToListAsync(); *@
+                <ItemTemplate>
                     <b style="font-size: large; font-style: normal">
-                        <a href="/ProductList?categoryId=@cat.CategoryID">@cat.CategoryName</a>
+                    <a href="<%#: GetRouteUrlHelper.GetRouteUrl("ProductsByCategoryRoute", new {categoryName = Item.CategoryName}) %>">
+                        @context.CategoryName
+                    </a>
                     </b>
-                    @if (i < _categories.Count - 1)
-                    {
-                        <text>  |  </text>
-                    }
-                }
-            }
+                </ItemTemplate>
+                <ItemSeparatorTemplate>  |  </ItemSeparatorTemplate>
+            </ListView>
         </div>
-        <main class="container body-content" role="main">
+        <div class="container body-content">
             @Body
             <hr />
             <footer>
                 <p>&copy; @(DateTime.Now.Year) - Wingtip Toys</p>
             </footer>
-        </main>
+        </div>
     

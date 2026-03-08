@@ -1,29 +1,56 @@
-using Microsoft.AspNetCore.Components;
-using Microsoft.EntityFrameworkCore;
+// =============================================================================
+// TODO: This code-behind was copied from Web Forms and needs manual migration.
+//
+// Common transforms needed (use the BWFC Copilot skill for assistance):
+//   - Page_Load / Page_Init → OnInitializedAsync / OnParametersSetAsync
+//   - Page_PreRender → OnAfterRenderAsync
+//   - IsPostBack checks → remove or convert to state logic
+//   - ViewState usage → component [Parameter] or private fields
+//   - Session/Cache access → inject IHttpContextAccessor or use DI
+//   - Response.Redirect → NavigationManager.NavigateTo
+//   - Event handlers (Button_Click, etc.) → convert to Blazor event callbacks
+//   - Data binding (DataBind, DataSource) → component parameters or OnInitialized
+//   - UpdatePanel / ScriptManager references → remove (Blazor handles updates)
+//   - User controls → Blazor component references
+// =============================================================================
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.UI;
+using System.Web.UI.WebControls;
 using WingtipToys.Models;
+using System.Web.ModelBinding;
+using System.Web.Routing;
 
 namespace WingtipToys
 {
-    public partial class ProductList : ComponentBase
+  public partial class ProductList : System.Web.UI.Page
+  {
+    protected void Page_Load(object sender, EventArgs e)
     {
-        [Inject] private IDbContextFactory<ProductContext> DbFactory { get; set; } = default!;
 
-        [SupplyParameterFromQuery(Name = "categoryId")]
-        public int? CategoryId { get; set; }
-
-        private List<Product> _products = new();
-
-        protected override async Task OnInitializedAsync()
-        {
-            using var db = DbFactory.CreateDbContext();
-            IQueryable<Product> query = db.Products.Include(p => p.Category);
-
-            if (CategoryId.HasValue && CategoryId > 0)
-            {
-                query = query.Where(p => p.CategoryID == CategoryId);
-            }
-
-            _products = await query.ToListAsync();
-        }
     }
+
+    public IQueryable<Product> GetProducts(
+                        [SupplyParameterFromQuery(Name = "id")] int? categoryId,
+                        [Parameter] // TODO: Verify RouteData → [Parameter] conversion — ensure @page route template has matching {parameter} string categoryName)
+    {
+      var _db = new WingtipToys.Models.ProductContext();
+      IQueryable<Product> query = _db.Products;
+
+      if (categoryId.HasValue && categoryId > 0)
+      {
+        query = query.Where(p => p.CategoryID == categoryId);
+      }
+
+      if (!String.IsNullOrEmpty(categoryName))
+      {
+        query = query.Where(p =>
+                            String.Compare(p.Category.CategoryName,
+                            categoryName) == 0);
+      }
+      return query;
+    }
+  }
 }
