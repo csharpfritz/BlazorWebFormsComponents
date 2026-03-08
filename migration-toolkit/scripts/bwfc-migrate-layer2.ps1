@@ -47,7 +47,10 @@ param(
 
     [string]$DbContextName,
 
-    [string]$ProjectNamespace
+    [string]$ProjectNamespace,
+
+    [Parameter(HelpMessage = "Path to the original Web Forms source project (for .edmx and WebMethod detection)")]
+    [string]$SourcePath
 )
 
 Set-StrictMode -Version Latest
@@ -58,7 +61,8 @@ $ErrorActionPreference = 'Stop'
 # ============================================================================
 
 $script:TransformLog = @()
-$script:Summary = @{ PatternA = 0; PatternB = 0; PatternC = 0; Skipped = 0 }
+$script:ManualItems = [System.Collections.Generic.List[PSCustomObject]]::new()
+$script:Summary = @{ PatternA = 0; PatternB = 0; PatternC = 0; EdmxScaffold = 0; WebMethod = 0; Skipped = 0 }
 $script:Layer2Marker = '// Layer2-transformed'
 
 function Write-Layer2Log {
@@ -253,6 +257,328 @@ function Find-EntityType {
 
     # Step 4: No entity type detected
     return $null
+}
+
+function Write-ManualItem {
+    param(
+        [string]$File,
+        [string]$Category,
+        [string]$Detail
+    )
+    $entry = [PSCustomObject]@{
+        File     = $File
+        Category = $Category
+        Detail   = $Detail
+    }
+    $script:ManualItems.Add($entry)
+}
+
+# ============================================================================
+# EDMX → dotnet ef dbcontext scaffold command generation
+# ============================================================================
+#
+# Web Forms DB-first apps use .edmx files. Instead of copying EF6 models
+# verbatim, detect .edmx files and generate a scaffold command for EF Core.
+
+function Convert-EdmxToScaffold {
+    param(
+        [string]$SourceDir,
+        [string]$OutputDir
+    )
+
+    if (-not $SourceDir -or -not (Test-Path $SourceDir)) { return }
+
+    $edmxFiles = @(Get-ChildItem -Path $SourceDir -Filter '*.edmx' -Recurse -File -ErrorAction SilentlyContinue)
+    if ($edmxFiles.Count -eq 0) { return }
+
+    foreach ($edmxFile in $edmxFiles) {
+        $relPath = $edmxFile.FullName.Substring($SourceDir.Length).TrimStart('\', '/')
+        Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "Found .edmx file: $($edmxFile.Name)"
+
+        # Parse the .edmx XML to extract useful info
+        $connStringName = ''
+        $providerName = 'Microsoft.EntityFrameworkCore.SqlServer'
+        $entityNames = @()
+        $contextName = ''
+
+        try {
+            [xml]$edmxXml = Get-Content -Path $edmxFile.FullName -Raw -Encoding UTF8
+
+            # Extract entity type names from ConceptualModels
+            $nsMgr = New-Object System.Xml.XmlNamespaceManager($edmxXml.NameTable)
+            # Common EDMX namespaces
+            $nsMgr.AddNamespace('edmx', 'http://schemas.microsoft.com/ado/2009/11/edmx')
+            $nsMgr.AddNamespace('edm', 'http://schemas.microsoft.com/ado/2009/11/edm')
+            $nsMgr.AddNamespace('edm2', 'http://schemas.microsoft.com/ado/2008/09/edm')
+
+            # Try to find EntityType elements (works across EDMX versions)
+            $rawContent = Get-Content -Path $edmxFile.FullName -Raw -Encoding UTF8
+            $entityTypeRegex = [regex]'<EntityType\s+Name="([^"]+)"'
+            $entityMatches = $entityTypeRegex.Matches($rawContent)
+            foreach ($em in $entityMatches) {
+                $entityNames += $em.Groups[1].Value
+            }
+
+            # Try to extract EntityContainer name (becomes the DbContext name)
+            # Prefer the ConceptualModels EntityContainer (CSDL), not SSDL
+            $containerRegex = [regex]'<EntityContainer\s+Name="([^"]+)"'
+            $containerMatches = $containerRegex.Matches($rawContent)
+            if ($containerMatches.Count -gt 0) {
+                # Use the last match (CSDL comes after SSDL in EDMX)
+                $contextName = $containerMatches[$containerMatches.Count - 1].Groups[1].Value
+            }
+
+            # Try to extract connection string name from the Designer section
+            $connRegex = [regex]'connection\s+string\s*=\s*"([^"]*)"'
+            $connMatch = $connRegex.Match($rawContent)
+            if (-not $connMatch.Success) {
+                # Try metadata-based pattern
+                $metaRegex = [regex]'connectionString="metadata=[^"]*"'
+                $metaMatch = $metaRegex.Match($rawContent)
+            }
+
+            # Detect provider from SSDL
+            if ($rawContent -match 'Provider="([^"]+)"') {
+                $ssdlProvider = $Matches[1]
+                $providerName = switch -Wildcard ($ssdlProvider) {
+                    '*SqlClient*'   { 'Microsoft.EntityFrameworkCore.SqlServer' }
+                    '*SQLite*'      { 'Microsoft.EntityFrameworkCore.Sqlite' }
+                    '*Npgsql*'      { 'Npgsql.EntityFrameworkCore.PostgreSQL' }
+                    '*MySql*'       { 'Pomelo.EntityFrameworkCore.MySql' }
+                    default         { 'Microsoft.EntityFrameworkCore.SqlServer' }
+                }
+            }
+        }
+        catch {
+            Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "Could not parse .edmx XML — generating generic scaffold command"
+        }
+
+        if (-not $contextName) {
+            $contextName = [System.IO.Path]::GetFileNameWithoutExtension($edmxFile.Name)
+        }
+
+        # Build scaffold command text
+        $sb = [System.Text.StringBuilder]::new()
+        [void]$sb.AppendLine("# ============================================================================")
+        [void]$sb.AppendLine("# EF Core Scaffold Command — generated from $($edmxFile.Name)")
+        [void]$sb.AppendLine("# ============================================================================")
+        [void]$sb.AppendLine("#")
+        [void]$sb.AppendLine("# Your Web Forms project used DB-first Entity Framework with an .edmx file.")
+        [void]$sb.AppendLine("# Instead of adapting EF6 models, use 'dotnet ef dbcontext scaffold' to")
+        [void]$sb.AppendLine("# generate fresh EF Core models directly from your database.")
+        [void]$sb.AppendLine("#")
+        if ($entityNames.Count -gt 0) {
+            [void]$sb.AppendLine("# Entities found in .edmx: $($entityNames -join ', ')")
+        }
+        [void]$sb.AppendLine("# Original context name: $contextName")
+        [void]$sb.AppendLine("#")
+        [void]$sb.AppendLine("# TODO: Run this command to generate EF Core models from your database:")
+        [void]$sb.AppendLine("# dotnet ef dbcontext scaffold ""YOUR_CONNECTION_STRING"" $providerName --output-dir Models --context ${contextName}DbContext --force")
+        [void]$sb.AppendLine("#")
+        [void]$sb.AppendLine("# Replace YOUR_CONNECTION_STRING with your actual database connection string.")
+        [void]$sb.AppendLine("# You can find the original connection string in your Web.config file.")
+        if ($entityNames.Count -gt 0) {
+            [void]$sb.AppendLine("#")
+            [void]$sb.AppendLine("# To scaffold only specific tables, add --table flags:")
+            $tableExamples = ($entityNames | Select-Object -First 3 | ForEach-Object { "--table $_ " }) -join ''
+            [void]$sb.AppendLine("# dotnet ef dbcontext scaffold ""YOUR_CONNECTION_STRING"" $providerName --output-dir Models --context ${contextName}DbContext $tableExamples--force")
+        }
+        [void]$sb.AppendLine("#")
+        [void]$sb.AppendLine("# Prerequisites:")
+        [void]$sb.AppendLine("#   dotnet tool install --global dotnet-ef")
+        [void]$sb.AppendLine("#   dotnet add package Microsoft.EntityFrameworkCore.Design")
+        [void]$sb.AppendLine("#   dotnet add package $providerName")
+        [void]$sb.AppendLine("")
+
+        $scaffoldText = $sb.ToString()
+
+        # Write scaffold-command.txt
+        $scaffoldFile = Join-Path $OutputDir 'scaffold-command.txt'
+        if ($PSCmdlet.ShouldProcess($scaffoldFile, "Write EF Core scaffold command from $($edmxFile.Name)")) {
+            # Append if multiple .edmx files
+            if (Test-Path $scaffoldFile) {
+                Add-Content -Path $scaffoldFile -Value $scaffoldText -Encoding UTF8
+            } else {
+                Set-Content -Path $scaffoldFile -Value $scaffoldText -Encoding UTF8
+            }
+            Write-Layer2Log -File 'scaffold-command.txt' -Pattern 'EdmxScaffold' -Detail "Generated scaffold command for $($edmxFile.Name) ($($entityNames.Count) entities)"
+        }
+
+        # Also prepend as a comment block to Program.cs if it exists
+        $programCs = Join-Path $OutputDir 'Program.cs'
+        if ((Test-Path $programCs) -and $PSCmdlet.ShouldProcess($programCs, "Add scaffold command comment")) {
+            $programContent = Get-Content -Path $programCs -Raw -Encoding UTF8
+            if ($programContent -notmatch 'dotnet ef dbcontext scaffold') {
+                $commentBlock = "// ============================================================================`n"
+                $commentBlock += "// TODO: Generate EF Core models from your database using:`n"
+                $commentBlock += "// dotnet ef dbcontext scaffold ""YOUR_CONNECTION_STRING"" $providerName --output-dir Models --context ${contextName}DbContext --force`n"
+                $commentBlock += "// See scaffold-command.txt for full details and options.`n"
+                $commentBlock += "// ============================================================================`n`n"
+                $programContent = $commentBlock + $programContent
+                Set-Content -Path $programCs -Value $programContent -Encoding UTF8
+                Write-Layer2Log -File 'Program.cs' -Pattern 'EdmxScaffold' -Detail "Added scaffold command reference to top of Program.cs"
+            }
+        }
+
+        Write-ManualItem -File $relPath -Category 'EdmxScaffold' -Detail "DB-first .edmx detected ($($entityNames.Count) entities: $($entityNames -join ', ')). Run 'dotnet ef dbcontext scaffold' — see scaffold-command.txt"
+        $script:Summary.EdmxScaffold++
+    }
+}
+
+# ============================================================================
+# WebMethod → Minimal API Detection
+# ============================================================================
+#
+# Web Forms pages can have [WebMethod] attributed static methods that serve as
+# AJAX endpoints. These should become Minimal API endpoints in Blazor.
+
+function Convert-WebMethodToMinimalApi {
+    param(
+        [string]$SourceDir,
+        [string]$OutputDir
+    )
+
+    # Scan both source .aspx.cs files (if SourceDir provided) and output .razor.cs files
+    # Prefer source files when available (they have the original signatures)
+    # Only fall back to .razor.cs if no source is provided
+    $webMethodFiles = @()
+
+    if ($SourceDir -and (Test-Path $SourceDir)) {
+        $webMethodFiles += @(Get-ChildItem -Path $SourceDir -Filter '*.aspx.cs' -Recurse -File -ErrorAction SilentlyContinue)
+    } else {
+        # Only scan output .razor.cs files if no source directory provided
+        $webMethodFiles += @(Get-ChildItem -Path $OutputDir -Filter '*.razor.cs' -Recurse -File -ErrorAction SilentlyContinue)
+    }
+
+    $webMethodRegex = [regex]'(?ms)\[(?:System\.Web\.Services\.)?WebMethod(?:\([^\)]*\))?\]\s*public\s+static\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*\(([^\)]*)\)'
+    $totalMethods = 0
+
+    foreach ($file in $webMethodFiles) {
+        $content = Get-Content -Path $file.FullName -Raw -Encoding UTF8
+        if ($content -notmatch '\[(?:System\.Web\.Services\.)?WebMethod') { continue }
+
+        $matches_ = $webMethodRegex.Matches($content)
+        if ($matches_.Count -eq 0) { continue }
+
+        $relPath = $file.FullName
+        if ($SourceDir -and $file.FullName.StartsWith($SourceDir)) {
+            $relPath = $file.FullName.Substring($SourceDir.Length).TrimStart('\', '/')
+        } elseif ($file.FullName.StartsWith($OutputDir)) {
+            $relPath = $file.FullName.Substring($OutputDir.Length).TrimStart('\', '/')
+        }
+
+        # Determine the page name for API route generation
+        $pageName = [System.IO.Path]::GetFileNameWithoutExtension(
+            [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+        )
+        # Strip .aspx or .razor from the page name
+        $pageName = $pageName -replace '\.(aspx|razor)$', ''
+
+        Write-Layer2Log -File $relPath -Pattern 'WebMethod' -Detail "Found $($matches_.Count) WebMethod(s) in $($file.Name)"
+
+        $stubs = [System.Text.StringBuilder]::new()
+        [void]$stubs.AppendLine('')
+        [void]$stubs.AppendLine('// ============================================================================')
+        [void]$stubs.AppendLine("// WebMethod → Minimal API Stubs (from $($file.Name))")
+        [void]$stubs.AppendLine('// ============================================================================')
+        [void]$stubs.AppendLine('// The following [WebMethod] static methods were detected in the original')
+        [void]$stubs.AppendLine('// Web Forms page. They served as AJAX endpoints and should be converted')
+        [void]$stubs.AppendLine('// to Minimal API endpoints in Program.cs.')
+        [void]$stubs.AppendLine('//')
+
+        foreach ($m in $matches_) {
+            $returnType = $m.Groups[1].Value
+            $methodName = $m.Groups[2].Value
+            $paramsRaw = $m.Groups[3].Value.Trim()
+            $totalMethods++
+
+            # Parse parameters
+            $paramList = @()
+            $routeParams = @()
+            if ($paramsRaw) {
+                $paramParts = $paramsRaw -split '\s*,\s*'
+                foreach ($pp in $paramParts) {
+                    $pp = $pp.Trim()
+                    if ($pp -match '(\S+)\s+(\w+)') {
+                        $pType = $Matches[1]
+                        $pName = $Matches[2]
+                        $paramList += "$pType $pName"
+                        $routeParams += "($pType $pName)"
+                    }
+                }
+            }
+
+            # Determine HTTP method: GET for no params or simple types, POST for complex
+            $httpMethod = if ($paramList.Count -eq 0 -or $returnType -match '^(string|int|bool|double|float|decimal|long)$') { 'MapGet' } else { 'MapPost' }
+
+            $paramSignature = if ($routeParams.Count -gt 0) { ($routeParams -join ', ') } else { '()' }
+
+            [void]$stubs.AppendLine("// TODO: WebMethod ""$methodName"" was converted from a Web Forms AJAX endpoint.")
+            [void]$stubs.AppendLine("// Original: [WebMethod] public static $returnType $methodName($paramsRaw)")
+            [void]$stubs.AppendLine("// Add to Program.cs:")
+            [void]$stubs.AppendLine("// app.$httpMethod(""/api/$pageName/$methodName"", $paramSignature => { /* original logic */ });")
+            [void]$stubs.AppendLine('//')
+
+            Write-ManualItem -File $relPath -Category 'WebMethod' -Detail "[WebMethod] $returnType $methodName($paramsRaw) → app.$httpMethod(""/api/$pageName/$methodName"", ...)"
+        }
+
+        # Append stubs to the corresponding .razor.cs file in the output
+        $razorCsPath = $null
+        if ($file.Extension -eq '.cs' -and $file.Name -like '*.razor.cs') {
+            $razorCsPath = $file.FullName
+        } else {
+            # Map source .aspx.cs to output .razor.cs
+            $razorCsName = ($file.Name -replace '\.aspx\.cs$', '.razor.cs')
+            $razorCsFiles = @(Get-ChildItem -Path $OutputDir -Filter $razorCsName -Recurse -File -ErrorAction SilentlyContinue)
+            if ($razorCsFiles) {
+                $razorCsPath = $razorCsFiles[0].FullName
+            }
+        }
+
+        if ($razorCsPath -and (Test-Path $razorCsPath)) {
+            if ($PSCmdlet.ShouldProcess($razorCsPath, "Append WebMethod → Minimal API stubs")) {
+                $existingContent = Get-Content -Path $razorCsPath -Raw -Encoding UTF8
+                if ($existingContent -notmatch 'WebMethod.*Minimal API Stubs') {
+                    Add-Content -Path $razorCsPath -Value $stubs.ToString() -Encoding UTF8
+                    Write-Layer2Log -File $razorCsPath -Pattern 'WebMethod' -Detail "Appended $($matches_.Count) Minimal API stub(s)"
+                }
+            }
+        }
+
+        # Also generate a consolidated snippet for Program.cs
+        $programCs = Join-Path $OutputDir 'Program.cs'
+        if ((Test-Path $programCs) -and $PSCmdlet.ShouldProcess($programCs, "Add WebMethod API endpoint stubs")) {
+            $programContent = Get-Content -Path $programCs -Raw -Encoding UTF8
+            if ($programContent -notmatch "// WebMethod endpoints from $pageName") {
+                $apiBlock = "`n// --- WebMethod endpoints from $pageName (converted from [WebMethod] AJAX) ---"
+                foreach ($m in $matches_) {
+                    $returnType = $m.Groups[1].Value
+                    $methodName = $m.Groups[2].Value
+                    $paramsRaw = $m.Groups[3].Value.Trim()
+
+                    $routeParams = @()
+                    if ($paramsRaw) {
+                        $paramParts = $paramsRaw -split '\s*,\s*'
+                        foreach ($pp in $paramParts) {
+                            if ($pp.Trim() -match '(\S+)\s+(\w+)') {
+                                $routeParams += "($($Matches[1]) $($Matches[2]))"
+                            }
+                        }
+                    }
+                    $httpMethod = if ($routeParams.Count -eq 0 -or $returnType -match '^(string|int|bool|double|float|decimal|long)$') { 'MapGet' } else { 'MapPost' }
+                    $paramSignature = if ($routeParams.Count -gt 0) { ($routeParams -join ', ') } else { '()' }
+                    $apiBlock += "`n// TODO: app.$httpMethod(""/api/$pageName/$methodName"", $paramSignature => { /* original logic from $($file.Name) */ });"
+                }
+                $apiBlock += "`n"
+
+                $programContent = $programContent.Replace('app.Run();', "${apiBlock}`napp.Run();")
+                Set-Content -Path $programCs -Value $programContent -Encoding UTF8
+                Write-Layer2Log -File 'Program.cs' -Pattern 'WebMethod' -Detail "Added $($matches_.Count) API endpoint stub(s) for $pageName"
+            }
+        }
+
+        $script:Summary.WebMethod += $matches_.Count
+    }
 }
 
 # ============================================================================
@@ -940,6 +1266,11 @@ $dbCtx = Find-DbContextName -ProjectRoot $Path
 Write-Host "  Namespace:  $ns" -ForegroundColor DarkGray
 Write-Host "  DbContext:  $(if ($dbCtx) { $dbCtx } else { '(none detected)' })" -ForegroundColor DarkGray
 Write-Host "  DbProvider: $DbProvider" -ForegroundColor DarkGray
+if ($SourcePath) {
+    Write-Host "  SourcePath: $SourcePath" -ForegroundColor DarkGray
+}
+Write-Host ''
+
 Write-Host ''
 
 # ── Pattern A: Scan code-behinds ──
@@ -982,17 +1313,72 @@ if (Test-PatternC -ProjectRoot $Path) {
     Write-Host '  No Pattern C candidates detected (or already transformed).' -ForegroundColor DarkGray
 }
 
+# ── EDMX Scaffold: Detect DB-first .edmx files ──
+# (Runs after Pattern C so Program.cs exists and won't be overwritten)
+Write-Host ''
+Write-Host '── EDMX → EF Core Scaffold Command ──' -ForegroundColor Magenta
+if ($SourcePath -and (Test-Path $SourcePath)) {
+    Convert-EdmxToScaffold -SourceDir $SourcePath -OutputDir $Path
+    if ($script:Summary.EdmxScaffold -eq 0) {
+        Write-Host '  No .edmx files detected in source project.' -ForegroundColor DarkGray
+    }
+} else {
+    Write-Host '  No -SourcePath provided — skipping .edmx detection.' -ForegroundColor DarkGray
+}
+
+# ── WebMethod → Minimal API Detection ──
+# (Runs after Pattern A/C so .razor.cs and Program.cs are in final form)
+Write-Host ''
+Write-Host '── WebMethod → Minimal API Detection ──' -ForegroundColor Magenta
+Convert-WebMethodToMinimalApi -SourceDir $SourcePath -OutputDir $Path
+if ($script:Summary.WebMethod -eq 0) {
+    Write-Host '  No [WebMethod] methods detected.' -ForegroundColor DarkGray
+}
+
 # ── Summary ──
 Write-Host ''
 Write-Host '╔══════════════════════════════════════════════════════════╗' -ForegroundColor Cyan
 Write-Host '║  Layer 2 Summary                                        ║' -ForegroundColor Cyan
 Write-Host '╠══════════════════════════════════════════════════════════╣' -ForegroundColor Cyan
+Write-Host "║  EDMX Scaffold Commands:              $($script:Summary.EdmxScaffold) file(s)         ║" -ForegroundColor Magenta
+Write-Host "║  WebMethod → Minimal API:             $($script:Summary.WebMethod) method(s)       ║" -ForegroundColor Magenta
 Write-Host "║  Pattern A (FormView→ComponentBase):  $($script:Summary.PatternA) file(s)         ║" -ForegroundColor Cyan
 Write-Host "║  Pattern B (Auth Simplification):     $($script:Summary.PatternB) file(s)         ║" -ForegroundColor Green
 Write-Host "║  Pattern C (Program.cs Bootstrap):    $($script:Summary.PatternC) file(s)         ║" -ForegroundColor Yellow
 Write-Host "║  Skipped (already transformed):       $($script:Summary.Skipped) file(s)         ║" -ForegroundColor DarkGray
 Write-Host '╚══════════════════════════════════════════════════════════╝' -ForegroundColor Cyan
 Write-Host ''
+
+# Manual items report
+if ($script:ManualItems.Count -gt 0) {
+    Write-Host '--- Items Needing Manual Attention (Layer 2) ---' -ForegroundColor Yellow
+    $grouped = $script:ManualItems | Group-Object -Property Category
+    foreach ($group in $grouped) {
+        Write-Host "  [$($group.Name)] ($($group.Count) item(s)):" -ForegroundColor Yellow
+        foreach ($item in $group.Group) {
+            Write-Host "    • $($item.File): $($item.Detail)"
+        }
+    }
+    Write-Host ''
+
+    # Write manual-items report to file
+    $manualItemsPath = Join-Path $Path 'layer2-manual-items.md'
+    $mdContent = [System.Text.StringBuilder]::new()
+    [void]$mdContent.AppendLine('# Layer 2 Manual Items')
+    [void]$mdContent.AppendLine('')
+    [void]$mdContent.AppendLine('Items that require manual developer attention after Layer 2 transforms.')
+    [void]$mdContent.AppendLine('')
+    foreach ($group in $grouped) {
+        [void]$mdContent.AppendLine("## $($group.Name) ($($group.Count) item(s))")
+        [void]$mdContent.AppendLine('')
+        foreach ($item in $group.Group) {
+            [void]$mdContent.AppendLine("- **$($item.File)**: $($item.Detail)")
+        }
+        [void]$mdContent.AppendLine('')
+    }
+    Set-Content -Path $manualItemsPath -Value $mdContent.ToString() -Encoding UTF8
+    Write-Host "Manual items report written to: $manualItemsPath" -ForegroundColor DarkGray
+}
 
 # Export transform log
 if ($script:TransformLog.Count -gt 0) {

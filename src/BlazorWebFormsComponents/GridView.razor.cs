@@ -283,6 +283,11 @@ namespace BlazorWebFormsComponents
 		[Parameter] public int PageIndex { get; set; }
 
 		/// <summary>
+		/// Occurs when the page index is changing. Can be cancelled.
+		/// </summary>
+		[Parameter] public EventCallback<PageChangedEventArgs> PageIndexChanging { get; set; }
+
+		/// <summary>
 		/// Occurs after the page index has changed.
 		/// </summary>
 		[Parameter] public EventCallback<PageChangedEventArgs> PageIndexChanged { get; set; }
@@ -373,6 +378,9 @@ namespace BlazorWebFormsComponents
 			var startRowIndex = newPageIndex * PageSize;
 
 			var args = new PageChangedEventArgs(newPageIndex, oldPageIndex, totalPages, startRowIndex);
+			await PageIndexChanging.InvokeAsync(args);
+
+			if (args.Cancel) return;
 
 			PageIndex = args.NewPageIndex;
 			await PageIndexChanged.InvokeAsync(args);

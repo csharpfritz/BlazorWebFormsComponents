@@ -1673,6 +1673,100 @@ function Convert-LogoutFormToLink {
 
 #endregion
 
+#region --- CSS Isolation ---
+
+function Convert-CssToIsolation {
+    <#
+    .SYNOPSIS
+        Extracts embedded <style> blocks and page-specific CSS into Blazor CSS isolation files.
+    .DESCRIPTION
+        When processing a Web Forms page (e.g., ProductList.aspx), this function:
+        1. Detects embedded <style> blocks in the .aspx markup
+        2. Extracts the CSS content
+        3. Writes it to a .razor.css file alongside the generated .razor file
+        4. Removes the <style> block from the Razor markup
+        5. If the CSS uses ASP.NET-generated IDs (ctl00_...), adds a TODO comment
+
+        This produces Blazor CSS isolation files that scope styles to the component,
+        which is the correct Blazor pattern for per-page CSS.
+    #>
+    param(
+        [string]$Content,
+        [string]$OutputFile,
+        [string]$RelPath
+    )
+
+    $cssContent = [System.Text.StringBuilder]::new()
+    $styleBlockCount = 0
+    $hasAspNetIds = $false
+
+    # Extract all <style> blocks (including those with attributes like type="text/css")
+    $styleRegex = [regex]'(?si)<style\b[^>]*>(.*?)</style>'
+    $styleMatches = $styleRegex.Matches($Content)
+
+    if ($styleMatches.Count -eq 0) {
+        return $Content
+    }
+
+    foreach ($m in $styleMatches) {
+        $css = $m.Groups[1].Value.Trim()
+        if ([string]::IsNullOrWhiteSpace($css)) { continue }
+
+        $styleBlockCount++
+        [void]$cssContent.AppendLine("/* Extracted from $RelPath — style block $styleBlockCount */")
+        [void]$cssContent.AppendLine($css)
+        [void]$cssContent.AppendLine('')
+
+        # Check for ASP.NET-generated control IDs
+        if ($css -match 'ctl\d+[_]|MainContent_|ContentPlaceHolder') {
+            $hasAspNetIds = $true
+        }
+    }
+
+    if ($cssContent.Length -eq 0) {
+        return $Content
+    }
+
+    # Build the .razor.css file content
+    $razorCssContent = [System.Text.StringBuilder]::new()
+    if ($hasAspNetIds) {
+        [void]$razorCssContent.AppendLine('/* TODO: This CSS contains ASP.NET-generated control IDs (e.g., ctl00_MainContent_...).')
+        [void]$razorCssContent.AppendLine('   These IDs will NOT exist in the Blazor output. Update selectors to use')
+        [void]$razorCssContent.AppendLine('   class names, element selectors, or Blazor component structure instead. */')
+        [void]$razorCssContent.AppendLine('')
+    }
+    [void]$razorCssContent.Append($cssContent.ToString())
+
+    # Write the .razor.css file
+    $razorCssFile = $OutputFile + '.css'  # e.g., ProductList.razor.css
+    $razorCssDir = Split-Path $razorCssFile -Parent
+
+    if ($PSCmdlet.ShouldProcess($razorCssFile, "Write CSS isolation file")) {
+        if (-not (Test-Path $razorCssDir)) {
+            New-Item -ItemType Directory -Path $razorCssDir -Force | Out-Null
+        }
+        # Append if file already exists (multiple sources contributing)
+        if (Test-Path $razorCssFile) {
+            Add-Content -Path $razorCssFile -Value $razorCssContent.ToString() -Encoding UTF8
+        } else {
+            Set-Content -Path $razorCssFile -Value $razorCssContent.ToString() -Encoding UTF8
+        }
+    }
+
+    # Remove <style> blocks from the markup
+    $Content = $styleRegex.Replace($Content, '')
+
+    # Clean up blank lines left by removed style blocks
+    $Content = $Content -replace '(\r?\n){3,}', "`n`n"
+
+    Write-TransformLog -File $RelPath -Transform 'CSSIsolation' -Detail "Extracted $styleBlockCount style block(s) to $(Split-Path $razorCssFile -Leaf)"
+    Write-ManualItem -File $RelPath -Category 'CSSIsolation' -Detail "Extracted $styleBlockCount embedded <style> block(s) to CSS isolation file$(if ($hasAspNetIds) { ' — contains ASP.NET-generated IDs that need updating' })"
+
+    return $Content
+}
+
+#endregion
+
 #region --- Main File Transform Pipeline ---
 
 function Convert-WebFormsFile {
@@ -1791,6 +1885,11 @@ function Convert-WebFormsFile {
 
     # SSR Fix 3b: Convert logout <form>+<button> patterns to <a> links
     $content = Convert-LogoutFormToLink -Content $content -RelPath $relativePath
+
+    # CSS Isolation: Extract embedded <style> blocks to .razor.css files
+    if ($extension -eq '.aspx' -or $extension -eq '.ascx') {
+        $content = Convert-CssToIsolation -Content $content -OutputFile $outputFile -RelPath $relativePath
+    }
 
     # Clean up leftover blank lines from removed directives (collapse 3+ consecutive blank lines to 2)
     $content = $content -replace '(\r?\n){3,}', "`n`n"

@@ -251,6 +251,35 @@ $DataSourceFiles = $FileResults | Where-Object { $_.UsesDataSourceControls }
 $ViewStateFiles = $FileResults | Where-Object { $_.HasViewState }
 $SessionFiles = $FileResults | Where-Object { $_.HasSession }
 
+# Detect .edmx files (DB-first Entity Framework)
+$EdmxFiles = @(Get-ChildItem -Path $ResolvedPath -Filter '*.edmx' -Recurse -File -ErrorAction SilentlyContinue |
+    ForEach-Object {
+        $relPath = $_.FullName
+        if ($_.FullName.StartsWith($ResolvedPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $relPath = $_.FullName.Substring($ResolvedPath.Length).TrimStart('\', '/')
+        }
+        $relPath
+    })
+
+# Detect [WebMethod] attributed methods in code-behind files
+$WebMethodFiles = @()
+$WebMethodCount = 0
+$cbFiles = Get-ChildItem -Path $ResolvedPath -Filter '*.aspx.cs' -Recurse -File -ErrorAction SilentlyContinue
+foreach ($cbf in $cbFiles) {
+    try {
+        $cbContent = [System.IO.File]::ReadAllText($cbf.FullName)
+        if ($cbContent -match '\[(?:System\.Web\.Services\.)?WebMethod') {
+            $relPath = $cbf.FullName
+            if ($cbf.FullName.StartsWith($ResolvedPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $relPath = $cbf.FullName.Substring($ResolvedPath.Length).TrimStart('\', '/')
+            }
+            $wmCount = ([regex]'\[(?:System\.Web\.Services\.)?WebMethod').Matches($cbContent).Count
+            $WebMethodFiles += $relPath
+            $WebMethodCount += $wmCount
+        }
+    } catch { }
+}
+
 $Summary = [PSCustomObject]@{
     ProjectPath       = $ResolvedPath
     TotalFiles        = $totalFiles
@@ -265,6 +294,9 @@ $Summary = [PSCustomObject]@{
     DataSourceFiles   = @($DataSourceFiles | ForEach-Object { $_.RelativePath })
     ViewStateFiles    = @($ViewStateFiles | ForEach-Object { $_.RelativePath })
     SessionFiles      = @($SessionFiles | ForEach-Object { $_.RelativePath })
+    EdmxFiles         = $EdmxFiles
+    WebMethodFiles    = $WebMethodFiles
+    WebMethodCount    = $WebMethodCount
 }
 
 #endregion
@@ -331,7 +363,9 @@ function Write-ConsoleReport {
     # Special attention
     $hasWarnings = ($Report.DataSourceFiles.Count -gt 0) -or
                    ($Report.ViewStateFiles.Count -gt 0) -or
-                   ($Report.SessionFiles.Count -gt 0)
+                   ($Report.SessionFiles.Count -gt 0) -or
+                   ($Report.EdmxFiles.Count -gt 0) -or
+                   ($Report.WebMethodFiles.Count -gt 0)
 
     if ($hasWarnings) {
         Write-Host "  FILES NEEDING SPECIAL ATTENTION" -ForegroundColor Yellow
@@ -357,6 +391,21 @@ function Write-ConsoleReport {
                 Write-Host "      - $f" -ForegroundColor DarkYellow
             }
         }
+
+        if ($Report.EdmxFiles.Count -gt 0) {
+            Write-Host "    DB-First .edmx Files ($($Report.EdmxFiles.Count) files):" -ForegroundColor Magenta
+            foreach ($f in $Report.EdmxFiles) {
+                Write-Host "      - $f  (use 'dotnet ef dbcontext scaffold' for EF Core)" -ForegroundColor DarkYellow
+            }
+        }
+
+        if ($Report.WebMethodFiles.Count -gt 0) {
+            Write-Host "    [WebMethod] AJAX Endpoints ($($Report.WebMethodCount) methods in $($Report.WebMethodFiles.Count) files):" -ForegroundColor Magenta
+            foreach ($f in $Report.WebMethodFiles) {
+                Write-Host "      - $f  (convert to Minimal API endpoints)" -ForegroundColor DarkYellow
+            }
+        }
+
         Write-Host ""
     }
 
@@ -459,7 +508,9 @@ function ConvertTo-MarkdownReport {
     # Special attention
     $hasWarnings = ($Report.DataSourceFiles.Count -gt 0) -or
                    ($Report.ViewStateFiles.Count -gt 0) -or
-                   ($Report.SessionFiles.Count -gt 0)
+                   ($Report.SessionFiles.Count -gt 0) -or
+                   ($Report.EdmxFiles.Count -gt 0) -or
+                   ($Report.WebMethodFiles.Count -gt 0)
 
     if ($hasWarnings) {
         [void]$sb.AppendLine("## Files Needing Special Attention")
@@ -487,6 +538,28 @@ function ConvertTo-MarkdownReport {
             [void]$sb.AppendLine("### Session Usage ($($Report.SessionFiles.Count) files)")
             [void]$sb.AppendLine("")
             foreach ($f in $Report.SessionFiles) {
+                [void]$sb.AppendLine("- ``$f``")
+            }
+            [void]$sb.AppendLine("")
+        }
+
+        if ($Report.EdmxFiles.Count -gt 0) {
+            [void]$sb.AppendLine("### DB-First .edmx Files ($($Report.EdmxFiles.Count) files)")
+            [void]$sb.AppendLine("")
+            [void]$sb.AppendLine("> Use ``dotnet ef dbcontext scaffold`` to generate EF Core models from your database.")
+            [void]$sb.AppendLine("")
+            foreach ($f in $Report.EdmxFiles) {
+                [void]$sb.AppendLine("- ``$f``")
+            }
+            [void]$sb.AppendLine("")
+        }
+
+        if ($Report.WebMethodFiles.Count -gt 0) {
+            [void]$sb.AppendLine("### [WebMethod] AJAX Endpoints ($($Report.WebMethodCount) methods in $($Report.WebMethodFiles.Count) files)")
+            [void]$sb.AppendLine("")
+            [void]$sb.AppendLine("> Convert to Minimal API endpoints in ``Program.cs``.")
+            [void]$sb.AppendLine("")
+            foreach ($f in $Report.WebMethodFiles) {
                 [void]$sb.AppendLine("- ``$f``")
             }
             [void]$sb.AppendLine("")

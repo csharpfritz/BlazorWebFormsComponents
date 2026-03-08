@@ -87,7 +87,7 @@ User Controls in Web Forms are identified by their `.ascx` extension and inclusi
 
 Components have no direct reference to the structure and contents of the parent Page or MasterPage.  If your controls rely on this capability of Web Forms, you will want to instead pass around a `CascadingValue` that your controls can receive as a `CascadingParameter`.
 
-Components also do not have ViewState.  We are [considering implementing a ViewState-like object to help with conversion](https://github.com/FritzAndFriends/BlazorWebFormsComponents/issues/93).  If you were storing the state of things in `ControlState` or `ViewState` we recommend allocating a class-level field or parameter to store those values.
+Components have a [ViewState](../UtilityFeatures/ViewState.md) compatibility property — a `Dictionary<string, object>` on every BWFC component that lets `ViewState["key"] = value` code compile and run as-is.  This is an in-memory dictionary (not serialized like Web Forms ViewState), but it covers the common pattern of storing component-scoped state.  For long-term maintainability, we recommend refactoring ViewState usage to class-level fields and strongly-typed properties after your initial migration.
 
 We recommend copying your HTML and code into a `YOURCOMPONENT.razor` file with the same name and place it in the same folder structure under a `Components` folder as was located in your web forms project.  You can omit the `<% control` directive at the top of the file.  You should then migrate any methods to a `YOURCOMPONENT.razor.cs` partial class.
 
