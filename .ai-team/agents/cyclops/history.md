@@ -161,3 +161,15 @@ Key learnings:
 - `Get-PluralName` returns 'Items' for `object` entity type to avoid generating broken `db.objects` references
 
 📌 Team update (2026-03-08): Preserve SelectMethod in migration scripts — BWFC supports it natively via SelectHandler<T>. Stop stripping the attribute, add signature-adaptation TODO instead — decided by Forge
+
+### GridView PageIndexChanging Event (2026-03-09)
+
+**Added `PageIndexChanging` cancellable event to GridView, closing the library gap identified in ContosoUniversity Run 01.**
+
+- Added `[Parameter] public EventCallback<PageChangedEventArgs> PageIndexChanging` to `GridView.razor.cs`
+- Modified `GoToPage()` to invoke `PageIndexChanging` before the page change, checking `args.Cancel` to skip the change if cancelled
+- `PageIndexChanged` still fires after the change (existing behavior preserved)
+- Used the shared `PageChangedEventArgs` class (not a new `GridViewPageEventArgs`) — matches DetailsView's pattern exactly
+- `PageChangedEventArgs` already has `NewPageIndex`, `OldPageIndex`, `TotalPages`, `StartRowIndex`, and `Cancel` — covers the full Web Forms `GridViewPageEventArgs` contract
+
+**Key learning:** The project uses a shared `PageChangedEventArgs` for all paging events across controls (DetailsView, GridView), rather than control-specific event args classes like Web Forms does. This is a deliberate simplification. The handler can modify `args.NewPageIndex` before the change takes effect, matching the Web Forms behavior where you set `e.NewPageIndex` in the handler.

@@ -178,3 +178,52 @@ Decision inbox entry filed with Run 02 priorities.
 - Unconvertible page detection should match on SDK/API patterns, not business-domain words. "Checkout" is a legitimate page name; "ProcessPayment" or "PayPal" SDK imports are the actual indicators of code that needs manual migration.
 
 📌 Team update (2026-03-08): WingtipToys hardcoding audit — 23 findings (5 CRITICAL, 3 HIGH, 10 MEDIUM, 5 LOW). Layer 2 entity detection, Program.cs template, and skill files need genericization — decided by Cyclops
+
+### ContosoUniversity Run 01 Feature Implementation (2026-03-09)
+
+**Task:** Implement 3 migration script features from ContosoUniversity Run 01 review (approved by Jeff).
+
+**Changes made:**
+
+1. **DB-First EF Scaffold Command Generation (Layer 2):**
+   - Added `Convert-EdmxToScaffold` function to `bwfc-migrate-layer2.ps1`
+   - Detects `.edmx` files in the source project when `-SourcePath` is provided
+   - Parses EDMX XML to extract entity names (from ConceptualModels), EntityContainer name (for DbContext), and SSDL provider (for EF Core provider mapping)
+   - Generates `scaffold-command.txt` with full `dotnet ef dbcontext scaffold` command, prerequisites, and table-specific scaffolding examples
+   - Adds a scaffold comment block at the top of Program.cs (runs after Pattern C to avoid being overwritten)
+   - Reports .edmx findings in the manual-items report
+   - Added `-SourcePath` optional parameter to Layer 2 script
+
+2. **WebMethod → Minimal API Detection (Layer 2):**
+   - Added `Convert-WebMethodToMinimalApi` function to `bwfc-migrate-layer2.ps1`
+   - Scans source `.aspx.cs` files for `[WebMethod]` and `[System.Web.Services.WebMethod]` attributes
+   - Extracts method name, return type, and parameter signatures
+   - Generates Minimal API stubs (`app.MapGet`/`app.MapPost`) as TODO comments in both the `.razor.cs` file and `Program.cs`
+   - Runs AFTER Pattern A (so .razor.cs is in final form) and Pattern C (so Program.cs exists)
+   - Automatically determines GET vs POST based on return type/parameter complexity
+   - Falls back to scanning output `.razor.cs` files if no `-SourcePath` provided
+
+3. **CSS Isolation in Layer 1:**
+   - Added `Convert-CssToIsolation` function to `bwfc-migrate.ps1`
+   - Extracts embedded `<style>` blocks from `.aspx` and `.ascx` files
+   - Writes CSS content to `.razor.css` files alongside the generated `.razor` files
+   - Removes `<style>` blocks from the Razor markup
+   - Detects ASP.NET-generated control IDs (`ctl00_MainContent_...`) and adds a TODO warning comment in the `.razor.css` file
+   - Called during the main page conversion loop, after all other transforms but before writing
+   - Reports extractions in ManualItems with ASP.NET ID warnings
+
+4. **Scanner Updates:**
+   - Updated `bwfc-scan.ps1` to detect `.edmx` files and `[WebMethod]` methods
+   - Added `EdmxFiles`, `WebMethodFiles`, and `WebMethodCount` to the scan summary object
+   - Updated console report and Markdown report to display these findings under "Files Needing Special Attention"
+
+5. **Layer 2 Infrastructure:**
+   - Added `$script:ManualItems` list and `Write-ManualItem` helper to Layer 2 (matching Layer 1 convention)
+   - Added `layer2-manual-items.md` report generation with grouped categories
+   - Updated summary display to include EDMX and WebMethod counts
+
+**Key learnings:**
+- EDMX files have both SSDL (StorageModels) and CSDL (ConceptualModels) EntityContainers. The CSDL container is the one that maps to the DbContext name — use the last `<EntityContainer>` match, not the first.
+- WebMethod detection should scan source `.aspx.cs` OR output `.razor.cs`, not both (they contain the same code). Prefer source when `-SourcePath` is available to get original signatures.
+- New features that modify Program.cs must run AFTER Pattern C to avoid being overwritten. Execution order: Pattern A → Pattern B → Pattern C → EDMX Scaffold → WebMethod detection.
+- PowerShell `Get-ChildItem` returning a single result is NOT an array — always wrap with `@()` when using `.Count` in strict mode.

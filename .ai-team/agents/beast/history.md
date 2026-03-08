@@ -118,3 +118,12 @@ Documentation & migration reporting agent. M1–M16 docs shipped (all control ca
 📌 Team update (2026-03-08): Preserve SelectMethod in migration scripts — BWFC supports it natively via SelectHandler<T>. Stop stripping the attribute, add signature-adaptation TODO instead — decided by Forge
 
 📌 Team update (2026-03-08): WingtipToys hardcoding audit — 23 findings (5 CRITICAL, 3 HIGH, 10 MEDIUM, 5 LOW). Layer 2 entity detection, Program.cs template, and skill files need genericization — decided by Cyclops
+
+### ViewState Documentation Enhancement (2026-03-09)
+
+- **Scope:** Rewrote `docs/UtilityFeatures/ViewState.md` from a sparse 45-line doc to a comprehensive utility feature page. Fixed outdated migration guide.
+- **ViewState.md changes:** Added Microsoft docs link, Background section with Web Forms context, detailed Blazor Implementation section showing the `[Obsolete]` dictionary pattern, `EnableViewState` parameter documentation, Web Forms vs Blazor usage comparison, migration path table, in-memory limitations table (Web Forms vs BWFC side-by-side), practical sort-direction migration example (before/after), cross-request state alternatives table (cascading values, scoped services, etc.), refactored "Moving On" with concrete code showing strongly-typed replacement, admonitions for key warnings, and See Also cross-references.
+- **Migration/readme.md fix:** Line 90 previously stated "Components also do not have ViewState" and linked to GitHub issue #93 as if it were still under consideration. This was **outdated** — ViewState has been implemented. Updated to describe the existing `ViewState` property with link to the new doc page.
+- **mkdocs.yml:** Already had `ViewState: UtilityFeatures/ViewState.md` entry — no change needed.
+- **Key findings:** The `BaseWebFormsComponent.ViewState` property (line 146) is a `Dictionary<string, object>` with `[Obsolete]` attribute. `EnableViewState` (line 75-76) is also present as a no-op parameter for markup compatibility. Decision 6915 confirmed ViewState works for ContosoUniversity Instructors sort-direction scenario.
+- **Pattern followed:** Utility Feature Documentation Template from the documentation skill — Background → Web Forms Usage → Blazor Implementation → Migration Path → Limitations → Moving On → See Also.
