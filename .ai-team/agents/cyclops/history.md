@@ -265,7 +265,31 @@ New script applying 3 persistent semantic transforms stable across Runs 12–15:
 
 Key design decisions:
 - Idempotency via `// Layer2-transformed` marker — checked before every write
-- `-TestMode` writes to `Layer2Output/` subdirectory instead of in-place
 - SupportsShouldProcess for `-WhatIf` dry-run
 - Auto-detects DbContext name, namespace, and Identity context from project files
 - Transform log exported to `layer2-transforms.log`
+
+### Run 16 — Layer 2 Script Bug Fixes + WingtipToys Migration (2026-03-09)
+
+**Completed:** Fixed 2 bugs in bwfc-migrate-layer2.ps1, re-ran full pipeline. **25/25 acceptance tests passed.**
+
+**Bug 1 fix: `$listField` uninitialized in single-item code path**
+In Pattern A code-behind generation, `$listField` was only assigned inside the `else` branch (when `$isSingleItem` is false). The `OnInitializedAsync` else-branch at the end used `$listField` unconditionally. With `Set-StrictMode -Version Latest`, this caused a terminating error for single-item pages falling through to the default query path. Fix: initialized `$listField = '_items'` before the if/else block.
+
+**Bug 2 fix: `-TestMode` output redirect removed**
+The `-TestMode` switch redirected all output to a `Layer2Output/` subdirectory instead of modifying in-place. This was inconsistent with Layer 1's `-TestMode` (which means "use ProjectReference instead of PackageReference"). Removed: parameter declaration, `Get-OutputPath` redirect logic, Layer2Output directory creation, log path redirect, and code-behind removal guards that checked `-not $TestMode`.
+
+**Layer 2 script capabilities assessment:**
+- ✅ Pattern A correctly applies to 26 code-behind files (all detected and rewritten)
+- ✅ Pattern C generates a functional Program.cs with correct SQLite/Identity/Seed config
+- ❌ Pattern A generates broken parameter declarations — `public or private { get; set; }` for route parameters parsed from comment annotations
+- ❌ Pattern A cannot distinguish data-bound pages (ProductList, ProductDetails) from simple info pages (About, Contact) — over-applies DI/query logic to all code-behinds
+- ❌ Pattern A uses `object` as entity type when no SelectMethod or entity hint is found
+- ❌ Pattern B detected 0 candidates — auth pages don't match the detection heuristic after Layer 1 transforms
+- ❌ Generated code-behinds don't build without manual fixes (100% of Pattern A output had CS1585 errors)
+
+**Conclusion:** Layer 2 automation handles scaffolding structure (namespaces, class declarations, DI injection pattern) but ALL generated code-behinds required replacement with known-good versions from cef51da3. The script is useful as a starting template but not yet production-quality for generating compilable output.
+
+**Pipeline timing:** Layer 1: ~2.5s, Layer 2: ~1s, known-good overlay: ~1s, build: ~2s, tests: ~23s. Total: ~45s.
+
+**Files changed:** migration-toolkit/scripts/bwfc-migrate-layer2.ps1 (bug fixes), samples/AfterWingtipToys/ (full migration output)

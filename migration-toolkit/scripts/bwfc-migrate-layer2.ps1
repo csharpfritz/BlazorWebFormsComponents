@@ -16,9 +16,6 @@
 .PARAMETER Path
     Path to the Layer 1 output directory (the Blazor project root).
 
-.PARAMETER TestMode
-    When set, creates output in a 'Layer2Output' subdirectory instead of modifying in-place.
-
 .PARAMETER WhatIf
     Dry-run mode — reports what would change without modifying files.
 
@@ -38,16 +35,12 @@
 .EXAMPLE
     .\bwfc-migrate-layer2.ps1 -Path .\output\MyBlazorApp -DbProvider SqlServer -WhatIf
 
-.EXAMPLE
-    .\bwfc-migrate-layer2.ps1 -Path .\output\MyBlazorApp -TestMode
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory)]
     [string]$Path,
-
-    [switch]$TestMode,
 
     [ValidateSet('SQLite', 'SqlServer', 'PostgreSQL', 'InMemory')]
     [string]$DbProvider = 'SQLite',
@@ -87,16 +80,6 @@ function Write-Layer2Log {
 
 function Get-OutputPath {
     param([string]$OriginalPath)
-    if ($TestMode) {
-        $rel = [System.IO.Path]::GetRelativePath($Path, $OriginalPath)
-        $testDir = Join-Path $Path 'Layer2Output'
-        $dest = Join-Path $testDir $rel
-        $destDir = Split-Path $dest -Parent
-        if (-not (Test-Path $destDir)) {
-            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-        }
-        return $dest
-    }
     return $OriginalPath
 }
 
@@ -294,6 +277,7 @@ function Invoke-PatternA {
     }
 
     # Add data field
+    $listField = '_items'  # default, overridden below if not single item
     if ($isSingleItem) {
         $newContent += "        private List<${entityType}> _item = new();`n"
     } else {
@@ -513,7 +497,7 @@ function Invoke-PatternB {
             # Remove code-behind if it exists (login uses @code block)
             $codeBehind = $RazorPath + '.cs'
             $codeBehindOutput = Get-OutputPath -OriginalPath $codeBehind
-            if ((Test-Path $codeBehind) -and -not $TestMode) {
+            if (Test-Path $codeBehind) {
                 Remove-Item -Path $codeBehindOutput -Force -ErrorAction SilentlyContinue
                 Write-Layer2Log -File $codeBehind -Pattern 'PatternB' -Detail "Removed code-behind (merged into @code block)"
             }
@@ -617,7 +601,7 @@ function Invoke-PatternB {
             # Remove code-behind if it exists
             $codeBehind = $RazorPath + '.cs'
             $codeBehindOutput = Get-OutputPath -OriginalPath $codeBehind
-            if ((Test-Path $codeBehind) -and -not $TestMode) {
+            if (Test-Path $codeBehind) {
                 Remove-Item -Path $codeBehindOutput -Force -ErrorAction SilentlyContinue
                 Write-Layer2Log -File $codeBehind -Pattern 'PatternB' -Detail "Removed code-behind (merged into @code block)"
             }
@@ -844,14 +828,6 @@ if (-not (Test-Path $Path)) {
 
 $Path = (Resolve-Path $Path).Path
 
-if ($TestMode) {
-    Write-Host "[TestMode] Output will be written to $Path\Layer2Output" -ForegroundColor Yellow
-    $testOutDir = Join-Path $Path 'Layer2Output'
-    if (-not (Test-Path $testOutDir)) {
-        New-Item -ItemType Directory -Path $testOutDir -Force | Out-Null
-    }
-}
-
 if ($WhatIfPreference) {
     Write-Host "[WhatIf] Dry-run mode — no files will be modified" -ForegroundColor Yellow
 }
@@ -919,7 +895,6 @@ Write-Host ''
 # Export transform log
 if ($script:TransformLog.Count -gt 0) {
     $logPath = Join-Path $Path 'layer2-transforms.log'
-    if ($TestMode) { $logPath = Join-Path $Path 'Layer2Output' 'layer2-transforms.log' }
     $script:TransformLog | ForEach-Object {
         "[$($_.Timestamp.ToString('HH:mm:ss'))] [$($_.Pattern)] $($_.File) — $($_.Detail)"
     } | Set-Content -Path $logPath -Encoding UTF8

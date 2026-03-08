@@ -1,4 +1,4 @@
-// TODO: Review ΓÇö auto-copied from Web Forms source
+// TODO: Review — auto-copied from Web Forms source
 
 using System.ComponentModel.DataAnnotations;
 
