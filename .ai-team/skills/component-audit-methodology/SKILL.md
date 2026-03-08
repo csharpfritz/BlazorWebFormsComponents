@@ -28,6 +28,13 @@ Categorize all .razor files into:
 
 Count: Expect ~153 total (87 non-style, 66 style/pager).
 
+### 1b. WingtipToys Migration Inventory
+
+For the WingtipToys migration specifically:
+- Scan `samples/WingtipToys/WingtipToys/` for `<asp:(\w+)` patterns across .aspx, .master, .ascx files
+- Scan `samples/AfterWingtipToys/` for BWFC component usage
+- Note: AfterWingtipToys uses far fewer BWFC components than expected — the migration script converts simple controls (Button, TextBox, HyperLink) to native HTML. Only complex controls (ListView, LoginView, etc.) remain as BWFC components.
+
 ### 2. Web Forms Coverage Matrix
 
 Compare implemented controls against ASP.NET Web Forms 4.8 control categories:
@@ -47,7 +54,8 @@ Cross-reference against implemented .razor files to find:
 - Implementation without docs (gap)
 - Docs without matching implementation (stale)
 
-Known undocumented categories: field columns, style sub-components, infrastructure, helpers.
+Known undocumented categories: style sub-components, infrastructure, helpers.
+Field columns now documented (`docs/DataControls/FieldColumns.md` added 2026-03-08).
 
 ### 4. HTML Fidelity
 
@@ -61,13 +69,16 @@ Classify divergences:
 
 ### 5. Migration Script Effectiveness
 
-**Source:** `dev-docs/migration-tests/wingtiptoys-run{N}-{date}/`
+**Source:** `dev-docs/migration-tests/wingtiptoys-run{N}.md` and `wingtiptoys-run{N}-{date}/`
 
 Track across runs:
 - Tests passing (target: all pass)
-- Manual fixes required (target: 0)
-- Total migration time
+- Layer 1 manual fixes (target: 0 — achieved as of Run 14)
+- Layer 2 semantic fixes (code-behind transforms requiring context)
+- Layer 1 execution time
 - Transforms applied count
+
+**Important:** Distinguish Layer 1 (mechanical regex/script transforms) from Layer 2 (semantic code-behind transforms). Layer 1 was fully automated as of Run 14. Layer 2 has 3 stable semantic gaps since Run 12.
 
 ### 6. Health Metrics
 
@@ -92,3 +103,10 @@ Save to `dev-docs/component-audit-{date}.md` with sections:
 ## Frequency
 
 Run audit after each major milestone (sprint completion, migration run improvements, architecture changes).
+
+## Lessons Learned
+
+- **Style sub-component count:** Use `*Style.razor` + `*PagerSettings.razor` pattern to count (66 as of 2026-03-08). Previous audit reported 63 — the discrepancy was in the audit narrative, not the code.
+- **Substitution status changed** between baseline and refresh — always re-verify deferred control status by checking actual .razor files.
+- **ID rendering tracking:** Check for `IDRendering.razor` test files to count which components support `id` attribute rendering. 9 components had it as of the refresh audit.
+- **CONTROL-COVERAGE.md is the authority** for migration toolkit coverage — verify it against actual component inventory each audit.

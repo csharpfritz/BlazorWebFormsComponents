@@ -91,3 +91,19 @@ Key findings from post-Run 12/13 audit:
  Team update (2026-03-08): Layer 2 bulk-extract from known-good commit is default approach until Layer 1 output changes structurally  decided by Cyclops
 
  Team update (2026-03-08): Documentation refreshed  Runs 8-13 summaries, SSR-as-default guidance, package pinning, component coverage gap analysis  decided by Beast
+
+### Audit Refresh (2026-03-08)
+
+**Report:** `dev-docs/component-audit-2026-03-08-refresh.md`
+
+Key changes since baseline audit:
+
+1. **Substitution is now implemented** — deferred controls reduced from 2 to 1 (only Xml remains). Coverage: 98.2% of feasible controls.
+2. **ID attribute rendering** added to 9 components (BulletedList, Button, Calendar, CheckBox, FileUpload, Label, LinkButton, Panel, TextBox). ~20+ data controls still need it.
+3. **BulletedList `<ol>` and Panel `<fieldset>/<legend>`** fidelity issues confirmed resolved. Structural divergences reduced from 5 to 3 (ListView, Calendar, Label).
+4. **Field column docs** (FieldColumns.md) and **ID rendering docs** (IDRendering.md) added — closes top documentation gaps from baseline.
+5. **Migration script at 0 Layer 1 manual fixes** for 4 consecutive runs (12–15). Layer 2 has 3 stable semantic fixes.
+6. **RouteData script bug discovered** in Run 15 — `[Parameter] // TODO` comment absorbs closing parenthesis, causing build failures. Fix priority: P1.
+7. **CONTROL-COVERAGE.md is accurate** — verified against actual BWFC inventory. No discrepancies.
+8. **Style sub-component count** is 66 (was reported as 63 in baseline — discrepancy was in the audit, not the code). CONTROL-COVERAGE.md correct at 66.
+9. **AfterWingtipToys uses only 4 BWFC components directly** (Label, Panel, ListView, LoginView) — migration script converts most simple controls to native HTML.
