@@ -7006,3 +7006,10 @@ The Layer 2 script (`bwfc-migrate-layer2.ps1`) introduced in Run 16 creates a ne
 1. **Layer 2 entity detection** (findings 1-3) — the `Product`/`Category`/`Order` hardcoding is the #1 blocker for non-WingtipToys apps
 2. **Program.cs template** (finding 4) — `ProductContext` should use auto-detected name
 3. **Skill files** (findings 8-14) — AI assistants reading these skills will perpetuate WingtipToys patterns in all migrations
+
+### 2026-03-09: Layer 1 Script Bug Fix ()
+
+**By:** Cyclops
+**What:** Fixed variable initialization bug in `bwfc-migrate.ps1` where `` was used in a Replace callback before being set. The script incorrectly used ` = 0` instead of ` = 0`, causing failures on pages with HeadContent placeholders (e.g., ContosoUniversity About.aspx).
+**Why:** Migration-blocking bug. Discovered during dual-app validation (WingtipToys Run 17, ContosoUniversity Run 02).
+

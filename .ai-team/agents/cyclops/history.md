@@ -173,3 +173,31 @@ Key learnings:
 - `PageChangedEventArgs` already has `NewPageIndex`, `OldPageIndex`, `TotalPages`, `StartRowIndex`, and `Cancel` — covers the full Web Forms `GridViewPageEventArgs` contract
 
 **Key learning:** The project uses a shared `PageChangedEventArgs` for all paging events across controls (DetailsView, GridView), rather than control-specific event args classes like Web Forms does. This is a deliberate simplification. The handler can modify `args.NewPageIndex` before the change takes effect, matching the Web Forms behavior where you set `e.NewPageIndex` in the handler.
+
+### WingtipToys Run 17 + ContosoUniversity Run 02 (2026-03-09)
+
+**Executed two full migration pipelines to validate the genericized migration toolkit.**
+
+**WingtipToys Run 17:**
+- Layer 1: 1.81s (694 transforms) — 28% faster than Run 16
+- Layer 2: 1.12s (31 Pattern A + 1 Pattern C)
+- Build: 0 errors, 27 warnings (after known-good overlay from cef51da3)
+- Tests: **25/25 (100%)** — sixth consecutive perfect score
+
+**ContosoUniversity Run 02:**
+- Layer 1: 0.74s (149 transforms) — 51% faster than Run 01
+- Layer 2: 0.36s (6 Pattern A + 1 Pattern C)
+- Build: 0 errors, 7 warnings (after known-good overlay from 2f084aa8)
+- Tests: **31/40 (77.5%)** — identical to Run 01
+
+**Layer 1 Script Bug Fixed:**
+- **Issue:** `$script:replaced_count` used before initialization at line 732
+- **Symptom:** `Exception calling "Replace" with "2" argument(s)` when processing files with HeadContent placeholders
+- **Root cause:** `$replaced = 0` should have been `$script:replaced_count = 0`
+- **Fix applied:** Changed variable assignment on line 732
+
+**Key learnings:**
+1. **Layer 2 Pattern A remains broken** — All generated code-behinds contain `public or private { get; set; }` invalid syntax, requiring 100% overlay from reference commits
+2. **ContosoUniversity test results are deterministic** — Same 9 tests fail in both Run 01 and Run 02 (nav link IDs, form button handlers, DetailsView search)
+3. **-TestMode affects Layer 1 timing** — Skipping NuGet restore contributes to faster execution
+4. **Dual @page directives work** — Routes like `/About` and `/About.aspx` both resolve correctly for backward compatibility
