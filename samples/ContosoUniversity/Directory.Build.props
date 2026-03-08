@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stop repo-root Directory.Build.props from injecting NBGV and .NET analyzers into this legacy .NET Framework project -->
+<Project>
+</Project>
