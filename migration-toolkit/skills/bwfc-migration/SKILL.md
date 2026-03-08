@@ -737,3 +737,108 @@ For migrating custom Web Forms controls that extend `System.Web.UI.WebControls.W
 | `Wizard` | Multi-step form with component state |
 | `Web Parts` | Redesign as Blazor components |
 | `AJAX Toolkit Extenders` | Blazor interactivity or JS interop |
+
+---
+
+## Common Build Errors and Fixes
+
+<!-- Added 2026-03-08: ContosoUniversity Run 02-03 learnings -->
+
+These errors frequently occur during migration. Know how to fix them quickly.
+
+### RZ9996: Unrecognized child content
+
+**Cause:** Field elements (`BoundField`, `TemplateField`, etc.) appear directly inside `GridView` without a `<Columns>` wrapper.
+
+```razor
+@* WRONG — causes RZ9996 *@
+<GridView DataSource="@data">
+    <BoundField DataField="Name" HeaderText="Name" />
+</GridView>
+
+@* RIGHT — wrap in Columns *@
+<GridView DataSource="@data">
+    <Columns>
+        <BoundField DataField="Name" HeaderText="Name" />
+    </Columns>
+</GridView>
+```
+
+**Also applies to:** DetailsView needs `<Fields>` wrapper.
+
+### RZ10001: Type cannot be inferred
+
+**Cause:** Generic components (`GridView`, `DropDownList`, `BoundField`, `DetailsView`, `ListView`) missing their type parameter.
+
+```razor
+@* WRONG — missing ItemType *@
+<GridView DataSource="@courses">
+    <Columns>
+        <BoundField DataField="Title" />
+    </Columns>
+</GridView>
+
+@* RIGHT — ItemType specified *@
+<GridView DataSource="@courses" ItemType="Course">
+    <Columns>
+        <BoundField DataField="Title" ItemType="Course" />
+    </Columns>
+</GridView>
+```
+
+**Type parameter names:**
+- `GridView`, `ListView`, `FormView`, `DetailsView`, `BoundField`: use `ItemType`
+- `DropDownList`: use `TItem`
+
+### CS0234: Type or namespace 'UI' does not exist in 'System.Web'
+
+**Cause:** Code-behind still references `System.Web.UI` which doesn't exist in .NET Core.
+
+```csharp
+// WRONG — Web Forms namespaces
+using System.Web;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+public partial class About : System.Web.UI.Page { }
+
+// RIGHT — Blazor namespaces
+using Microsoft.AspNetCore.Components;
+using BlazorWebFormsComponents;
+public partial class About : ComponentBase { }
+```
+
+### RZ9980: Unclosed tag with no matching end tag
+
+**Cause:** Malformed HTML from incomplete migration. Often affects `<div>`, `<script>`, or `<HeadContent>`.
+
+**Fix:** Check the razor file for unclosed tags. Common culprits:
+- `<script>` tags missing closing `</script>`
+- `<HeadContent>` not properly closed
+- `<div>` elements with mismatched nesting
+
+### RZ1034: Malformed tag helper
+
+**Cause:** Blazor tag helper (like `<HeadContent>`) is malformed — missing start or end tag.
+
+**Fix:** Ensure the tag helper has both opening and closing tags:
+
+```razor
+@* WRONG *@
+<HeadContent>
+    <link href="styles.css" rel="stylesheet">
+@* Missing </HeadContent> *@
+
+@* RIGHT *@
+<HeadContent>
+    <link href="styles.css" rel="stylesheet" />
+</HeadContent>
+```
+
+### CS0246: The type or namespace name could not be found
+
+**Cause:** Missing using statement, missing NuGet package, or referencing a namespace that doesn't exist in the migrated project.
+
+**Common fixes:**
+- Add `@using BlazorWebFormsComponents` to `_Imports.razor`
+- Add project reference to BWFC NuGet package
+- Replace `ContosoUniversity.Bll` with service classes or direct EF Core access

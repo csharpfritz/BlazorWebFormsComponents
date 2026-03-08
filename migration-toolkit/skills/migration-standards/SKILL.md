@@ -6,17 +6,134 @@ confidence: "high"
 source: "earned"
 ---
 
-<!-- Updated 2026-03-08: Validated against Runs 14-16, SSR architecture, 2-script pipeline -->
+<!-- Updated 2026-03-08: Validated against WingtipToys Runs 14-16 + ContosoUniversity Runs 01-03 -->
 
 ## Context
 
-When migrating an ASP.NET Web Forms application to Blazor using BlazorWebFormsComponents, these standards define the canonical target architecture, tooling choices, and migration patterns. Established through nine WingtipToys migration benchmark runs (Runs 8–16) and codified as a directive by Jeffrey T. Fritz.
+When migrating an ASP.NET Web Forms application to Blazor using BlazorWebFormsComponents, these standards define the canonical target architecture, tooling choices, and migration patterns. Established through nine WingtipToys migration benchmark runs (Runs 8–16) and three ContosoUniversity benchmark runs, codified as a directive by Jeffrey T. Fritz.
 
 Apply these standards to:
 - Migration script (`bwfc-migrate.ps1` + `bwfc-migrate-layer2.ps1`) enhancements
 - Copilot-assisted Layer 2 work
 - Migration documentation and checklists
 - Any new migration test runs
+
+## Critical Migration Requirements
+
+<!-- Updated 2026-03-08: Added ContosoUniversity Run 02-03 learnings -->
+
+These requirements are essential for migration success. Missing any of them will cause acceptance test failures or build errors.
+
+### Navigation Link IDs
+
+**Always generate `id` attributes on navigation links.** Acceptance tests locate nav links by ID (e.g., `id="home"`, `id="about"`, `id="students"`). Without IDs, tests like `NavLink_NavigatesToCorrectPage` fail.
+
+**When converting Site.Master to MainLayout.razor:**
+- Preserve existing IDs from source nav links
+- If no ID exists, derive one from the link text (lowercase, alphanumeric only)
+- Example: "About Us" → `id="aboutus"`, "Home" → `id="home"`
+
+```razor
+@* WRONG — missing IDs *@
+<a href="/Home">Home</a>
+<a href="/About">About</a>
+
+@* RIGHT — IDs present for test compatibility *@
+<a id="home" href="/Home">Home</a>
+<a id="about" href="/About">About</a>
+```
+
+The Layer 1 script's `Add-NavLinkIds` function handles this automatically.
+
+### GridView Field Wrapping
+
+**BoundField, TemplateField, ButtonField, HyperLinkField, ImageField, CommandField, and CheckBoxField MUST be wrapped in `<Columns>`.** Direct children of GridView cause RZ9996 errors.
+
+```razor
+@* WRONG — direct child causes build error *@
+<GridView DataSource="@data">
+    <BoundField DataField="Name" HeaderText="Name" />
+</GridView>
+
+@* RIGHT — wrapped in Columns *@
+<GridView DataSource="@data">
+    <Columns>
+        <BoundField DataField="Name" HeaderText="Name" />
+    </Columns>
+</GridView>
+```
+
+The Layer 1 script's `Wrap-GridViewColumns` function handles this automatically.
+
+### Generic Type Parameters
+
+**All generic BWFC components require their type parameter.** Missing types cause RZ10001 errors.
+
+| Component | Type Parameter | Example |
+|-----------|---------------|---------|
+| GridView | `ItemType` | `<GridView ItemType="Course" ...>` |
+| DropDownList | `TItem` | `<DropDownList TItem="Department" ...>` |
+| BoundField | `ItemType` | `<BoundField ItemType="Course" ...>` |
+| DetailsView | `ItemType` | `<DetailsView ItemType="Student" ...>` |
+| ListView | `ItemType` | `<ListView ItemType="Product" ...>` |
+| FormView | `ItemType` | `<FormView ItemType="Order" ...>` |
+
+**Derive the type from:**
+1. The `ItemType` attribute in Web Forms markup (if present)
+2. The `SelectMethod` return type in the code-behind
+3. The data source property type
+
+### Code-Behind Base Class
+
+**All code-behinds must use the correct base class:**
+
+| File Type | Base Class | Notes |
+|-----------|-----------|-------|
+| Page code-behind | `ComponentBase` or `WebFormsPageBase` | Use `WebFormsPageBase` for Page.Title/IsPostBack compat |
+| Layout code-behind | `LayoutComponentBase` | Or delete if unused |
+| Component code-behind | `ComponentBase` | Standard Blazor |
+
+**Never use `System.Web.UI.Page`** — it doesn't exist in .NET Core:
+
+```csharp
+// WRONG — Web Forms base class
+using System.Web.UI;
+public partial class About : System.Web.UI.Page { }
+
+// RIGHT — Blazor base class
+using Microsoft.AspNetCore.Components;
+public partial class About : ComponentBase { }
+```
+
+### Using Statement Conversion
+
+**Replace all `System.Web.*` usings with Blazor equivalents:**
+
+| Remove | Add Instead |
+|--------|-------------|
+| `using System.Web;` | — (not needed) |
+| `using System.Web.UI;` | `using Microsoft.AspNetCore.Components;` |
+| `using System.Web.UI.WebControls;` | `using BlazorWebFormsComponents;` |
+| `using System.Web.Security;` | `using Microsoft.AspNetCore.Identity;` |
+
+### Event Handler Preservation
+
+**Preserve event handler attributes and wire them to methods.** Do NOT strip `OnClick`, `OnCommand`, etc.:
+
+```razor
+@* WRONG — handler stripped, button does nothing *@
+<Button Text="Add" />
+
+@* RIGHT — handler preserved, method signature updated *@
+<Button Text="Add" OnClick="Add_Click" />
+
+@code {
+    private void Add_Click(MouseEventArgs e)
+    {
+        // Converted handler logic
+    }
+}
+```
 
 ## Patterns
 

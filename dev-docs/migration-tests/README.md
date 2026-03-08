@@ -6,8 +6,8 @@ Benchmarked migrations of real Web Forms applications using the BWFC migration t
 
 | Project | Source | Framework | Pages | Controls Used | Status |
 |---------|--------|-----------|-------|---------------|--------|
-| WingtipToys | ASP.NET Web Forms 2013 | .NET 4.5 | ~15 pages (32 markup files) | GridView, ListView, FormView, LoginView, LoginStatus, etc. | ✅ 16 runs, 100% pass (5 consecutive) |
-| ContosoUniversity | Microsoft Tutorial App | .NET 4.x | 5 pages + 1 master | GridView, DetailsView, Table, UpdatePanel, ScriptManager, AutoCompleteExtender | 🔄 Run 01 in progress |
+| WingtipToys | ASP.NET Web Forms 2013 | .NET 4.5 | ~15 pages (32 markup files) | GridView, ListView, FormView, LoginView, LoginStatus, etc. | ✅ 17 runs, 100% pass (6 consecutive) |
+| ContosoUniversity | Microsoft Tutorial App | .NET 4.x | 5 pages + 1 master | GridView, DetailsView, Table, UpdatePanel, ScriptManager, AutoCompleteExtender | ✅ 2 runs, 77.5% pass (stable) |
 
 ---
 
@@ -32,10 +32,11 @@ All runs use the WingtipToys sample in `samples/WingtipToys/` as source input.
 | [14](wingtiptoys-run14.md) | 2026-03-08 | 3.2s | **0** | 3 | ✅ 25/25 (100%) | SSR | Layer 1 fully zero-touch; automation ceiling identified |
 | [15](wingtiptoys-run15.md) | 2026-03-08 | 2.83s | 0 | 3 | ✅ 25/25 (100%) | SSR | 4th consecutive 100%; L2 reference extraction |
 | [16](wingtiptoys-run16.md) | 2026-03-08 | **2.50s** | 0 | 3* | ✅ 25/25 (100%) | SSR | First Layer 2 automation; Program.cs auto-generated |
+| [17](wingtiptoys-run17.md) | 2026-03-09 | **1.81s** | 0 | 3* | ✅ 25/25 (100%) | SSR | Genericized toolkit validation; 28% faster L1 |
 
 > **Run 7** was skipped (no benchmark recorded).
 >
-> **Run 16 note:** `*` Layer 2 script automated Program.cs (Pattern C). Patterns A (code-behinds) and B (auth forms) still need manual overlay.
+> **Runs 16–17 note:** `*` Layer 2 script automates Program.cs (Pattern C). Patterns A (code-behinds) and B (auth forms) still need manual overlay.
 
 ---
 
@@ -43,14 +44,14 @@ All runs use the WingtipToys sample in `samples/WingtipToys/` as source input.
 
 ### Convergence Summary
 
-Across 16 runs, the pipeline evolved from a manual migration taking ~10 minutes to a two-script pipeline completing Layer 1 in 2.5 seconds:
+Across 17 runs, the pipeline evolved from a manual migration taking ~10 minutes to a two-script pipeline completing Layer 1 in 1.81 seconds:
 
-| Metric | Early (Runs 1–6) | Mid (Runs 8–11) | Late (Runs 12–16) |
+| Metric | Early (Runs 1–6) | Mid (Runs 8–11) | Late (Runs 12–17) |
 |--------|-------------------|------------------|---------------------|
 | **Test suite** | Build-only | 14 → 25 tests | 25 tests |
-| **Pass rate** | Build pass | 56% → 68% | **100% (5 consecutive)** |
-| **Layer 1 time** | 3–4.5s | 3.3–10s | **3.0 → 2.50s** |
-| **L1 manual fixes** | Not tracked | 3 → 0 | **0 for 5 consecutive runs** |
+| **Pass rate** | Build pass | 56% → 68% | **100% (6 consecutive)** |
+| **Layer 1 time** | 3–4.5s | 3.3–10s | **3.0 → 1.81s** |
+| **L1 manual fixes** | Not tracked | 3 → 0 | **0 for 6 consecutive runs** |
 | **Layer 2 fixes** | Not tracked | 12 → 5 | **3 (stable)** |
 | **Render mode** | N/A | InteractiveServer | **SSR** |
 
@@ -65,15 +66,16 @@ Across 16 runs, the pipeline evolved from a manual migration taking ~10 minutes 
 | **13** | **SSR breakthrough** — eliminated HttpContext/SignalR problems |
 | **14** | **Layer 1 zero-touch** — 0 manual fixes for first time |
 | **16** | **Layer 2 automation begins** — Program.cs fully auto-generated |
+| **17** | **Genericized toolkit validated** — L1 script bug fixed, 28% faster |
 
 ### Layer 1 Performance Trend
 
 ```
-Run:  1    4    5    6    8    9   10   11   12   13   14   15   16
-     3.3  ~3  3.25 4.58 3.3  ~10  4.6  3.3  3.1  3.0  3.2 2.83 2.50  (seconds)
+Run:  1    4    5    6    8    9   10   11   12   13   14   15   16   17
+     3.3  ~3  3.25 4.58 3.3  ~10  4.6  3.3  3.1  3.0  3.2 2.83 2.50 1.81  (seconds)
 ```
 
-Layer 1 stabilized around 3s, then improved to **2.50s** — a 40% improvement from the 4.2s average of early runs (excluding the Run 9 outlier).
+Layer 1 stabilized around 3s, then improved to **1.81s** — a 56% improvement from the 4.2s average of early runs (excluding the Run 9 outlier).
 
 ---
 
@@ -100,6 +102,7 @@ All runs use the ContosoUniversity sample in `samples/ContosoUniversity/` as sou
 | Run | Date | L1 Time | L1 Manual Fixes | L2 Fixes | Score | Render Mode | Key Outcome |
 |-----|------|---------|-----------------|----------|-------|-------------|-------------|
 | [01](contoso-run01.md) | 2026-03-08 | **1.50s** | 18 → 0 errors | 7 | **31/40 (77.5%)** | SSR | All pages work, nav/form wiring issues remain |
+| [02](contoso-run02.md) | 2026-03-09 | **0.74s** | 0 (overlay) | 7 | **31/40 (77.5%)** | SSR | Identical test results; L1 script bug fixed |
 
 ### ContosoUniversity vs WingtipToys
 
