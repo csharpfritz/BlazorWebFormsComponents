@@ -7,7 +7,7 @@ Benchmarked migrations of real Web Forms applications using the BWFC migration t
 | Project | Source | Framework | Pages | Controls Used | Status |
 |---------|--------|-----------|-------|---------------|--------|
 | WingtipToys | ASP.NET Web Forms 2013 | .NET 4.5 | ~15 pages (32 markup files) | GridView, ListView, FormView, LoginView, LoginStatus, etc. | ✅ 16 runs, 100% pass (5 consecutive) |
-| *(Next project TBD)* | — | — | — | — | 🔜 Planned |
+| ContosoUniversity | Microsoft Tutorial App | .NET 4.x | 5 pages + 1 master | GridView, DetailsView, Table, UpdatePanel, ScriptManager, AutoCompleteExtender | 🔄 Run 01 in progress |
 
 ---
 
@@ -90,6 +90,27 @@ Based on 16 runs of iterative testing:
 4. **Layer 1 time trend:** 4.2s → 2.50s (40% improvement). The script is faster despite doing more work (more transforms, better flagging, auto-detection).
 
 5. **Pipeline is reproducible:** Layer 2 reference extraction (introduced in Run 15) makes the entire pipeline deterministic — the same fixes apply cleanly every run.
+
+---
+
+## ContosoUniversity Runs
+
+All runs use the ContosoUniversity sample in `samples/ContosoUniversity/` as source input.
+
+| Run | Date | L1 Time | L1 Manual Fixes | L2 Fixes | Score | Render Mode | Key Outcome |
+|-----|------|---------|-----------------|----------|-------|-------------|-------------|
+| [01](contoso-run01.md) | 2026-03-08 | **1.50s** | 18 → 0 errors | 7 | **31/40 (77.5%)** | SSR | All pages work, nav/form wiring issues remain |
+
+### ContosoUniversity vs WingtipToys
+
+| Aspect | WingtipToys | ContosoUniversity |
+|--------|-------------|-------------------|
+| Pages | ~15 (32 markup files) | 5 pages + 1 master |
+| Data Access | Code-First EF6 | Database-First EF6 (.edmx) |
+| Ajax Controls | None | UpdatePanel, ScriptManager, AutoCompleteExtender |
+| Auth | ASP.NET Identity | None |
+| Acceptance Tests | 25 | 40 (33 pass + 7 nav failures = 31 functional) |
+| Key Challenge | Auth/cookie handling in SSR | EF6 .edmx + AjaxControlToolkit |
 
 ---
 

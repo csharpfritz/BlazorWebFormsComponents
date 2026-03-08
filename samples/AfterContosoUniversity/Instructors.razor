@@ -1,0 +1,26 @@
+@page "/Instructors"
+@page "/Instructors.aspx"
+<HeadContent>
+    <link href="CSS/Instructors_CSS.css" rel="stylesheet" />
+    <script src="JQuery/JQuery_Instructors.js"></script>
+</HeadContent>
+<ScriptManager></ScriptManager>
+    <UpdatePanel>
+        <ContentTemplate>
+            <div id="grv">
+                <h1 id="hdr">Our Instructors</h1>
+                <GridView ItemType="Instructor" ID="grvInstructors" Items="@_instructors" AutoGenerateColumns="false"
+                    CssClass="grv"
+                    AllowSorting="true"
+                    EmptyDataText = "There are no records to display" >
+                    <Columns>
+                        <BoundField ItemType="Instructor" DataField="InstructorID" HeaderText="Instructor ID" SortExpression="InstructorID" />
+                        <BoundField ItemType="Instructor" DataField="FirstName" HeaderText="First Name"  SortExpression="FirstName"/>
+                        <BoundField ItemType="Instructor" DataField="LastName" HeaderText="Last Name"  SortExpression="LastName"/>
+                        <BoundField ItemType="Instructor" DataField="Email" HeaderText="Email"  />
+                    </Columns>
+                </GridView>
+            </div>
+        </ContentTemplate>
+        </UpdatePanel>
+

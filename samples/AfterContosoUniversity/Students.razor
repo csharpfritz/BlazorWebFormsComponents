@@ -1,0 +1,98 @@
+@page "/Students"
+@page "/Students.aspx"
+<HeadContent>
+    <link href="CSS/Students_CSS.css" rel="stylesheet" />
+    <script src="JQuery/JQuery_Students.js"></script>
+</HeadContent>
+<ScriptManager ID="ScriptManager2"></ScriptManager>       
+    <UpdatePanel>
+        <ContentTemplate>
+            <div id="grvStudentsData">
+                <GridView ItemType="StudentViewModel" ID="grv"
+                    Items="@_students"
+                    CssClass="grv"
+                    AutoGenerateColumns="false"
+                    EmptyDataText="There are no records to display"
+                    DataKeyNames="ID"
+                    CellPadding="4">
+                    <Columns>
+                        <BoundField ItemType="StudentViewModel" DataField="ID" HeaderText="Student ID" ReadOnly="true" />
+                        <BoundField ItemType="StudentViewModel" DataField="FullName" HeaderText="Student Name" />
+                        <BoundField ItemType="StudentViewModel" DataField="Email" HeaderText="Email" />
+                        <BoundField ItemType="StudentViewModel" DataField="Date" HeaderText="Enrollment Date" ReadOnly="true" />
+                        <BoundField ItemType="StudentViewModel" DataField="Count" HeaderText="Number of Courses" ReadOnly="true" />
+                    </Columns>
+                </GridView>
+            </div>
+            <div id="addStud">
+                <h1 id="addStudent">Add Student</h1>
+                <Table ID="tabAddStud" CssClass="tabAddStud">
+                    <TableRow>
+                        <TableCell>First Name</TableCell>
+                        <TableCell>
+                            <TextBox ID="txtFirstName" @bind-Text="@_firstName" placeholder="Type Your First Name..." />
+                        </TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell>Last Name</TableCell><TableCell>
+                            <TextBox ID="txtLastName" @bind-Text="@_lastName" placeholder="Type Your Last Name..." />
+                        </TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell>Birth Date</TableCell><TableCell>
+                            <TextBox ID="txtBirthDate" @bind-Text="@_birthDate" placeholder="dd.mm.year" />
+                        </TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell>Email</TableCell><TableCell>
+                            <TextBox ID="txtEmail" @bind-Text="@_email" placeholder="Email is Optional..." />
+                        </TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell>Course Name</TableCell><TableCell>
+                            <select @bind="@_selectedCourseId">
+                                <option value="0">-- Select Course --</option>
+                                @foreach (var course in _courses)
+                                {
+                                    <option value="@course.CourseID">@course.CourseName</option>
+                                }
+                            </select>
+                        </TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell>               
+                        </TableCell><TableCell>
+                            <Button CssClass="insert" ID="btnInsert" Text="New Enrollment" OnClick="@btnInsert_Click" />
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                     <Button ID="btnClear" Text="Clear" OnClick="@btnClear_Click" />
+                        </TableCell>
+                    </TableRow>
+                </Table>
+            </div>
+            <div id="ajax">
+                <h1 id="searchStud">Search Student</h1>
+                <TextBox CssClass="txtSearch" ID="txtSearch" @bind-Text="@_searchText" placeholder="Type Student Name..." />
+                @* AutoCompleteExtender removed - not available in BWFC *@
+                <Button ID="btnSearch" Text="Show Student Info" OnClick="@btnSearch_Click" CssClass="btnInfo" />
+                @if (_selectedStudent != null)
+                {
+                <DetailsView ItemType="StudentViewModel"
+                    ID="studentData"
+                    Item="@_selectedStudent"
+                    AutoGenerateRows="false"
+                    CssClass="detailsView">
+                    <Fields>
+                        <BoundField ItemType="StudentViewModel"
+                            DataField="FullName"
+                            HeaderText="Name" />
+                        <BoundField ItemType="StudentViewModel" DataField="Email" HeaderText="Email" />
+                        <BoundField ItemType="StudentViewModel" DataField="Date" HeaderText="Birth Date" />
+                        <BoundField ItemType="StudentViewModel" DataField="ID" HeaderText="ID" />
+                    </Fields>
+                </DetailsView>
+                }
+            </div>
+        </ContentTemplate>
+    </UpdatePanel>         
+     
+
