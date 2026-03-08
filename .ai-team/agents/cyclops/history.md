@@ -227,3 +227,20 @@ Added `Convert-TemplatePlaceholders` function in new `#region --- Template Place
 - ReadOnly: Skip hidden/submit/button inputs; process TextBox and input patterns separately to avoid position conflicts
 - LoginStatus: Handle both self-closing (`/>`) and open-close tag variants; extract attributes with defaults; Sort-Object wrapped in `@()` to prevent single-item collection issue
 - Logout form: Non-greedy `.*?` for form content; check both action URL and button text for logout patterns; preserve CSS classes
+
+### Run 15  Layer 2 AfterWingtipToys Semantic Fixes (2026-03-08)
+
+**Completed:** Applied Layer 2 fixes to fresh Run 15 migration output. 68 files changed, 0 errors, 25/25 acceptance tests passed. Total elapsed: 3.1 minutes.
+
+**Approach:** Used git show cef51da3:{filepath} to bulk-extract all 68 known-good file contents from Run 14 and overwrote the current Layer 1 output. This is far faster than manually re-applying each fix (~3 min vs. likely 30+ min).
+
+**Key patterns reconfirmed from Run 14:**
+- The migration script's [Parameter] // TODO: comment pattern breaks the method signature by swallowing the parameter type  this is the #1 build-breaker
+- Code-behind stubs inheriting System.Web.UI.Page must be fully rewritten as ComponentBase with DI injection
+- FormView doesn't work in SSR (CurrentItem in OnAfterRenderAsync doesn't re-render)  replace with direct @if rendering
+- ListView needs Items="@_products" binding, not SelectMethod
+- Auth pages need [SupplyParameterFromForm] individual properties, not nested model classes
+- Program.cs needs full rewrite for .NET 9 SSR: AddDbContextFactory, AddRazorComponents, session middleware, minimal API endpoints for cart/auth
+- Runtime SQLite .db files must not be committed  clean up after acceptance test runs
+
+**Efficiency insight:** When Layer 2 fixes are stable across runs (same errors, same fixes), bulk-extracting from a known-good commit is the optimal approach. Only investigate individual diffs when the Layer 1 output changes structurally.
