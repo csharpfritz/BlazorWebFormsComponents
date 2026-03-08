@@ -32,6 +32,15 @@
 .PARAMETER SkipProjectScaffold
     Skip generating .csproj, Program.cs, and _Imports.razor scaffold files.
 
+.PARAMETER TestMode
+    Use a local ProjectReference to BWFC source instead of a NuGet PackageReference.
+    Use -BwfcProjectPath to override the default relative path.
+
+.PARAMETER BwfcProjectPath
+    Relative path from the output directory to the BWFC .csproj file.
+    Only used when -TestMode is specified.
+    Defaults to "..\..\src\BlazorWebFormsComponents\BlazorWebFormsComponents.csproj".
+
 .EXAMPLE
     .\bwfc-migrate.ps1 -Path C:\src\MyWebFormsApp -Output C:\src\MyBlazorApp
 
@@ -46,6 +55,16 @@
     .\bwfc-migrate.ps1 -Path .\LegacyApp -Output .\BlazorApp -SkipProjectScaffold -Verbose
 
     Transforms files with detailed logging, skipping project scaffold generation.
+
+.EXAMPLE
+    .\bwfc-migrate.ps1 -Path .\LegacyApp -Output .\BlazorApp -TestMode
+
+    Migrates with a local ProjectReference to BWFC source (for development/testing).
+
+.EXAMPLE
+    .\bwfc-migrate.ps1 -Path .\LegacyApp -Output .\BlazorApp -TestMode -BwfcProjectPath "..\bwfc\BlazorWebFormsComponents.csproj"
+
+    Migrates with a custom path to the local BWFC project.
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -57,7 +76,13 @@ param(
     [string]$Output,
 
     [Parameter(HelpMessage = "Skip creating .csproj, Program.cs, and _Imports.razor")]
-    [switch]$SkipProjectScaffold
+    [switch]$SkipProjectScaffold,
+
+    [Parameter(HelpMessage = "Use local ProjectReference to BWFC instead of NuGet PackageReference")]
+    [switch]$TestMode,
+
+    [Parameter(HelpMessage = "Relative path from output dir to BWFC .csproj (used with -TestMode)")]
+    [string]$BwfcProjectPath = "..\..\src\BlazorWebFormsComponents\BlazorWebFormsComponents.csproj"
 )
 
 Set-StrictMode -Version Latest
@@ -157,7 +182,13 @@ function New-ProjectScaffold {
         $additionalPackages += "`n    <PackageReference Include=`"Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore`" Version=`"10.0.0`" />"
     }
 
-    # .csproj
+    # .csproj — use ProjectReference in TestMode, PackageReference otherwise
+    if ($TestMode) {
+        $bwfcRef = "    <ProjectReference Include=`"$BwfcProjectPath`" />"
+        Write-Verbose "  [TestMode] Using ProjectReference: $BwfcProjectPath"
+    } else {
+        $bwfcRef = '    <PackageReference Include="Fritz.BlazorWebFormsComponents" Version="*" />'
+    }
     $csprojContent = @"
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
@@ -168,7 +199,7 @@ function New-ProjectScaffold {
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Fritz.BlazorWebFormsComponents" Version="*" />${additionalPackages}
+${bwfcRef}${additionalPackages}
   </ItemGroup>
 
 </Project>
