@@ -2,16 +2,18 @@
 name: "migration-standards"
 description: "Canonical standards for migrating ASP.NET Web Forms applications to Blazor using BWFC"
 domain: "migration"
-confidence: "medium"
+confidence: "high"
 source: "earned"
 ---
 
+<!-- Updated 2026-03-08: Synced with distributable migration-standards — SSR, 2-script pipeline, Run 16 -->
+
 ## Context
 
-When migrating an ASP.NET Web Forms application to Blazor using BlazorWebFormsComponents, these standards define the canonical target architecture, tooling choices, and migration patterns. Established through five WingtipToys migration benchmark runs and codified as a directive by Jeffrey T. Fritz.
+When migrating an ASP.NET Web Forms application to Blazor using BlazorWebFormsComponents, these standards define the canonical target architecture, tooling choices, and migration patterns. Established through nine WingtipToys migration benchmark runs (Runs 8–16) and codified as a directive by Jeffrey T. Fritz.
 
 Apply these standards to:
-- Migration script (`bwfc-migrate.ps1`) enhancements
+- Migration script (`bwfc-migrate.ps1` + `bwfc-migrate-layer2.ps1`) enhancements
 - Copilot-assisted Layer 2 work
 - Migration documentation and checklists
 - Any new migration test runs
@@ -24,31 +26,31 @@ Apply these standards to:
 |---|---|
 | Framework | **.NET 10** (or latest LTS/.NET preview) |
 | Project template | `dotnet new blazor --interactivity Server` |
-| Render mode | Global Server Interactive |
+| Render mode | **SSR (Static Server Rendering)** with per-component `InteractiveServer` opt-in |
 | Base class | `WebFormsPageBase` for pages (`@inherits` in `_Imports.razor`); `ComponentBase` for non-page components |
 | Service registration | `builder.Services.AddBlazorWebFormsComponents()` in `Program.cs` |
 | Layout | `MainLayout.razor` with `@inherits LayoutComponentBase` and `@Body` |
 
-### Render Mode Placement
+### Render Mode — SSR Default
 
-> **`@rendermode` is a directive *attribute*, not a standalone directive.** It goes on component instances in markup, not in `_Imports.razor`.
+> **Default to SSR** with per-component `InteractiveServer` opt-in. Established in Run 12, confirmed stable through Run 16 (5 consecutive 100% results). SSR eliminates `HttpContext`/cookie/session problems.
 
-**`_Imports.razor`** — add the static using so you can write `InteractiveServer` instead of `RenderMode.InteractiveServer`:
+**`_Imports.razor`** — add the static using for per-component render mode convenience:
 
 ```razor
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
 @inherits BlazorWebFormsComponents.WebFormsPageBase
 ```
 
-**`App.razor`** — apply render mode to the top-level routable components:
+**`App.razor`** — do NOT add `@rendermode` to `<Routes>` or `<HeadOutlet>` (SSR is the default):
 
 ```razor
-<HeadOutlet @rendermode="InteractiveServer" />
+<HeadOutlet />
 ...
-<Routes @rendermode="InteractiveServer" />
+<Routes />
 ```
 
-Do **not** place `@rendermode InteractiveServer` as a line in `_Imports.razor` — it will cause build errors (RZ10003, CS0103, RZ10024).
+> Do **not** place `@rendermode InteractiveServer` as a standalone line in `_Imports.razor` — it will cause build errors (RZ10003, CS0103, RZ10024).
 
 ### Page Base Class
 
@@ -178,18 +180,47 @@ Bootstrap CSS is REQUIRED for proper navbar and layout styling. Missing CSS is a
 | `Page.Title` | `Page.Title = "X"` works AS-IS via `WebFormsPageBase` | `WebFormsPageBase` delegates to `IPageService`. `<BlazorWebFormsComponents.Page />` in layout renders `<PageTitle>` and `<meta>` tags. |
 | `Response.Redirect` | `NavigationManager.NavigateTo()` | Inject `NavigationManager` |
 
-### Layer 1 (Script) vs Layer 2 (Manual) Boundary
+### 2-Script Pipeline (Layer 1 + Layer 2)
 
-**Script handles (Layer 1):**
+<!-- Updated 2026-03-08: Reflects Run 16 pipeline evolution — synced with distributable version -->
+
+The migration pipeline uses **two scripts** plus targeted manual overlay:
+
+| Stage | Script | What It Handles |
+|-------|--------|----------------|
+| **Layer 1** | `bwfc-migrate.ps1` | Mechanical markup transforms (100% automated since Run 14) |
+| **Layer 2** | `bwfc-migrate-layer2.ps1` | Semantic code-behind transforms (partially automated since Run 16) |
+| **Manual overlay** | — | Business-logic-specific fixes that resist automation |
+
+#### Layer 1 — `bwfc-migrate.ps1`
+
+**Script handles (fully automated, 0 manual fixes for 5 consecutive runs):**
 - `asp:` prefix stripping (preserves BWFC tags)
 - Data-binding expression conversion (5 variants)
 - LoginView → **preserve as BWFC LoginView** (uses `AuthenticationStateProvider` natively)
 - Master page → MainLayout.razor
 - Scaffold generation (csproj, Program.cs, etc.)
+- Route generation using **RelPath** for subdirectory pages
 - SelectMethod/GetRouteUrl flagging
 - Register directive cleanup
+- RouteData → `[Parameter]` conversion with TODO comment on a **separate line**
+- Enhanced navigation bypass (`data-enhance-nav="false"`)
+- ReadOnly attribute warnings
+- Logout form → link conversion
 
-**Always manual (Layer 2):**
+**`-TestMode` switch:** Generates `ProjectReference` to local BWFC source for development iteration.
+
+#### Layer 2 — `bwfc-migrate-layer2.ps1`
+
+Three target patterns:
+
+| Pattern | Target | Status (Run 16) |
+|---------|--------|-----------------|
+| **Pattern A** — Code-behinds | Page → ComponentBase + DI rewrite | ⚠️ Scaffolding automated, entity types need overlay |
+| **Pattern B** — Auth forms | Login/Register form simplification | ❌ Detection needs improvement |
+| **Pattern C** — Program.cs | Full .NET SSR bootstrap generation | ✅ Fully automated |
+
+**Always manual (not scriptable):**
 - EF6 → EF Core (models, DbContext, seed)
 - Identity/Auth subsystem
 - Session → scoped services

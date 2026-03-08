@@ -107,3 +107,6 @@ Key changes since baseline audit:
 7. **CONTROL-COVERAGE.md is accurate** — verified against actual BWFC inventory. No discrepancies.
 8. **Style sub-component count** is 66 (was reported as 63 in baseline — discrepancy was in the audit, not the code). CONTROL-COVERAGE.md correct at 66.
 9. **AfterWingtipToys uses only 4 BWFC components directly** (Label, Panel, ListView, LoginView) — migration script converts most simple controls to native HTML.
+
+
+ Team update (2026-03-09): Layer 2 script created (bwfc-migrate-layer2.ps1)  separate from Layer 1, 3 semantic transforms, idempotent via marker. Route generation fixed (). Layer 2 Pattern A not yet production-quality (known-good overlay still needed)  decided by Cyclops

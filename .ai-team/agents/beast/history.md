@@ -94,3 +94,14 @@ WebFormsPageBase docs and Page System rewrite shipped (2026-03-05). Skills cross
  Team update (2026-03-08): Migration script gained 4 new functions (EnhancedNavDisable, ReadOnlyWarning, LoginStatus conversion, LogoutFormToLink)  targets 0 manual fixes  decided by Cyclops
 
  Team update (2026-03-08): Component audit priorities  BulletedList/Panel/id-rendering fixes, field column docs, zero-touch migration script  decided by Forge
+
+### Run 16 Migration Report & Toolkit Docs (2026-03-08)
+
+- **Run 16 report:** `dev-docs/migration-tests/wingtiptoys-run16.md` — fifth consecutive 100% (25/25). First Layer 2 automation attempt. Layer 1 at 2.50s (12% faster). Layer 2 script handles Pattern C (Program.cs) fully, Pattern A (code-behinds) scaffolding, Pattern B (auth) not yet detected.
+- **migration-toolkit/README.md:** Updated "Latest" banner to Run 16, added `bwfc-migrate-layer2.ps1` to scripts table, updated pipeline table to reflect "Script + Overlay" for Layer 2, rewrote "What's New" section for Run 16, updated Quick Overview to include Layer 2 step.
+- **migration-toolkit/METHODOLOGY.md:** Updated pipeline diagram (COPILOT-ASSISTED → SCRIPT + OVERLAY), updated intelligence/tool table, rewrote Layer 2 section to document 2-script pipeline and 3 patterns (A/B/C), updated time estimates (Layer 1 now ~3s, Layer 2 now ~3 min with agents).
+- **migration-toolkit/QUICKSTART.md:** Added Step 4 (Layer 2 script), renumbered Steps 5–10, added warning about Pattern A/B partial automation.
+- **Key learning:** Layer 2 documentation must distinguish between "script-automated" and "needs overlay" — the pipeline is no longer binary (automated vs manual). Three-state model: fully automated (Pattern C), partially automated (Pattern A), not yet automated (Pattern B).
+
+
+ Team update (2026-03-09): Run 16 complete  25/25 tests, Layer 2 script bugs fixed ( init, TestMode removed), known-good overlay still required. Audit consolidated with updated priorities  decided by Cyclops, Forge

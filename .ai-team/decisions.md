@@ -6805,9 +6805,28 @@ Long-term, we could add `[StreamRendering]` support to data-bound components for
 **Why:** Run 13 achieved 25/25 with 3 manual post-script fixes. Baking these in targets 0 manual fixes for Run 14. The fixes address SSR-specific behavior: enhanced navigation intercepting API links, ReadOnly preservation breaking editable fields, and form+button logout causing Playwright selector conflicts. Each fix uses conservative heuristics — `Add-ReadOnlyWarning` adds comments rather than removing attributes, `ConvertFrom-LoginStatus` includes a MIGRATION NOTE with endpoint setup instructions.
 
 
-### 2026-03-08: Component audit findings and priorities
+### 2026-03-09: Component audit findings and priorities (consolidated)
 
-**By:** Forge  
-**What:** Comprehensive audit of BWFC library post-Run 12/13. Library is at 96% coverage (52/54 feasible controls). HTML fidelity is the weakest area — only 1/132 variants is an exact match. Missing `id` attributes is the #1 divergence pattern (~30+ controls). 5 controls have structural HTML divergences that break CSS/JS selectors: BulletedList, Panel, ListView, Calendar, Label. Migration script has converged to 3 remaining manual fixes. Top 5 sprint priorities: (1) fix 3 migration script gaps for zero-touch Run 14, (2) fix BulletedList `<ol>` rendering, (3) add `id` attribute rendering, (4) document field columns, (5) fix Panel `<fieldset>` rendering.  
-**Why:** Jeff requested a state-of-the-library assessment after Run 12/13 improvements. The library needs no new controls — the focus should shift to fidelity refinement and migration automation. The 3 remaining migration gaps are all tractable (estimated 5 hours total). The `id` attribute gap is the single most impactful HTML fidelity issue and affects the most controls.
+**By:** Forge
+**What:** Comprehensive audit of BWFC library spanning Runs 12–15. Library at 96% coverage (52/54 feasible; only Xml deferred — Substitution now has working implementation). HTML fidelity is the weakest area — only 1/132 variants is an exact match. Missing `id` attributes is the #1 divergence pattern (~30+ controls); 9 components have `id` rendering but DetailsView, GridView, DropDownList, FormView, DataList, DataGrid, ListView, HiddenField still lack it. 5 controls have structural HTML divergences breaking CSS/JS selectors: BulletedList, Panel, ListView, Calendar, Label. RouteData script bug is P1 — `[Parameter] // TODO: Verify RouteData` absorbs closing parenthesis in code-behinds (fixed by Cyclops in Run 16). Layer 2 automation now proven feasible (same 3 semantic fixes stable across 4 runs → bwfc-migrate-layer2.ps1 created). Style sub-component documentation gap: 66 components with zero standalone docs — a single "Styling Components" utility page recommended. RadioButton sample page missing from AfterBlazorServerSide. Top priorities: (1) fix migration script gaps, (2) fix BulletedList `<ol>` rendering, (3) extend `id` attribute rendering to data controls, (4) document field columns, (5) fix Panel `<fieldset>` rendering.
+**Why:** Jeff requested state-of-library assessment. No new controls needed — focus shifts to fidelity refinement, migration automation, and documentation coverage. The `id` attribute gap is the single most impactful HTML fidelity issue.
+
+
+
+### 2026-03-09: Layer 2 automation script architecture
+**By:** Cyclops
+**What:** Created `bwfc-migrate-layer2.ps1` as a separate script (not merged into Layer 1). It applies 3 semantic transforms: FormView→ComponentBase+DI, auth form simplification, Program.cs bootstrap generation. Uses `// Layer2-transformed` marker for idempotency. Accepts `-Path` and `-WhatIf` flags (no `-TestMode` — removed in Run 16; use `-WhatIf` for dry runs).
+**Why:** Layer 2 transforms require cross-file awareness (reading Models/ to detect DbContext, scanning for Identity patterns) that doesn't fit Layer 1's per-file pipeline. Keeping it separate means Layer 1 can improve independently without risking Layer 2 regressions. The 3 patterns have been stable across Runs 12–15, making them safe to automate.
+
+### 2026-03-09: Route generation uses RelPath not FileName
+**By:** Cyclops
+**What:** `ConvertFrom-PageDirective` now builds routes from `$RelPath` (e.g., `Account/Login.aspx` → `/Account/Login`) instead of `$FileName` (which only gave `/Login`). Default/Index handling works at any directory depth.
+**Why:** Pages in subdirectories (Account/, Admin/, Checkout/) were getting wrong routes. The fix aligns with `New-CompilableStub` which already used `$relativePath`.
+
+
+### 2026-03-09: Layer 2 script bug fixes and capability assessment (Run 16)
+
+**By:** Cyclops
+**What:** Fixed 2 bugs in `bwfc-migrate-layer2.ps1`: (1) `$listField` uninitialized in single-item code paths — caused `Set-StrictMode` terminating errors; fixed by initializing `$listField = '_items'` before branching. (2) `-TestMode` output redirect to `Layer2Output/` was inconsistent with Layer 1 — removed entirely (use `-WhatIf` instead). Capability assessment: Pattern A applies to 26 code-behinds but generates broken parameter declarations (100% had CS1585 errors); Pattern B detected 0 auth pages; Pattern C produced usable Program.cs. All generated code-behinds still required known-good overlay from `cef51da3`. 25/25 acceptance tests passed after overlay.
+**Why:** Layer 2 automation handles scaffolding structure but is not yet production-quality for compilable output. Pattern A parameter parsing and entity type detection need significant improvement. The script is useful as a starting template. Future work: improve Pattern A to distinguish data-bound pages from simple info pages, fix `public or private { get; set; }` parameter generation.
 
