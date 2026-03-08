@@ -155,6 +155,106 @@ function Find-IdentityDbContextName {
     return $null
 }
 
+function Get-PluralName {
+    param([string]$Name)
+
+    if (-not $Name -or $Name -eq 'object') { return 'Items' }
+
+    # Words ending in 'y' preceded by a consonant → 'ies' (Category → Categories)
+    if ($Name -match '[^aeiou]y$') {
+        return $Name.Substring(0, $Name.Length - 1) + 'ies'
+    }
+    # Words ending in 's', 'x', 'z', 'ch', 'sh' → 'es' (Address → Addresses)
+    if ($Name -match '(s|x|z|ch|sh)$') {
+        return $Name + 'es'
+    }
+    # Words ending in 'fe' → 'ves' (Life → Lives)
+    if ($Name -match 'fe$') {
+        return $Name.Substring(0, $Name.Length - 2) + 'ves'
+    }
+    # Words ending in 'f' (not 'ff') → 'ves' (Leaf → Leaves)
+    if ($Name -match '[^f]f$') {
+        return $Name.Substring(0, $Name.Length - 1) + 'ves'
+    }
+    # Default: append 's'
+    return $Name + 's'
+}
+
+function Find-DbSetName {
+    param(
+        [string]$EntityType,
+        [string]$ProjectRoot
+    )
+
+    if (-not $EntityType -or $EntityType -eq 'object') { return 'Items' }
+
+    # Try to find actual DbSet<EntityType> property name from DbContext source
+    $csFiles = Get-ChildItem -Path $ProjectRoot -Filter '*.cs' -Recurse -ErrorAction SilentlyContinue
+    foreach ($f in $csFiles) {
+        $fc = Get-Content -Path $f.FullName -Raw -Encoding UTF8
+        if ($fc -match "DbSet<${EntityType}>\s+(\w+)") {
+            return $Matches[1]
+        }
+    }
+
+    # Fall back to pluralization helper
+    return Get-PluralName -Name $EntityType
+}
+
+function Find-EntityType {
+    param(
+        [string]$CodeBehindPath,
+        [string]$Content
+    )
+
+    # Step 1: Check companion .razor file for ItemType or TItem
+    $razorPath = $CodeBehindPath -replace '\.cs$', ''
+    if (Test-Path $razorPath) {
+        $razorContent = Get-Content -Path $razorPath -Raw -Encoding UTF8
+        if ($razorContent -match 'ItemType="([^"]+)"') {
+            $typeName = $Matches[1]
+            # Strip namespace prefix (e.g., WingtipToys.Models.Product → Product)
+            if ($typeName -match '\.(\w+)$') { $typeName = $Matches[1] }
+            return $typeName
+        }
+        if ($razorContent -match 'TItem="([^"]+)"') {
+            $typeName = $Matches[1]
+            if ($typeName -match '\.(\w+)$') { $typeName = $Matches[1] }
+            return $typeName
+        }
+    }
+
+    # Step 2: Scan code-behind for strong type hints
+    if ($Content -match 'IQueryable<(\w+)>') { return $Matches[1] }
+    if ($Content -match 'List<(\w+)>') { return $Matches[1] }
+    if ($Content -match 'DbSet<(\w+)>') { return $Matches[1] }
+
+    # Step 3: Match against Model class names found in the project
+    $modelsDir = Join-Path $Path 'Models'
+    if (Test-Path $modelsDir) {
+        $modelClasses = @()
+        foreach ($f in (Get-ChildItem -Path $modelsDir -Filter '*.cs' -Recurse)) {
+            $mc = Get-Content -Path $f.FullName -Raw -Encoding UTF8
+            $classMatches = [regex]::Matches($mc, 'public\s+class\s+(\w+)')
+            foreach ($cm in $classMatches) {
+                $cn = $cm.Groups[1].Value
+                # Skip infrastructure classes
+                if ($cn -notmatch 'Context$|Initializer$|Seeder$|Configuration$|Migration') {
+                    $modelClasses += $cn
+                }
+            }
+        }
+        foreach ($mc in $modelClasses) {
+            if ($Content -match $mc) {
+                return $mc
+            }
+        }
+    }
+
+    # Step 4: No entity type detected
+    return $null
+}
+
 # ============================================================================
 # Pattern A: FormView/DataBound code-behind → ComponentBase + DI
 # ============================================================================
@@ -181,7 +281,7 @@ function Test-PatternA {
     if ($content -notmatch 'TODO:.*code-behind was copied from Web Forms') { return $false }
 
     # Check for FormView/DataBound patterns
-    $hasSelectMethod = $content -match 'SelectMethod|GetProducts|GetProduct|GetCategories'
+    $hasSelectMethod = $content -match 'SelectMethod|IQueryable<|DataBind|ItemType'
     $hasFormView = $content -match 'FormView|DataBound|IQueryable'
     $hasGetRouteUrl = $content -match 'GetRouteUrl'
     $hasPageLoad = $content -match 'Page_Load|Page_Init|Page_PreRender'
@@ -237,11 +337,12 @@ function Invoke-PatternA {
     $isSingleItem = $content -match 'FirstOrDefault|SingleOrDefault|Find\(' -or $className -match 'Detail'
     $isFilteredList = $content -match 'Where\s*\(' -or ($queryParams.Count -gt 0)
 
-    # Determine the entity type from content hints
-    $entityType = 'object'
-    if ($content -match 'Product') { $entityType = 'Product' }
-    elseif ($content -match 'Category') { $entityType = 'Category' }
-    elseif ($content -match 'Order(?!Detail)') { $entityType = 'Order' }
+    # Determine the entity type dynamically
+    $entityType = Find-EntityType -CodeBehindPath $CodeBehindPath -Content $content
+    if (-not $entityType) {
+        $entityType = 'object'
+        Write-Layer2Log -File $CodeBehindPath -Pattern 'PatternA' -Detail "Could not detect entity type — falling back to 'object'"
+    }
 
     # Build the new code-behind
     $newContent = "$script:Layer2Marker`n"
@@ -278,6 +379,9 @@ function Invoke-PatternA {
 
     # Add data field
     $listField = '_items'  # default, overridden below if not single item
+    if ($entityType -eq 'object') {
+        $newContent += "        // TODO: Replace 'object' with the actual entity type for this page`n"
+    }
     if ($isSingleItem) {
         $newContent += "        private List<${entityType}> _item = new();`n"
     } else {
@@ -298,8 +402,7 @@ function Invoke-PatternA {
             $qp = $queryParams[0]
             $newContent += "            if ($($qp.Property).HasValue && $($qp.Property) > 0)`n"
             $newContent += "            {`n"
-            $dbSetName = $entityType + 's'
-            if ($entityType -eq 'Category') { $dbSetName = 'Categories' }
+            $dbSetName = Find-DbSetName -EntityType $entityType -ProjectRoot $Path
             $newContent += "                var found = await db.${dbSetName}.FirstOrDefaultAsync(e => e.$($qp.Name) == $($qp.Property));`n"
             $newContent += "                if (found != null)`n"
             $newContent += "                {`n"
@@ -308,8 +411,7 @@ function Invoke-PatternA {
             $newContent += "            }`n"
         } elseif ($isFilteredList -and $queryParams.Count -gt 0) {
             $qp = $queryParams[0]
-            $dbSetName = $entityType + 's'
-            if ($entityType -eq 'Category') { $dbSetName = 'Categories' }
+            $dbSetName = Find-DbSetName -EntityType $entityType -ProjectRoot $Path
             $newContent += "            IQueryable<${entityType}> query = db.${dbSetName};`n"
             $newContent += "`n"
             $newContent += "            if ($($qp.Property).HasValue && $($qp.Property) > 0)`n"
@@ -319,8 +421,7 @@ function Invoke-PatternA {
             $newContent += "`n"
             $newContent += "            ${listField} = await query.ToListAsync();`n"
         } else {
-            $dbSetName = $entityType + 's'
-            if ($entityType -eq 'Category') { $dbSetName = 'Categories' }
+            $dbSetName = Find-DbSetName -EntityType $entityType -ProjectRoot $Path
             $newContent += "            // TODO: Customize query as needed`n"
             $newContent += "            ${listField} = await db.${dbSetName}.ToListAsync();`n"
         }
@@ -669,7 +770,8 @@ function Invoke-PatternC {
         $csFiles = Get-ChildItem -Path $modelsDir -Filter '*.cs' -Recurse
         foreach ($f in $csFiles) {
             $content = Get-Content -Path $f.FullName -Raw -Encoding UTF8
-            if ($content -match 'class\s+(\w+DatabaseInitializer|Seed\w+)') {
+            if ($content -match 'class\s+(\w+Initializer|\w+Seeder|Seed\w+)' -or
+                $content -match 'class\s+(\w+)\s*[^{]*:\s*(?:DropCreateDatabase\w*|CreateDatabaseIfNotExists|IDatabaseInitializer)') {
                 $hasSeedData = $true
                 $seedClass = $Matches[1]
                 break

@@ -256,13 +256,13 @@ These are 100% mechanical — apply to every file:
 
 ```xml
 <!-- Web Forms -->
-<asp:GridView ID="ProductGrid" runat="server"
-    ItemType="WingtipToys.Models.Product"
-    SelectMethod="GetProducts"
+<asp:GridView ID="ItemGrid" runat="server"
+    ItemType="YourApp.Models.YourEntity"
+    SelectMethod="GetItems"
     AutoGenerateColumns="false"
     AllowPaging="true" PageSize="10">
     <Columns>
-        <asp:BoundField DataField="Name" HeaderText="Product" />
+        <asp:BoundField DataField="Name" HeaderText="Name" />
         <asp:TemplateField HeaderText="Price">
             <ItemTemplate><%#: Item.UnitPrice.ToString("C") %></ItemTemplate>
         </asp:TemplateField>
@@ -272,11 +272,11 @@ These are 100% mechanical — apply to every file:
 
 ```razor
 <!-- Blazor with BWFC -->
-<GridView Items="products" TItem="Product"
+<GridView Items="items" TItem="YourEntity"
     AutoGenerateColumns="false"
     AllowPaging="true" PageSize="10">
     <Columns>
-        <BoundField DataField="Name" HeaderText="Product" />
+        <BoundField DataField="Name" HeaderText="Name" />
         <TemplateField HeaderText="Price">
             <ItemTemplate Context="Item">@Item.UnitPrice.ToString("C")</ItemTemplate>
         </TemplateField>
@@ -290,11 +290,11 @@ These are 100% mechanical — apply to every file:
 
 ```xml
 <!-- Web Forms -->
-<asp:ListView ID="ProductList" runat="server"
-    ItemType="WingtipToys.Models.Product" SelectMethod="GetProducts">
+<asp:ListView ID="ItemList" runat="server"
+    ItemType="YourApp.Models.YourEntity" SelectMethod="GetItems">
     <ItemTemplate>
-        <div class="product">
-            <h3><%#: Item.ProductName %></h3>
+        <div class="item">
+            <h3><%#: Item.Name %></h3>
             <asp:Image ImageUrl="<%#: Item.ImagePath %>" runat="server" />
             <p><%#: Item.UnitPrice.ToString("C") %></p>
         </div>
@@ -304,10 +304,10 @@ These are 100% mechanical — apply to every file:
 
 ```razor
 <!-- Blazor with BWFC -->
-<ListView Items="products" TItem="Product">
+<ListView Items="items" TItem="YourEntity">
     <ItemTemplate Context="Item">
-        <div class="product">
-            <h3>@Item.ProductName</h3>
+        <div class="item">
+            <h3>@Item.Name</h3>
             <Image ImageUrl="@Item.ImagePath" />
             <p>@Item.UnitPrice.ToString("C")</p>
         </div>
@@ -321,8 +321,8 @@ Web Forms `ListView` supports `GroupItemCount` for grid-style layouts (e.g., 4 p
 
 ```xml
 <!-- Web Forms — ListView with GroupItemCount for 4-column grid -->
-<asp:ListView ID="productList" runat="server"
-    ItemType="WingtipToys.Models.Product" SelectMethod="GetProducts"
+<asp:ListView ID="itemList" runat="server"
+    ItemType="YourApp.Models.YourEntity" SelectMethod="GetItems"
     GroupItemCount="4">
     <LayoutTemplate>
         <table><tr runat="server" id="groupPlaceholder" /></table>

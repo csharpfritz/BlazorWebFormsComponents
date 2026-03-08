@@ -158,4 +158,23 @@ Decision inbox entry filed with Run 02 priorities.
 
 **Key learning:** Web Forms SelectMethod (`IQueryable<T> Method()`) → BWFC SelectHandler (`IQueryable<T> Method(int maxRows, int startRowIndex, string sortByExpression, out int totalRowCount)`). The 4-parameter signature is the ONLY difference. Layer 1 should never strip markup attributes that map to real BWFC parameters — it should preserve and annotate.
 
+### bwfc-migrate.ps1 Hardcoding Cleanup (2026-03-09)
+
+**Task:** Implement 4 fixes to remove WingtipToys-specific hardcoding and correct SelectMethod handling.
+
+**Changes made to `migration-toolkit/scripts/bwfc-migrate.ps1`:**
+
+1. **ConvertFrom-SelectMethod rewritten (L1082–L1103):** No longer strips `SelectMethod` from markup. The attribute is preserved in the tag and a Blazor comment TODO is appended documenting the exact BWFC `SelectHandler<T>` 4-parameter signature. ManualItem now says "preserved — adapt signature" instead of "removed — needs rewrite". This aligns with the BWFC library's native support for `SelectMethod` as a delegate parameter.
+
+2. **Program.cs template fixed (L257–L263):** Replaced hardcoded `ProductContext` with `YourDbContext` placeholder in both `AddDbContextFactory` and `AddEntityFrameworkStores`. Added a leading `// TODO: Replace YourDbContext with your actual DbContext class name` comment.
+
+3. **GetRouteUrl hint fixed (L1072):** ManualItem now reads `"Replace GetRouteUrl('$routeName', ...) with direct NavigateTo or href URL pattern for the '$routeName' route"` — uses the actual captured route name variable instead of a hardcoded WingtipToys `/ProductDetails?ProductID=` example.
+
+4. **Unconvertible page patterns fixed (L1265–L1272):** Replaced `'PayPal'` with a multi-SDK pattern `(PayPal|Stripe|Braintree|Square|Adyen)\b`. Replaced `'Checkout'` with payment-processing code patterns `(ProcessPayment|ChargeCard|CreateCharge|CapturePayment|PaymentGateway|IPayment)`. The word "Checkout" alone no longer flags a page as unconvertible — only actual payment SDK references do.
+
+**Key learnings:**
+- Migration scripts must be sample-agnostic. Any hardcoded reference to a specific sample project (entity names, URL patterns, page names) is a bug that will cause incorrect output for other projects.
+- When a BWFC component natively supports a Web Forms attribute (like SelectMethod), Layer 1 should PRESERVE the attribute and annotate the signature adaptation — never strip it and replace with a completely different pattern.
+- Unconvertible page detection should match on SDK/API patterns, not business-domain words. "Checkout" is a legitimate page name; "ProcessPayment" or "PayPal" SDK imports are the actual indicators of code that needs manual migration.
+
 📌 Team update (2026-03-08): WingtipToys hardcoding audit — 23 findings (5 CRITICAL, 3 HIGH, 10 MEDIUM, 5 LOW). Layer 2 entity detection, Program.cs template, and skill files need genericization — decided by Cyclops

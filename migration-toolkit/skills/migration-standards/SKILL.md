@@ -149,7 +149,7 @@ The script should preserve the attribute and annotate the signature change neede
 | `<asp:DetailsView>` | `<DetailsView Items="@data">` with fields | Manual field rendering |
 | `<asp:DataList>` | `<DataList Items="@data">` with `ItemTemplate` | `@foreach` + grid HTML |
 
-**SelectMethod → Items:** Replace `SelectMethod="GetProducts"` with `Items="@_products"` where `_products` is populated in `OnInitializedAsync` via an injected service or DbContext.
+**SelectMethod → Items:** Replace `SelectMethod="GetMethodName"` with `Items="@_items"` where `_items` is populated in `OnInitializedAsync` via an injected service or DbContext.
 
 ### Session State → Scoped Services
 
@@ -250,29 +250,29 @@ Three persistent semantic gaps that require business-logic understanding:
 
 ```razor
 @* Web Forms *@
-<asp:ListView ID="productList" runat="server"
-    DataKeyNames="ProductID" GroupItemCount="4"
-    ItemType="WingtipToys.Models.Product"
-    SelectMethod="GetProducts">
+<asp:ListView ID="itemList" runat="server"
+    DataKeyNames="ItemID" GroupItemCount="4"
+    ItemType="YourApp.Models.YourEntity"
+    SelectMethod="GetItems">
     <ItemTemplate>
-        <td><%#: Item.ProductName %></td>
+        <td><%#: Item.Name %></td>
     </ItemTemplate>
 </asp:ListView>
 
 @* After migration (BWFC preserved) *@
-<ListView Items="@_products" GroupItemCount="4">
+<ListView Items="@_items" GroupItemCount="4">
     <ItemTemplate>
-        <td>@context.ProductName</td>
+        <td>@context.Name</td>
     </ItemTemplate>
 </ListView>
 
 @code {
-    [Inject] private ProductContext Db { get; set; }
-    private List<Product> _products;
+    [Inject] private AppDbContext Db { get; set; }
+    private List<YourEntity> _items;
 
     protected override async Task OnInitializedAsync()
     {
-        _products = await Db.Products.ToListAsync();
+        _items = await Db.Items.ToListAsync();
     }
 }
 ```
@@ -300,17 +300,17 @@ Three persistent semantic gaps that require business-logic understanding:
 
 ```razor
 @* WRONG — loses all BWFC functionality *@
-@foreach (var product in _products)
+@foreach (var item in _items)
 {
     <tr>
-        <td>@product.ProductName</td>
+        <td>@item.Name</td>
     </tr>
 }
 
 @* RIGHT — use BWFC ListView *@
-<ListView Items="@_products">
+<ListView Items="@_items">
     <ItemTemplate>
-        <tr><td>@context.ProductName</td></tr>
+        <tr><td>@context.Name</td></tr>
     </ItemTemplate>
 </ListView>
 ```

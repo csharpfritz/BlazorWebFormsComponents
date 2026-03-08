@@ -142,4 +142,22 @@ Key learnings:
 - **Skill files (MEDIUM):** 4 skill files use `WingtipToys.Models.Product`, `ProductContext`, `ProductService`, `ShoppingCart`/`CartService` as canonical examples. AI agents learning from these will replicate WingtipToys patterns in all migrations.
 - **Audit wrote decision to:** `.ai-team/decisions/inbox/cyclops-wingtiptoys-audit.md`
 
+### WingtipToys Hardcoding Fixes in Layer 2 Script (2026-03-09)
+
+**Fixed 4 findings (3 CRITICAL, 1 HIGH) in bwfc-migrate-layer2.ps1 to remove WingtipToys-specific hardcodings.**
+
+**Finding 1 (CRITICAL) — Entity type detection:** Replaced hardcoded `Product`/`Category`/`Order` entity matching with `Find-EntityType` function. Detection cascade: (1) read companion `.razor` file for `ItemType="X"` or `TItem="X"`, (2) scan code-behind for `IQueryable<T>`, `List<T>`, `DbSet<T>`, (3) match Model class names from `Models/` directory against code-behind content, (4) fall back to `object` with TODO comment in generated code.
+
+**Finding 2 (CRITICAL) — Detection heuristic:** Replaced `SelectMethod|GetProducts|GetProduct|GetCategories` with `SelectMethod|IQueryable<|DataBind|ItemType` — all generic patterns that match data-bound pages regardless of entity names.
+
+**Finding 3 (CRITICAL) — DbSet name derivation:** Replaced hardcoded `Category → Categories` special case with two new helper functions: `Get-PluralName` (handles consonant+y→ies, s/x/z/ch/sh→es, fe→ves, f→ves, default +s) and `Find-DbSetName` (scans DbContext source for actual `DbSet<T>` property names, falls back to `Get-PluralName`). Validated pluralization for Category→Categories, Address→Addresses, Entity→Entities, Life→Lives, Leaf→Leaves, Class→Classes.
+
+**Finding 7 (HIGH) — Seed data detection:** Broadened `class\s+(\w+DatabaseInitializer|Seed\w+)` to `class\s+(\w+Initializer|\w+Seeder|Seed\w+)` plus a second branch matching classes inheriting from EF6 initializer base classes (`DropCreateDatabase*`, `CreateDatabaseIfNotExists`, `IDatabaseInitializer`).
+
+**Key design decisions:**
+- `Find-EntityType` uses script-level `$Path` variable (consistent with how other functions access script params)
+- `Find-DbSetName` scans .cs files each invocation — acceptable overhead for a one-shot migration script
+- Pluralization helper handles common English rules; exotic plurals (e.g., Mouse→Mice) are left for DbContext source scanning to resolve
+- `Get-PluralName` returns 'Items' for `object` entity type to avoid generating broken `db.objects` references
+
 📌 Team update (2026-03-08): Preserve SelectMethod in migration scripts — BWFC supports it natively via SelectHandler<T>. Stop stripping the attribute, add signature-adaptation TODO instead — decided by Forge

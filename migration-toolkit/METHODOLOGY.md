@@ -63,7 +63,7 @@ Layer 1 handles every transform that can be expressed as a regex find-and-replac
 
 ### What Layer 1 Does
 
-| Transform | Count (WingtipToys) | Accuracy |
+| Transform | Count (WingtipToys PoC) | Accuracy |
 |---|---|---|
 | `asp:` tag prefix removals | 147+ | 100% |
 | `runat="server"` attribute removals | 165+ | 100% |
@@ -73,6 +73,8 @@ Layer 1 handles every transform that can be expressed as a regex find-and-replac
 | URL conversions (`~/` → `/`) | All | 100% |
 | File renaming (`.aspx` → `.razor`) | 33 | 100% |
 | Project scaffold (`.csproj`, `Program.cs`, `_Imports.razor`, `App.razor`) | Full | ✅ |
+
+> **Note:** Counts above are from the WingtipToys PoC (33 pages, 230+ control instances). Your counts will vary by application size and complexity.
 
 `_Imports.razor` includes `@inherits BlazorWebFormsComponents.WebFormsPageBase` so that all converted pages get `Page.Title`, `Page.MetaDescription`, `Page.MetaKeywords`, and `IsPostBack` without per-page injection. The layout scaffold includes `<BlazorWebFormsComponents.Page />` to render `<PageTitle>` and `<meta>` tags.
 
@@ -96,7 +98,7 @@ After Layer 1, pages fall into three readiness categories:
 | ⚠️ Needs Layer 2 | ~64% | Structural transforms needed — Copilot handles these |
 | ❌ Needs Layer 3 | ~24% | Architecture decisions required — human judgment needed |
 
-> These percentages are from the [WingtipToys proof-of-concept](../planning-docs/WINGTIPTOYS-MIGRATION-EXECUTIVE-REPORT.md). Your mileage will vary based on how much DataSource/auth/session-state your app uses.
+> These percentages are from the [WingtipToys proof-of-concept](../planning-docs/WINGTIPTOYS-MIGRATION-EXECUTIVE-REPORT.md) and are representative, not absolute. Your mileage will vary based on how much DataSource/auth/session-state your app uses.
 
 ---
 
@@ -225,7 +227,7 @@ Don't skip layers. Don't try to do Layer 3 work in Layer 1. The pipeline is desi
 
 ## Time Estimates
 
-Based on the [WingtipToys proof-of-concept](../planning-docs/WINGTIPTOYS-MIGRATION-EXECUTIVE-REPORT.md) (33 pages, 230+ control instances):
+Based on the [WingtipToys proof-of-concept](../planning-docs/WINGTIPTOYS-MIGRATION-EXECUTIVE-REPORT.md) and other sample app migrations (33 pages, 230+ control instances):
 
 | Layer | Solo Developer | With Copilot/Agents |
 |---|---|---|
@@ -235,7 +237,7 @@ Based on the [WingtipToys proof-of-concept](../planning-docs/WINGTIPTOYS-MIGRATI
 | Layer 3 (architecture) | 10–14 hours | 8–12 hours |
 | **Total** | **18–26 hours** | **8–15 hours** |
 
-Layer 3 time varies the most because it depends on your application's complexity. A simple CRUD app with no auth may have almost no Layer 3 work. An enterprise app with custom session state, complex auth, and third-party integrations will spend most of its time in Layer 3.
+> **Note:** These estimates are from the WingtipToys PoC and are representative benchmarks, not absolute guarantees. Layer 3 time varies the most because it depends on your application's complexity. A simple CRUD app with no auth may have almost no Layer 3 work. An enterprise app with custom session state, complex auth, and third-party integrations will spend most of its time in Layer 3.
 
 ---
 
@@ -244,4 +246,4 @@ Layer 3 time varies the most because it depends on your application's complexity
 - [QUICKSTART.md](QUICKSTART.md) — the linear "just do it" path through all three layers
 - [CONTROL-COVERAGE.md](CONTROL-COVERAGE.md) — what's covered at each complexity level
 - [CHECKLIST.md](CHECKLIST.md) — per-page tracking template organized by layer
-- [Executive report](../planning-docs/WINGTIPTOYS-MIGRATION-EXECUTIVE-REPORT.md) — WingtipToys metrics source
+- [Executive report](../planning-docs/WINGTIPTOYS-MIGRATION-EXECUTIVE-REPORT.md) — WingtipToys PoC metrics source (representative benchmarks for the pipeline)

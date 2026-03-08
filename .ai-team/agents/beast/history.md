@@ -100,6 +100,21 @@ Documentation & migration reporting agent. M1–M16 docs shipped (all control ca
  Team update (2026-03-08): P0 HTML fidelity fixes complete  CheckBox span wrapper, BaseValidator id/class, FormView CssClass. 1488 tests pass.  decided by Cyclops, Forge
  Team update (2026-03-08): Second sample project will be purpose-built 'EventManager' Control Gallery targeting ~12-15 pages with controls WingtipToys doesn't cover  decided by Forge
  Team update (2026-03-08): ASPX URL rewriting goes in migration-toolkit docs (RewriteOptions.AddRedirect snippet), not BWFC NuGet  decided by Forge
+
+### Genericization of Migration Toolkit (2026-03-09)
+
+- **Scope:** Removed WingtipToys-specific examples from all skill files and documentation in `migration-toolkit/`. Made examples clearly generic so any Web Forms app (e-commerce, school management, healthcare, etc.) sees applicable patterns.
+- **Files modified (8):**
+  - `skills/migration-standards/SKILL.md` — ListView example: `WingtipToys.Models.Product` → `YourApp.Models.YourEntity`, `ProductContext` → `AppDbContext`, anti-patterns genericized
+  - `skills/bwfc-migration/SKILL.md` — GridView, ListView, and GroupItemCount examples: `ItemType="WingtipToys.Models.Product"` → `ItemType="YourApp.Models.YourEntity"`
+  - `skills/bwfc-data-migration/SKILL.md` — Largest change. `ProductContext` → `AppDbContext`, `ProductService` → `EntityService`, `GetProducts` → `GetItems` across EF6, service injection, and SelectMethod mapping sections. ShoppingCart/CartService restructured: generic pattern leads, cart shown as labeled "Example (e-commerce app)" note. Route examples genericized (`ProductRoute` → `DetailRoute`).
+  - `CHECKLIST.md` — Tracking examples wrapped in `<!-- EXAMPLE -->` comments with generic page names
+  - `copilot-instructions-template.md` — Control notes table and routing table now use `[YourXxx]` template format
+  - `README.md` — "How Long" section now says "and other sample app migrations" alongside WingtipToys PoC
+  - `METHODOLOGY.md` — Layer 1 table labeled "WingtipToys PoC", percentages note says "representative, not absolute", time estimates note added, cross-references clarified
+- **Identity skill (`bwfc-identity-migration/SKILL.md`):** Verified clean — no WingtipToys-specific references found.
+- **Pattern applied:** Generic code examples use `YourApp`, `YourEntity`, `AppDbContext`, `EntityService`, `GetItemsAsync`. Where WingtipToys-specific examples add genuine value (shopping cart session state pattern), kept but labeled explicitly as "> **Example (e-commerce app):**".
+- **Principle learned:** Toolkit skill files must use domain-neutral names in primary patterns. Domain-specific examples (e-commerce, healthcare, etc.) are fine as labeled secondary examples but should never be the primary teaching example. Future skill additions should follow the `YourApp`/`YourEntity`/`AppDbContext` convention.
 📌 Team update (2026-03-08): Preserve SelectMethod in migration scripts — BWFC supports it natively via SelectHandler<T>. Stop stripping the attribute, add signature-adaptation TODO instead — decided by Forge
 
 📌 Team update (2026-03-08): WingtipToys hardcoding audit — 23 findings (5 CRITICAL, 3 HIGH, 10 MEDIUM, 5 LOW). Layer 2 entity detection, Program.cs template, and skill files need genericization — decided by Cyclops

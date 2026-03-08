@@ -128,11 +128,11 @@ private void Button_Click() { }
 
 | Control | Your Usage | Migration Notes |
 |---|---|---|
-| GridView | [e.g., ProductGrid on Products.aspx] | `Items="products"` + `TItem="Product"` |
-| ListView | [e.g., CategoryList on Default.aspx] | `Items="categories"` + `TItem="Category"` |
-| FormView | [e.g., ProductDetail on Detail.aspx] | `DataItem="product"` + `TItem="Product"` |
+| GridView | [e.g., `[YourGridPage]` on `[YourPage].aspx`] | `Items="items"` + `TItem="YourEntity"` |
+| ListView | [e.g., `[YourListPage]` on `[YourPage].aspx`] | `Items="items"` + `TItem="YourEntity"` |
+| FormView | [e.g., `[YourDetailPage]` on `[YourPage].aspx`] | `DataItem="item"` + `TItem="YourEntity"` |
 | TextBox | [e.g., Login form fields] | Add `@bind-Text="model.Property"` |
-| DropDownList | [e.g., Category filter] | Bind `Items` + `@bind-SelectedValue` |
+| DropDownList | [e.g., `[YourFilterControl]`] | Bind `Items` + `@bind-SelectedValue` |
 | Validators | [e.g., Login/Register forms] | Nearly 1:1 — wrap form in `<EditForm>` |
 
 ---
@@ -180,8 +180,8 @@ private void Button_Click() { }
 | Original URL | Blazor Route | Page File |
 |---|---|---|
 | `/Default.aspx` | `@page "/"` | `Pages/Index.razor` |
-| `/Products.aspx` | `@page "/Products"` | `Pages/Products.razor` |
-| `/Products/Detail.aspx?id=5` | `@page "/Products/{ProductId:int}"` | `Pages/ProductDetail.razor` |
+| `/[YourListPage].aspx` | `@page "/[YourListPage]"` | `Pages/[YourListPage].razor` |
+| `/[YourDetailPage].aspx?id=5` | `@page "/[YourDetailPage]/{[YourParam]:int}"` | `Pages/[YourDetailPage].razor` |
 <!-- Add your pages here -->
 
 ---

@@ -254,12 +254,13 @@ app.Run();
     if ($hasIdentity) {
         $identityServiceBlock = @"
 
+// TODO: Replace YourDbContext with your actual DbContext class name
 // TODO: Configure database connection (use AddDbContextFactory — do NOT also register AddDbContext to avoid DI conflicts)
-// builder.Services.AddDbContextFactory<ProductContext>(options => options.UseSqlite("Data Source=app.db"));
+// builder.Services.AddDbContextFactory<YourDbContext>(options => options.UseSqlite("Data Source=app.db"));
 
 // TODO: Configure Identity
 // builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = false)
-//     .AddEntityFrameworkStores<ProductContext>();
+//     .AddEntityFrameworkStores<YourDbContext>();
 
 // TODO: Configure session for cart/state management
 // builder.Services.AddDistributedMemoryCache();
@@ -1068,7 +1069,7 @@ function ConvertFrom-GetRouteUrl {
     $routeNameMatches = $routeNameRegex.Matches($Content)
     foreach ($m in $routeNameMatches) {
         $routeName = $m.Groups[1].Value
-        Write-ManualItem -File $RelPath -Category 'GetRouteUrl' -Detail "Replace route name '$routeName' with direct URL pattern, e.g., /ProductDetails?ProductID=@Item.ProductID"
+        Write-ManualItem -File $RelPath -Category 'GetRouteUrl' -Detail "Replace GetRouteUrl('$routeName', ...) with direct NavigateTo or href URL pattern for the '$routeName' route"
     }
 
     return $Content
@@ -1081,22 +1082,20 @@ function ConvertFrom-GetRouteUrl {
 function ConvertFrom-SelectMethod {
     param([string]$Content, [string]$RelPath)
 
-    # Match SelectMethod="MethodName" in any tag, capture the method name and insert a TODO after the tag
-    $selectMethodRegex = [regex]'(?si)(<[^>]*?)\s+SelectMethod\s*=\s*"([^"]+)"([^>]*>)'
+    # Match SelectMethod="MethodName" — PRESERVE the attribute in markup (BWFC supports it natively)
+    # and append a TODO noting the signature adaptation from 0-param to 4-param SelectHandler<T>
+    $selectMethodRegex = [regex]'(?si)(<[^>]*?\s+SelectMethod\s*=\s*"([^"]+)"[^>]*>)'
     $selectMethodMatches = $selectMethodRegex.Matches($Content)
     if ($selectMethodMatches.Count -gt 0) {
         $Content = $selectMethodRegex.Replace($Content, {
             param($m)
-            $tagBeforeAttr = $m.Groups[1].Value
+            $fullTag = $m.Groups[1].Value
             $methodName = $m.Groups[2].Value
-            $tagAfterAttr = $m.Groups[3].Value
-            $serviceName = 'I' + $methodName.TrimStart('Get') + 'Service'
-            $varName = ($methodName.TrimStart('Get')).Substring(0,1).ToLower() + ($methodName.TrimStart('Get')).Substring(1) + 'Service'
-            "${tagBeforeAttr}${tagAfterAttr}`n@* TODO: Replace SelectMethod=""${methodName}"" with Items=""@_data"" parameter on this BWFC data control. Load _data in OnInitializedAsync: _data = await yourDbContext.YourEntities.ToListAsync(); *@"
+            "${fullTag}`n@* TODO: Adapt SelectMethod ""${methodName}"" to BWFC signature:`n   IQueryable<T> ${methodName}(int maxRows, int startRowIndex, string sortByExpression, out int totalRowCount)`n   — add the 4 parameters to the existing method. See BWFC docs for SelectHandler<T>. *@"
         })
-        Write-TransformLog -File $RelPath -Transform 'SelectMethod' -Detail "Converted $($selectMethodMatches.Count) SelectMethod attribute(s) to TODO annotations"
+        Write-TransformLog -File $RelPath -Transform 'SelectMethod' -Detail "Preserved $($selectMethodMatches.Count) SelectMethod attribute(s); added BWFC signature TODO(s)"
         foreach ($m in $selectMethodMatches) {
-            Write-ManualItem -File $RelPath -Category 'SelectMethod' -Detail "SelectMethod='$($m.Groups[2].Value)' removed — needs service injection and OnInitializedAsync data loading"
+            Write-ManualItem -File $RelPath -Category 'SelectMethod' -Detail "SelectMethod='$($m.Groups[2].Value)' preserved — adapt method signature to BWFC SelectHandler<T> (add 4 parameters: maxRows, startRowIndex, sortByExpression, out totalRowCount)"
         }
     }
 
@@ -1268,8 +1267,8 @@ function Test-UnconvertiblePage {
         'UserManager',
         'FormsAuthentication',
         'Session\[',
-        'PayPal',
-        'Checkout'
+        '(PayPal|Stripe|Braintree|Square|Adyen)\b',
+        '(ProcessPayment|ChargeCard|CreateCharge|CapturePayment|PaymentGateway|IPayment)'
     )
     foreach ($pat in $unconvertiblePatterns) {
         if ($Content -match $pat) {

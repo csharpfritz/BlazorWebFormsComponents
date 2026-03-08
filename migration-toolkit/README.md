@@ -148,7 +148,7 @@ See [CONTROL-COVERAGE.md](CONTROL-COVERAGE.md) for the full supported/unsupporte
 
 ## How Long Will This Take?
 
-Based on the [WingtipToys proof-of-concept](../planning-docs/WINGTIPTOYS-MIGRATION-EXECUTIVE-REPORT.md) (33 pages, 230+ control instances):
+Based on the [WingtipToys proof-of-concept](../planning-docs/WINGTIPTOYS-MIGRATION-EXECUTIVE-REPORT.md) and other sample app migrations (33 pages, 230+ control instances):
 
 | Approach | Estimated Time | Per-Page Average |
 |---|---|---|

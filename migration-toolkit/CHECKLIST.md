@@ -99,10 +99,12 @@ Create a single `MIGRATION-TRACKING.md` in your project. Paste one copy of the c
 - [x] About.aspx → About.razor (Trivial) — Done 2026-03-01
 
 ## In Progress
-- [ ] ProductList.aspx → ProductList.razor (Medium) — Layer 2
+<!-- EXAMPLE — replace with your actual pages -->
+- [ ] ItemList.aspx → ItemList.razor (Medium) — Layer 2
 
 ## Not Started
-- [ ] ShoppingCart.aspx → ShoppingCart.razor (Medium)
+<!-- EXAMPLE — replace with your actual pages -->
+- [ ] Dashboard.aspx → Dashboard.razor (Medium)
 - [ ] Login.aspx → Login.razor (Complex)
 ```
 

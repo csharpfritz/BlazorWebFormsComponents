@@ -41,23 +41,25 @@ Use this skill when you need to:
 Use the same `<form method="post">` → minimal API pattern used for auth. The endpoint has a real `HttpContext` with session access.
 
 ```csharp
-// Program.cs — cart add operation via minimal API
-app.MapPost("/Cart/Add", async (HttpContext context, ShoppingCartService cart) =>
+// Program.cs — state-modifying operation via minimal API
+app.MapPost("/State/Update", async (HttpContext context, YourStateService stateService) =>
 {
     var form = await context.Request.ReadFormAsync();
-    if (int.TryParse(form["productId"], out var productId))
-        cart.AddToCart(productId);
-    return Results.Redirect("/ShoppingCart");
+    if (int.TryParse(form["itemId"], out var itemId))
+        stateService.AddItem(itemId);
+    return Results.Redirect("/Items");
 }).DisableAntiforgery();
 ```
 
 ```razor
 @* Blazor page — form submits via HTTP POST, not a Blazor event *@
-<form method="post" action="/Cart/Add">
-    <input type="hidden" name="productId" value="@product.ProductID" />
-    <button type="submit">Add to Cart</button>
+<form method="post" action="/State/Update">
+    <input type="hidden" name="itemId" value="@item.ItemID" />
+    <button type="submit">Add Item</button>
 </form>
 ```
+
+> **Example (e-commerce app):** Replace `Session["CartId"]` with a minimal API endpoint at `/Cart/Add` that accepts `productId` and delegates to a `CartService`. The endpoint redirects back to the shopping cart page after adding the item.
 
 > **Important:** The endpoint MUST call `.DisableAntiforgery()` because Blazor's HTML rendering does not include antiforgery tokens. Example: `app.MapPost("/endpoint", handler).DisableAntiforgery();`
 
@@ -66,33 +68,37 @@ app.MapPost("/Cart/Add", async (HttpContext context, ShoppingCartService cart) =
 Replace `Session["key"]` with a scoped DI service. State lives in server memory for the duration of the SignalR circuit.
 
 ```csharp
-// CartService.cs — registered as AddScoped<CartService>()
-public class CartService
+// YourStateService.cs — registered as AddScoped<YourStateService>()
+public class YourStateService
 {
-    public ShoppingCart Cart { get; set; } = new();
-    public void AddItem(int productId) { /* ... */ }
+    public List<SelectedItem> Items { get; set; } = new();
+    public void AddItem(int itemId) { /* ... */ }
 }
 ```
 
-**Trade-off:** State is lost if the user refreshes the page or the circuit disconnects. Good for transient UI state, not for durable cart data.
+> **Example (e-commerce app):** `Session["ShoppingCart"]` → scoped `CartService` with `ShoppingCart Cart` property and `AddItem(int productId)` method.
+
+**Trade-off:** State is lost if the user refreshes the page or the circuit disconnects. Good for transient UI state, not for durable business data.
 
 ### Option C: Database-Backed State (most durable)
 
 Store state in the database, keyed by user ID or a cookie-based session token. Survives circuit disconnects, page refreshes, and server restarts.
 
 ```csharp
-public class CartService(IDbContextFactory<ProductContext> factory)
+public class StatePersistenceService(IDbContextFactory<AppDbContext> factory)
 {
-    public async Task AddItemAsync(string userId, int productId)
+    public async Task AddItemAsync(string userId, int itemId)
     {
         using var db = factory.CreateDbContext();
-        db.CartItems.Add(new CartItem { UserId = userId, ProductId = productId });
+        db.SavedItems.Add(new SavedItem { UserId = userId, ItemId = itemId });
         await db.SaveChangesAsync();
     }
 }
 ```
 
-**Recommendation:** For shopping carts and other business-critical state, prefer Option A (minimal API) or Option C (database). Use Option B only for transient UI state that can be safely lost.
+> **Example (e-commerce app):** `CartService` backed by `IDbContextFactory<AppDbContext>` stores cart items in a `CartItems` table, keyed by user ID.
+
+**Recommendation:** For business-critical state (shopping carts, form drafts, user selections), prefer Option A (minimal API) or Option C (database). Use Option B only for transient UI state that can be safely lost.
 
 ---
 
@@ -105,33 +111,33 @@ public class CartService(IDbContextFactory<ProductContext> factory)
 
 ```csharp
 // Web Forms — direct DbContext in code-behind
-public IQueryable<Product> GetProducts()
+public IQueryable<YourEntity> GetItems()
 {
-    var db = new ProductContext();
-    return db.Products;
+    var db = new AppDbContext();
+    return db.Items;
 }
 ```
 
 ```csharp
 // Blazor — Program.cs
-builder.Services.AddDbContextFactory<ProductContext>(options =>
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 ```
 
 ```csharp
 // Blazor — Service layer
-public class ProductService(IDbContextFactory<ProductContext> factory)
+public class EntityService(IDbContextFactory<AppDbContext> factory)
 {
-    public async Task<List<Product>> GetProductsAsync()
+    public async Task<List<YourEntity>> GetItemsAsync()
     {
         using var db = factory.CreateDbContext();
-        return await db.Products.ToListAsync();
+        return await db.Items.ToListAsync();
     }
 
-    public async Task<Product?> GetProductAsync(int id)
+    public async Task<YourEntity?> GetItemAsync(int id)
     {
         using var db = factory.CreateDbContext();
-        return await db.Products.FindAsync(id);
+        return await db.Items.FindAsync(id);
     }
 }
 ```
@@ -186,16 +192,16 @@ Web Forms `DataSource` controls have **no BWFC equivalent**. Replace with inject
 
 ```razor
 @* Blazor — service injection *@
-@inject IProductService ProductService
+@inject IEntityService EntityService
 
-<GridView Items="products" TItem="Product" AutoGenerateColumns="true" />
+<GridView Items="items" TItem="YourEntity" AutoGenerateColumns="true" />
 
 @code {
-    private List<Product> products = new();
+    private List<YourEntity> items = new();
 
     protected override async Task OnInitializedAsync()
     {
-        products = await ProductService.GetProductsAsync();
+        items = await EntityService.GetItemsAsync();
     }
 }
 ```
@@ -204,9 +210,9 @@ Web Forms `DataSource` controls have **no BWFC equivalent**. Replace with inject
 
 ```csharp
 // Program.cs
-builder.Services.AddDbContextFactory<ProductContext>(options =>
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IEntityService, EntityService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 ```
@@ -215,11 +221,11 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 | Web Forms SelectMethod | Blazor Service Call |
 |----------------------|---------------------|
-| `SelectMethod="GetProducts"` | `products = await ProductService.GetProductsAsync();` |
-| `SelectMethod="GetProduct"` | `product = await ProductService.GetProductAsync(id);` |
-| `InsertMethod="InsertProduct"` | `await ProductService.InsertAsync(product);` |
-| `UpdateMethod="UpdateProduct"` | `await ProductService.UpdateAsync(product);` |
-| `DeleteMethod="DeleteProduct"` | `await ProductService.DeleteAsync(id);` |
+| `SelectMethod="GetItems"` | `items = await EntityService.GetItemsAsync();` |
+| `SelectMethod="GetItem"` | `item = await EntityService.GetItemAsync(id);` |
+| `InsertMethod="InsertItem"` | `await EntityService.InsertAsync(item);` |
+| `UpdateMethod="UpdateItem"` | `await EntityService.UpdateAsync(item);` |
+| `DeleteMethod="DeleteItem"` | `await EntityService.DeleteAsync(id);` |
 
 ---
 
@@ -230,25 +236,27 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 ```csharp
 // Web Forms
-Session["ShoppingCart"] = cart;
-var cart = (ShoppingCart)Session["ShoppingCart"];
+Session["MyData"] = data;
+var data = (MyDataType)Session["MyData"];
 ```
 
 ```csharp
 // Blazor — Scoped service (in-memory, per-circuit)
-public class CartService
+public class MyDataService
 {
-    public ShoppingCart Cart { get; set; } = new();
-    public void AddItem(Product product, int quantity = 1) { ... }
-    public decimal GetTotal() => Cart.Items.Sum(i => i.Price * i.Quantity);
+    public MyDataType Data { get; set; } = new();
+    public void Update(string key, object value) { ... }
+    public T Get<T>(string key) { ... }
 }
 
 // Program.cs
-builder.Services.AddScoped<CartService>();
+builder.Services.AddScoped<MyDataService>();
 
 // Component
-@inject CartService CartService
+@inject MyDataService DataService
 ```
+
+> **Example (e-commerce app):** Replace `Session["ShoppingCart"]` with a scoped `CartService` holding a `ShoppingCart` object. Register as `AddScoped<CartService>()` and inject via `@inject CartService Cart`. The cart service exposes `AddItem`, `RemoveItem`, and `GetTotal` methods.
 
 ### State Storage Options
 
@@ -272,14 +280,14 @@ builder.Services.AddScoped<CartService>();
     {
         if (firstRender)
         {
-            var result = await SessionStorage.GetAsync<ShoppingCart>("cart");
-            cart = result.Success ? result.Value! : new ShoppingCart();
+            var result = await SessionStorage.GetAsync<MyDataType>("mydata");
+            cart = result.Success ? result.Value! : new MyDataType();
         }
     }
 
     private async Task SaveCart()
     {
-        await SessionStorage.SetAsync("cart", cart);
+        await SessionStorage.SetAsync("mydata", cart);
     }
 }
 ```
@@ -306,7 +314,7 @@ protected void Application_Error(object sender, EventArgs e)
 
 protected void Session_Start(object sender, EventArgs e)
 {
-    Session["Cart"] = new ShoppingCart();
+    Session["UserState"] = new UserState();
 }
 ```
 
@@ -317,8 +325,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Services (replaces Application_Start registrations)
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddBlazorWebFormsComponents();
-builder.Services.AddDbContextFactory<ProductContext>(options => ...);
-builder.Services.AddScoped<CartService>(); // replaces Session_Start
+builder.Services.AddDbContextFactory<AppDbContext>(options => ...);
+builder.Services.AddScoped<UserStateService>(); // replaces Session_Start
 
 var app = builder.Build();
 
@@ -387,19 +395,19 @@ var mode = PayPalOptions.Value.Mode;
 
 ```csharp
 // Web Forms — RouteConfig.cs
-routes.MapPageRoute("ProductRoute", "Product/{productId}", "~/ProductDetail.aspx");
-routes.MapPageRoute("CategoryRoute", "Category/{categoryId}", "~/ProductList.aspx");
+routes.MapPageRoute("DetailRoute", "Items/{itemId}", "~/ItemDetail.aspx");
+routes.MapPageRoute("ListRoute", "Categories/{categoryId}", "~/ItemList.aspx");
 ```
 
 ```razor
-@* Blazor — ProductDetail.razor *@
-@page "/Product/{ProductId:int}"
+@* Blazor — ItemDetail.razor *@
+@page "/Items/{ItemId:int}"
 @code {
-    [Parameter] public int ProductId { get; set; }
+    [Parameter] public int ItemId { get; set; }
 }
 
-@* Blazor — ProductList.razor *@
-@page "/Category/{CategoryId:int}"
+@* Blazor — ItemList.razor *@
+@page "/Categories/{CategoryId:int}"
 @code {
     [Parameter] public int CategoryId { get; set; }
 }
@@ -420,11 +428,11 @@ routes.MapPageRoute("CategoryRoute", "Category/{categoryId}", "~/ProductList.asp
 ```csharp
 // Web Forms — FriendlyUrls
 routes.EnableFriendlyUrls();
-// Maps Products.aspx → /Products, Products/Details/5 → Products.aspx?id=5
+// Maps Items.aspx → /Items, Items/Details/5 → Items.aspx?id=5
 
 // Blazor — direct @page mapping
-@page "/Products"
-@page "/Products/Details/{Id:int}"
+@page "/Items"
+@page "/Items/Details/{Id:int}"
 ```
 
 ---
