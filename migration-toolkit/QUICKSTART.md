@@ -78,7 +78,29 @@ The migration script handles the mechanical work: stripping `asp:` prefixes, rem
 
 ---
 
-## Step 4: Configure BWFC in the Blazor Project
+## Step 4: Run Layer 2 — Semantic Transforms
+
+The Layer 2 script handles semantic transforms that Layer 1 can't reach — Program.cs generation, code-behind scaffolding, and auth form detection:
+
+```powershell
+.\scripts\bwfc-migrate-layer2.ps1 -Path "C:\src\MyBlazorApp"
+```
+
+**What this does (in ~2 seconds):**
+
+| Pattern | What It Generates |
+|---------|-------------------|
+| **Program.cs** (Pattern C) | Full .NET SSR bootstrap with SQLite, Identity, middleware pipeline, seed data |
+| **Code-behinds** (Pattern A) | ComponentBase + `IDbContextFactory` + `SupplyParameterFromQuery` scaffolding |
+| **Auth forms** (Pattern B) | Detects Login/Register candidates for `[SupplyParameterFromForm]` simplification |
+
+> ⚠️ **Pattern A and B are partial.** The script creates correct file structure, but entity types and auth form detection may need manual refinement. Review the generated code-behind files and overlay corrections as needed.
+
+> 📄 Script reference: [`scripts/bwfc-migrate-layer2.ps1`](../scripts/bwfc-migrate-layer2.ps1)
+
+---
+
+## Step 5: Configure BWFC in the Blazor Project
 
 After the migration script runs, verify these are in place (the script scaffolds them, but check):
 
@@ -111,7 +133,7 @@ This renders `<PageTitle>` and `<meta>` tags. `WebFormsPageBase` provides the co
 
 ---
 
-## Step 5: Set Up Copilot for Layer 2
+## Step 6: Set Up Copilot for Layer 2 Refinement
 
 Copy the Copilot instructions template into your project to give Copilot migration-specific context:
 
@@ -129,9 +151,9 @@ Alternatively, point Copilot at the BWFC migration skill directly:
 
 ---
 
-## Step 6: Walk Through Layer 2 — Copilot-Assisted Transforms
+## Step 7: Walk Through Layer 2 — Copilot-Assisted Refinement
 
-Open each migrated `.razor` file and work through the structural transforms that the script couldn't handle. These are the patterns Copilot handles well with the migration skill:
+Open each migrated `.razor` file and work through any structural transforms that the Layer 2 script couldn't fully handle. These are the patterns Copilot handles well with the migration skill:
 
 | Transform | What To Do |
 |---|---|
@@ -148,7 +170,7 @@ Look for `<!-- TODO: BWFC-MIGRATE -->` comments left by the migration script —
 
 ---
 
-## Step 7: Address Layer 3 — Architecture Decisions
+## Step 8: Address Layer 3 — Architecture Decisions
 
 These are the decisions that need a human (or a human + the migration agent):
 
@@ -163,7 +185,7 @@ These are the decisions that need a human (or a human + the migration agent):
 
 ---
 
-## Step 8: Build and Verify
+## Step 9: Build and Verify
 
 ```bash
 dotnet build
@@ -190,7 +212,7 @@ Open the app in a browser and compare against your original Web Forms applicatio
 
 ---
 
-## Step 9: Iterate
+## Step 10: Iterate
 
 Use the [per-page checklist](CHECKLIST.md) to track progress across your application. Migrate pages in priority order:
 

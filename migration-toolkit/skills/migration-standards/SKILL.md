@@ -2,16 +2,18 @@
 name: "migration-standards"
 description: "Canonical standards for migrating ASP.NET Web Forms applications to Blazor using BWFC"
 domain: "migration"
-confidence: "medium"
+confidence: "high"
 source: "earned"
 ---
 
+<!-- Updated 2026-03-08: Validated against Runs 14-16, SSR architecture, 2-script pipeline -->
+
 ## Context
 
-When migrating an ASP.NET Web Forms application to Blazor using BlazorWebFormsComponents, these standards define the canonical target architecture, tooling choices, and migration patterns. Established through five WingtipToys migration benchmark runs and codified as a directive by Jeffrey T. Fritz.
+When migrating an ASP.NET Web Forms application to Blazor using BlazorWebFormsComponents, these standards define the canonical target architecture, tooling choices, and migration patterns. Established through nine WingtipToys migration benchmark runs (Runs 8–16) and codified as a directive by Jeffrey T. Fritz.
 
 Apply these standards to:
-- Migration script (`bwfc-migrate.ps1`) enhancements
+- Migration script (`bwfc-migrate.ps1` + `bwfc-migrate-layer2.ps1`) enhancements
 - Copilot-assisted Layer 2 work
 - Migration documentation and checklists
 - Any new migration test runs
@@ -24,29 +26,37 @@ Apply these standards to:
 |---|---|
 | Framework | **.NET 10** (or latest LTS/.NET preview) |
 | Project template | `dotnet new blazor --interactivity Server` |
-| Render mode | Global Server Interactive (see [Render Mode Placement](#render-mode-placement) below) |
+| Render mode | **SSR (Static Server Rendering)** with per-component `InteractiveServer` opt-in (see [Render Mode](#render-mode--ssr-default) below) |
 | Base class | `WebFormsPageBase` for pages (`@inherits` in `_Imports.razor`); `ComponentBase` for non-page components |
 | Layout | `MainLayout.razor` with `@inherits LayoutComponentBase` and `@Body` |
 
-### Render Mode Placement
+### Render Mode — SSR Default
 
-> **`@rendermode` is a directive *attribute*, not a standalone directive.** It goes on component instances in markup, not in `_Imports.razor`.
+> **Default to SSR (Static Server Rendering)** with per-component `InteractiveServer` opt-in. This was established in Run 12 and confirmed stable through Run 16 (5 consecutive 100% results). SSR eliminates `HttpContext`/cookie/session problems that plagued the InteractiveServer approach in Runs 8–11.
 
-**`_Imports.razor`** — add the static using so you can write `InteractiveServer` instead of `RenderMode.InteractiveServer`:
+**`App.razor`** — do NOT add `@rendermode` to `<Routes>` or `<HeadOutlet>` (SSR is the default when no render mode is specified):
+
+```razor
+<HeadOutlet />
+...
+<Routes />
+```
+
+**Per-component interactivity** — add `@rendermode` only to components that need interactive behavior:
+
+```razor
+<MyInteractiveComponent @rendermode="InteractiveServer" />
+```
+
+**`_Imports.razor`** — add the static using for convenience when applying per-component render modes:
 
 ```razor
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
 ```
 
-**`App.razor`** — apply render mode to the top-level routable components:
+> **Do NOT place `@rendermode InteractiveServer` as a standalone line in `_Imports.razor`** — `@rendermode` is a directive attribute, not a standalone directive. It will cause build errors (RZ10003, CS0103, RZ10024).
 
-```razor
-<HeadOutlet @rendermode="InteractiveServer" />
-...
-<Routes @rendermode="InteractiveServer" />
-```
-
-This gives every page global server interactivity. Do **not** place `@rendermode InteractiveServer` as a line in `_Imports.razor` — it is not a valid Razor directive and will cause build errors (RZ10003, CS0103, RZ10024).
+> **Why SSR over global InteractiveServer:** Under global InteractiveServer, `HttpContext` is NULL during WebSocket circuits. This breaks cookie auth, session state, and any middleware-dependent operations. SSR preserves a real HTTP request/response for every page load, making auth endpoints, session cookies, and middleware work correctly. Add `InteractiveServer` only to specific components that need real-time updates.
 
 > **Reference:** [ASP.NET Core Blazor render modes](https://learn.microsoft.com/aspnet/core/blazor/components/render-modes)
 
@@ -171,18 +181,63 @@ When linking to minimal API endpoints from Blazor pages, use `<form method="post
 | `Page.Title` | `Page.Title = "X"` works AS-IS via `WebFormsPageBase` | `WebFormsPageBase` delegates to `IPageService`. `<BlazorWebFormsComponents.Page />` in layout renders `<PageTitle>` and `<meta>` tags. |
 | `Response.Redirect` | `NavigationManager.NavigateTo()` | Inject `NavigationManager` |
 
-### Layer 1 (Script) vs Layer 2 (Manual) Boundary
+### 2-Script Pipeline (Layer 1 + Layer 2)
 
-**Script handles (Layer 1):**
+<!-- Updated 2026-03-08: Reflects Run 16 pipeline evolution -->
+
+The migration pipeline uses **two scripts** plus targeted manual overlay:
+
+| Stage | Script | What It Handles |
+|-------|--------|----------------|
+| **Layer 1** | `bwfc-migrate.ps1` | Mechanical markup transforms (100% automated since Run 14) |
+| **Layer 2** | `bwfc-migrate-layer2.ps1` | Semantic code-behind transforms (partially automated since Run 16) |
+| **Manual overlay** | — | Business-logic-specific fixes that resist automation |
+
+#### Layer 1 — `bwfc-migrate.ps1`
+
+**Script handles (fully automated, 0 manual fixes for 5 consecutive runs):**
 - `asp:` prefix stripping (preserves BWFC tags)
 - Data-binding expression conversion (5 variants)
 - LoginView → **preserve as BWFC LoginView** — do NOT rewrite as AuthorizeView. The BWFC `LoginView` injects `AuthenticationStateProvider` natively and uses the same template names (`AnonymousTemplate`, `LoggedInTemplate`). The migration script handles this automatically.
 - Master page → MainLayout.razor
 - Scaffold generation (csproj, Program.cs, etc.)
+- Route generation using **RelPath** for subdirectory pages (e.g., `Account/Login.aspx` → `@page "/Account/Login"`)
 - SelectMethod/GetRouteUrl flagging
 - Register directive cleanup
+- RouteData → `[Parameter]` conversion with TODO comment on a **separate line** (fixed in Run 16)
+- Enhanced navigation bypass (`data-enhance-nav="false"` on API links)
+- ReadOnly attribute warnings
+- Logout form → link conversion
 
-**Always manual (Layer 2):**
+**`-TestMode` switch:** Generates `ProjectReference` to local BWFC source instead of NuGet `PackageReference`, enabling rapid iteration during development runs:
+
+```powershell
+pwsh -File bwfc-migrate.ps1 -Path <source> -Output <target> -TestMode
+```
+
+#### Layer 2 — `bwfc-migrate-layer2.ps1`
+
+The Layer 2 script targets three patterns of semantic transforms:
+
+| Pattern | Target | Status (Run 16) |
+|---------|--------|-----------------|
+| **Pattern A** — Code-behinds | Page → ComponentBase + DI rewrite | ⚠️ Scaffolding automated, entity types need overlay |
+| **Pattern B** — Auth forms | Login/Register form simplification | ❌ Detection needs improvement — manual overlay |
+| **Pattern C** — Program.cs | Full .NET SSR bootstrap generation | ✅ Fully automated |
+
+```powershell
+pwsh -File bwfc-migrate-layer2.ps1 -Path <blazor-output-dir>
+```
+
+#### Manual Overlay (Layer 2 remainder)
+
+Three persistent semantic gaps that require business-logic understanding:
+
+1. **FormView SSR workaround** — `FormView.CurrentItem` doesn't trigger re-render in SSR; replace with direct `ComponentBase` + `IDbContextFactory` + `SupplyParameterFromQuery`
+2. **Auth form model simplification** — complex `[SupplyParameterFromForm]` with nested models → individual string properties with explicit `name` attributes
+3. **Program.cs application bootstrap** — Global.asax → .NET SSR middleware (Pattern C now automates this)
+
+**Always manual (not scriptable):**
 - EF6 → EF Core (models, DbContext, seed)
 - Identity/Auth subsystem
 - Session → scoped services

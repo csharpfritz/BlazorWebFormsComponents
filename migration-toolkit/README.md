@@ -4,7 +4,7 @@
 
 This toolkit packages everything you need to take a Web Forms app and bring it to Blazor using the [BlazorWebFormsComponents](https://www.nuget.org/packages/Fritz.BlazorWebFormsComponents) (BWFC) library. It combines automated scripts, Copilot skills, and a decision-making agent into a three-layer pipeline that handles ~85% of migration work mechanically or with AI assistance, leaving you to focus on the architecture decisions that actually need a human.
 
-> **Latest (Run 13):** 25/25 integration tests passing. The migration script now bakes in 3 previously-manual fixes — SSR enhanced-navigation disabling, ReadOnly attribute warnings, and LoginStatus→logout link conversion — targeting **0 manual fixes** for Run 14. SSR (Static Server Rendering) is the default architecture; package version pinned to **stable 10.0.0**.
+> **Latest (Run 16):** 25/25 integration tests passing — fifth consecutive 100%. Layer 1 script at **2.50s** (zero manual fixes). New **Layer 2 script** (`bwfc-migrate-layer2.ps1`) automates Program.cs generation and code-behind scaffolding. SSR (Static Server Rendering) is the default architecture; package version pinned to **stable 10.0.0**.
 
 - **NuGet Package:** <https://www.nuget.org/packages/Fritz.BlazorWebFormsComponents>
 - **GitHub Repository:** <https://github.com/FritzAndFriends/BlazorWebFormsComponents>
@@ -57,6 +57,7 @@ Copy these to your project root. Requires PowerShell 7.0+.
 |---|---|
 | [`bwfc-scan.ps1`](scripts/bwfc-scan.ps1) | **Scanner** — inventories your Web Forms project, identifies controls, counts pages, and outputs a migration readiness report. Run this first. |
 | [`bwfc-migrate.ps1`](scripts/bwfc-migrate.ps1) | **Mechanical transformer** — Layer 1 automated transforms: strips `asp:` prefixes, removes `runat="server"`, converts expressions, renames `.aspx`→`.razor`. Also handles SSR enhanced-nav disabling, ReadOnly attribute warnings, LoginStatus→logout link conversion, and logout form→link conversion. Handles ~40% of migration work deterministically. |
+| [`bwfc-migrate-layer2.ps1`](scripts/bwfc-migrate-layer2.ps1) | **Semantic transformer** — Layer 2 automated transforms: generates Program.cs bootstrap (Pattern C), scaffolds code-behind files with ComponentBase + DI (Pattern A), and detects auth form simplification candidates (Pattern B). Runs after `bwfc-migrate.ps1`. |
 
 ---
 
@@ -67,7 +68,7 @@ Migration isn't one step — it's three layers that handle different kinds of wo
 | Layer | What | How | Coverage |
 |---|---|---|---|
 | **Layer 1** — Automated | Tag prefix removal, `runat` removal, expression conversion, file renaming | [`scripts/bwfc-migrate.ps1`](scripts/bwfc-migrate.ps1) | ~40% of work |
-| **Layer 2** — Copilot-Assisted | Data binding rewiring, layout conversion, lifecycle method migration | [`skills/bwfc-migration/SKILL.md`](skills/bwfc-migration/SKILL.md) | ~45% of work |
+| **Layer 2** — Script + Overlay | Program.cs generation, code-behind scaffolding, auth form detection | [`scripts/bwfc-migrate-layer2.ps1`](scripts/bwfc-migrate-layer2.ps1) + manual overlay | ~45% of work |
 | **Layer 3** — Architecture Decisions | Identity, EF Core, session state, third-party integrations | [`skills/bwfc-data-migration/SKILL.md`](skills/bwfc-data-migration/SKILL.md) + human judgment | ~15% of work |
 
 **Start here:** [QUICKSTART.md](QUICKSTART.md) — the linear "just tell me what to do" path.
@@ -79,8 +80,9 @@ Migration isn't one step — it's three layers that handle different kinds of wo
 ```
 1. Scan     →  ./scripts/bwfc-scan.ps1 -Path ./MyWebFormsApp -OutputFormat Markdown
 2. Transform →  ./scripts/bwfc-migrate.ps1 -Path ./MyWebFormsApp -Output ./MyBlazorApp
-3. Guide     →  Open in editor with Copilot + BWFC migration skill
-4. Verify    →  dotnet build && dotnet run
+3. Semantic  →  ./scripts/bwfc-migrate-layer2.ps1 -Path ./MyBlazorApp
+4. Guide     →  Open in editor with Copilot + BWFC migration skill
+5. Verify    →  dotnet build && dotnet run
 ```
 
 ---
@@ -98,22 +100,35 @@ Migration isn't one step — it's three layers that handle different kinds of wo
 
 ---
 
-## What's New (Run 13)
+## What's New (Run 16)
 
-The migration script now automates 3 fixes that previously required manual intervention:
+Run 16 introduces the **Layer 2 automation script** — the first automated handling of semantic transforms that previously required manual Copilot-assisted work.
 
-| Fix | Function | What It Does |
-|---|---|---|
-| **SSR enhanced-nav disabling** | `Add-EnhancedNavDisable` | Adds `data-enhance-nav="false"` to `<a>` links targeting API endpoints, logout, and cart actions — prevents SSR enhanced navigation from intercepting 302 redirects |
-| **ReadOnly attribute warnings** | `Add-ReadOnlyWarning` | Inserts `<!-- MIGRATION NOTE -->` comments for `ReadOnly="True"` on TextBox and `readonly` on `<input>`, flagging for developer review |
-| **LoginStatus → logout link** | `ConvertFrom-LoginStatus` | Converts `<asp:LoginStatus>` to an `<a>` logout link with `data-enhance-nav="false"`, extracting `LogoutText`/`LogoutPageUrl` attributes |
-| **Logout form → link** | `Convert-LogoutFormToLink` | Detects logout `<form>`+`<button>` patterns and converts to `<a>` links, avoiding Playwright button-ordering conflicts |
+### Layer 2 Script (`bwfc-migrate-layer2.ps1`)
 
-**Key changes:**
+The new script targets three patterns:
 
-- **SSR is the default architecture** — the pipeline targets Static Server Rendering with selective interactivity, matching the .NET 10 Blazor template defaults
-- **Package version pinned to 10.0.0** — use `dotnet add package Fritz.BlazorWebFormsComponents --version 10.0.0` for stable, reproducible builds
-- **Test results:** Run 13 achieved **25/25 integration tests passing** (305 transforms). Run 14 targets **0 manual fixes**.
+| Pattern | Target | Run 16 Status |
+|---------|--------|---------------|
+| **Pattern C** — Program.cs | Full .NET SSR bootstrap (SQLite, Identity, seed data) | ✅ Fully automated |
+| **Pattern A** — Code-behinds | Page → ComponentBase + DI rewrite | ⚠️ Scaffolding correct, entity types need overlay |
+| **Pattern B** — Auth forms | Login/Register form simplification | ❌ Detection needs refinement |
+
+### Layer 1 Script Improvements
+
+| Fix | What Changed |
+|---|---|
+| **`[Parameter]` TODO comment** | TODO now emitted on separate line — eliminates build errors |
+| **Route generation (RelPath)** | Subdirectory pages get correct routes: `/Account/Login` instead of `/Login` |
+| **Performance** | 2.50s (was 2.83s in Run 15) — 12% faster |
+
+### Pipeline Evolution
+
+The migration pipeline is evolving from a 2-layer system (script + manual) to a **2-script pipeline** (Layer 1 → Layer 2 → targeted manual overlay). Program.cs generation is now fully automated, and the manual overlay surface area is shrinking with each run.
+
+- **Test results:** Run 16 achieved **25/25 integration tests passing** — fifth consecutive 100%.
+- **Layer 1:** Zero manual fixes for 5 consecutive runs (Runs 12–16).
+- **Layer 2:** Pattern C fully automated. Patterns A and B partially automated.
 
 ---
 

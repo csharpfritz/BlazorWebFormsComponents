@@ -9,24 +9,26 @@
 ```
 ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
 │    Layer 1           │    │    Layer 2           │    │    Layer 3           │
-│    AUTOMATED         │───▶│    COPILOT-ASSISTED  │───▶│    ARCHITECTURE      │
+│    AUTOMATED         │───▶│    SCRIPT + OVERLAY  │───▶│    ARCHITECTURE      │
 │                      │    │                      │    │                      │
-│  bwfc-migrate.ps1    │    │  Copilot + Skill     │    │  Human + Copilot     │
-│  ~40% of work        │    │  ~45% of work        │    │  ~15% of work        │
-│  ~30 seconds         │    │  ~2–4 hours          │    │  ~8–12 hours         │
-│  100% accuracy       │    │  High accuracy       │    │  Requires judgment   │
-└─────────────────────┘    └─────────────────────┘    └─────────────────────┘
-         │                          │                          │
-    Mechanical                 Structural                 Semantic
-    transforms                 transforms                 decisions
+│  bwfc-migrate.ps1    │    │  bwfc-migrate-       │    │  Human + Copilot     │
+│  ~40% of work        │    │  layer2.ps1 +        │    │  ~15% of work        │
+│  ~3 seconds          │    │  manual overlay       │    │  ~8–12 hours         │
+│  100% accuracy       │    │  ~45% of work        │    │  Requires judgment   │
+└─────────────────────┘    │  ~3 minutes          │    └─────────────────────┘
+         │                  │  High accuracy       │             │
+    Mechanical              └─────────────────────┘        Semantic
+    transforms                       │                     decisions
+                                Structural
+                                transforms
 ```
 
 Each layer handles a different *kind* of work, not just a different *amount*. The boundary between layers is defined by what type of intelligence is required:
 
 | Layer | Intelligence Required | Tool | Error Rate |
 |---|---|---|---|
-| Layer 1 | None — pure regex/pattern matching | PowerShell script | ~0% (deterministic) |
-| Layer 2 | Pattern recognition — knows BWFC control mappings | Copilot with migration skill | Low (guided by rules) |
+| Layer 1 | None — pure regex/pattern matching | PowerShell script (`bwfc-migrate.ps1`) | ~0% (deterministic) |
+| Layer 2 | Pattern recognition — knows BWFC control mappings | PowerShell script (`bwfc-migrate-layer2.ps1`) + Copilot with migration skill + manual overlay | Low (guided by rules) |
 | Layer 3 | Judgment — understands your app's architecture | Human + Copilot with data migration skill | Varies (depends on decisions) |
 
 ---
@@ -98,11 +100,47 @@ After Layer 1, pages fall into three readiness categories:
 
 ---
 
-## Layer 2: Copilot-Assisted Structural Transforms
+## Layer 2: Script-Assisted Semantic Transforms
 
-**Tool:** [Copilot migration skill](skills/bwfc-migration/SKILL.md)
+**Tools:** [`scripts/bwfc-migrate-layer2.ps1`](../scripts/bwfc-migrate-layer2.ps1) + [Copilot migration skill](skills/bwfc-migration/SKILL.md) + manual overlay
 
-Layer 2 handles transforms that follow consistent patterns but require understanding control semantics. A human *could* do these mechanically, but it's tedious and error-prone. Copilot with the BWFC migration skill handles them reliably.
+Layer 2 handles transforms that require understanding control semantics — data binding patterns, code-behind lifecycle methods, auth form structures, and application bootstrap. As of Run 16, a **Layer 2 script** automates a portion of this work, with Copilot and manual overlay handling the remainder.
+
+### The 2-Script Pipeline
+
+Layer 2 now uses a dedicated automation script before falling back to Copilot-assisted work:
+
+```
+bwfc-migrate.ps1 (Layer 1)  →  bwfc-migrate-layer2.ps1  →  Manual Overlay  →  Copilot
+         ~3 seconds                   ~2 seconds              ~3 minutes        as needed
+```
+
+### Layer 2 Script: Three Patterns
+
+The `bwfc-migrate-layer2.ps1` script targets three semantic patterns:
+
+| Pattern | What It Does | Current Status |
+|---------|-------------|----------------|
+| **Pattern C** — Program.cs | Generates full .NET SSR bootstrap with SQLite, Identity, seed data | ✅ Fully automated |
+| **Pattern A** — Code-behinds | Scaffolds ComponentBase + DI code-behind files from page analysis | ⚠️ Structure correct, entity types need manual overlay |
+| **Pattern B** — Auth forms | Detects Login/Register forms and simplifies `[SupplyParameterFromForm]` | ❌ Detection needs refinement — manual overlay still required |
+
+Run the Layer 2 script after Layer 1:
+
+```powershell
+.\scripts\bwfc-migrate-layer2.ps1 -Path "C:\src\MyBlazorApp"
+```
+
+### Manual Overlay
+
+After the Layer 2 script, some files may need manual overlay from a known-good reference or Copilot-assisted refinement. The typical overlay targets are:
+
+- **Code-behind entity types** — the script creates correct file structure but may use wrong entity types and parameters
+- **Auth form patterns** — Login/Register pages may need individual `[SupplyParameterFromForm]` string properties
+
+### Copilot-Assisted Transforms (Remaining Work)
+
+For transforms not yet handled by the Layer 2 script, use Copilot with the migration skill:
 
 ### What Layer 2 Handles
 
@@ -192,10 +230,10 @@ Based on the [WingtipToys proof-of-concept](../planning-docs/WINGTIPTOYS-MIGRATI
 | Layer | Solo Developer | With Copilot/Agents |
 |---|---|---|
 | Layer 0 (scan) | 5 minutes | 5 minutes |
-| Layer 1 (automated) | ~30 seconds | ~30 seconds |
-| Layer 2 (structural) | 8–12 hours | 2–4 hours |
+| Layer 1 (automated) | ~3 seconds | ~3 seconds |
+| Layer 2 (script + overlay) | 8–12 hours | ~3 minutes (script) + 1–3 hours (overlay) |
 | Layer 3 (architecture) | 10–14 hours | 8–12 hours |
-| **Total** | **18–26 hours** | **10–16 hours** |
+| **Total** | **18–26 hours** | **8–15 hours** |
 
 Layer 3 time varies the most because it depends on your application's complexity. A simple CRUD app with no auth may have almost no Layer 3 work. An enterprise app with custom session state, complex auth, and third-party integrations will spend most of its time in Layer 3.
 
