@@ -7013,3 +7013,49 @@ The Layer 2 script (`bwfc-migrate-layer2.ps1`) introduced in Run 16 creates a ne
 **What:** Fixed variable initialization bug in `bwfc-migrate.ps1` where `` was used in a Replace callback before being set. The script incorrectly used ` = 0` instead of ` = 0`, causing failures on pages with HeadContent placeholders (e.g., ContosoUniversity About.aspx).
 **Why:** Migration-blocking bug. Discovered during dual-app validation (WingtipToys Run 17, ContosoUniversity Run 02).
 
+
+### 2026-03-09: Generic Migration Toolkit Fixes from Run 02
+
+# Decision: Generic Migration Toolkit Fixes from Run 02
+
+**Author:** Cyclops  
+**Date:** 2026-03-09  
+**Status:** Implemented
+
+## Context
+
+ContosoUniversity Run 02 identified 3 issues affecting migration quality that are **generic** — they apply to all migration projects, not just ContosoUniversity.
+
+## Decisions
+
+### 1. Layer 1 converts relative .aspx hrefs to rooted paths
+
+**Before:** Only `href="~/Page.aspx"` was converted to `href="/Page"`  
+**After:** Also handles `href="Page.aspx"` → `href="/Page"`
+
+This ensures navigation works regardless of whether the source uses `~/` prefix or not.
+
+### 2. Layer 1 converts Button OnClick to @onclick
+
+**Pattern:** `<Button OnClick="HandlerName">` → `<Button @onclick="HandlerName">`
+
+Applies to Button, LinkButton, and ImageButton elements. Logs a manual item reminding developers to verify the handler exists in the code-behind.
+
+### 3. Layer 2 Pattern A handles method parameter annotations
+
+**Root cause of `public or private { get; set; }` bug:** Web Forms uses `[QueryString]` and `[RouteData]` on **method parameters**, but Blazor uses `[SupplyParameterFromQuery]` and `[Parameter]` on **class properties**.
+
+The regex was matching fragments of method signatures incorrectly. Fixed by:
+1. Adding regex patterns for method parameter syntax: `[Attr] type name,` or `type name)`
+2. Keeping property patterns as fallback: `[Attr] public type? Name {`
+3. Capitalizing method parameter names when converting to properties
+
+## Impact
+
+These fixes are backwards-compatible and apply to all future migrations. No changes to BWFC components themselves.
+
+## Files Changed
+
+- `migration-toolkit/scripts/bwfc-migrate.ps1` — Fixes 1 and 2
+- `migration-toolkit/scripts/bwfc-migrate-layer2.ps1` — Fix 3
+

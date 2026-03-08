@@ -201,3 +201,32 @@ Key learnings:
 2. **ContosoUniversity test results are deterministic** — Same 9 tests fail in both Run 01 and Run 02 (nav link IDs, form button handlers, DetailsView search)
 3. **-TestMode affects Layer 1 timing** — Skipping NuGet restore contributes to faster execution
 4. **Dual @page directives work** — Routes like `/About` and `/About.aspx` both resolve correctly for backward compatibility
+
+### Generic Migration Toolkit Fixes — Run 02 Recommendations (2026-03-09)
+
+**Implemented 3 fixes based on ContosoUniversity Run 02 recommendations to improve ALL migrations.**
+
+**Fix 1: Layer 1 — Relative .aspx href conversion (bwfc-migrate.ps1)**
+- Added pattern to convert `href="Page.aspx"` → `href="/Page"` in `ConvertFrom-UrlReferences`
+- Previously only handled `href="~/..."` patterns
+- ContosoUniversity Site.Master uses `href="Home.aspx"` (no `~/`), causing nav links to 404
+- Regex: `href="(?!~/|https?://|/|#)([^"]*?)\.aspx"` → `href="/$1"`
+- Excludes: already-rooted paths, absolute URLs, anchors
+
+**Fix 2: Layer 1 — Button OnClick handler conversion (bwfc-migrate.ps1)**
+- Added `ConvertFrom-ButtonOnClick` function to convert `OnClick="HandlerName"` → `@onclick="HandlerName"`
+- Applies to `<Button>`, `<LinkButton>`, `<ImageButton>` elements (after asp: prefix removal)
+- Logs manual item for each unique handler to verify code-behind has matching method stub
+- ContosoUniversity Students page has `btnInsert_Click`, `btnClear_Click`, `btnSearch_Click` handlers
+
+**Fix 3: Layer 2 — Parameter extraction regex fix (bwfc-migrate-layer2.ps1)**
+- Fixed root cause of `public or private { get; set; }` broken output
+- **Root cause identified:** `[QueryString]` and `[RouteData]` are on METHOD PARAMETERS in Web Forms, not class properties
+- Example: `GetProduct([QueryString("ProductID")] int? productId, [RouteData] string productName)`
+- Old regex expected property syntax: `[Parameter] public Type Name { get; set; }`
+- New implementation handles both patterns:
+  - Method params: `[SupplyParameterFromQuery(Name = "X")] type name,` or `)` 
+  - Properties: `[SupplyParameterFromQuery(Name = "X")] public type? Name {`
+- Capitalizes method parameter names when converting to properties (camelCase → TitleCase)
+
+**Key insight:** Web Forms model binding uses attributes on method parameters, but Blazor uses them on class properties. The Layer 2 script must transform between these paradigms, not just copy the pattern.
