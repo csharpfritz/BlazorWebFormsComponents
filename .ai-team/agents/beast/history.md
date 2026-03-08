@@ -100,3 +100,6 @@ Documentation & migration reporting agent. M1–M16 docs shipped (all control ca
  Team update (2026-03-08): P0 HTML fidelity fixes complete  CheckBox span wrapper, BaseValidator id/class, FormView CssClass. 1488 tests pass.  decided by Cyclops, Forge
  Team update (2026-03-08): Second sample project will be purpose-built 'EventManager' Control Gallery targeting ~12-15 pages with controls WingtipToys doesn't cover  decided by Forge
  Team update (2026-03-08): ASPX URL rewriting goes in migration-toolkit docs (RewriteOptions.AddRedirect snippet), not BWFC NuGet  decided by Forge
+📌 Team update (2026-03-08): Preserve SelectMethod in migration scripts — BWFC supports it natively via SelectHandler<T>. Stop stripping the attribute, add signature-adaptation TODO instead — decided by Forge
+
+📌 Team update (2026-03-08): WingtipToys hardcoding audit — 23 findings (5 CRITICAL, 3 HIGH, 10 MEDIUM, 5 LOW). Layer 2 entity detection, Program.cs template, and skill files need genericization — decided by Cyclops

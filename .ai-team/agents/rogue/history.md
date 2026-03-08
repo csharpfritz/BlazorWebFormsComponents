@@ -116,3 +116,7 @@ Tests written proactively from page inventory — selectors may need minor tunin
  Team update (2026-03-08): P0 HTML fidelity fixes complete  CheckBox span wrapper, BaseValidator id/class, FormView CssClass. 1488 tests pass.  decided by Cyclops, Forge
  Team update (2026-03-08): ASPX URL rewriting goes in migration-toolkit docs (RewriteOptions.AddRedirect snippet), not BWFC NuGet  decided by Forge
  Team update (2026-03-08): ContosoUniversity local setup  LocalDB connection strings, AjaxControlToolkit HintPath fix, NBGV block — decided by Colossus
+
+📌 Team update (2026-03-08): Preserve SelectMethod in migration scripts — BWFC supports it natively via SelectHandler<T>. Stop stripping the attribute, add signature-adaptation TODO instead — decided by Forge
+
+📌 Team update (2026-03-08): WingtipToys hardcoding audit — 23 findings (5 CRITICAL, 3 HIGH, 10 MEDIUM, 5 LOW). Layer 2 entity detection, Program.cs template, and skill files need genericization — decided by Cyclops

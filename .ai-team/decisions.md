@@ -6927,3 +6927,82 @@ The Layer 2 script (`bwfc-migrate-layer2.ps1`) introduced in Run 16 creates a ne
 - MEDIUM: CSS isolation (Point 7)
 - MEDIUM: ViewState documentation (Point 5)
 
+### 2026-03-08: Preserve SelectMethod in migration scripts (not strip)
+**By:** Forge
+**Date:** 2026-03-09
+**Status:** Proposed
+**Priority:** HIGH
+**Requested by:** Jeffrey T. Fritz
+**What:** The Layer 1 migration script's `ConvertFrom-SelectMethod` strips `SelectMethod` attributes and directs developers to use `Items` + `OnInitializedAsync`. This is wrong — BWFC has first-class `SelectMethod` support via `SelectHandler<T>` delegate on `DataBoundComponent<T>`. The fix: preserve `SelectMethod` in markup, add TODO for signature adaptation only (4 parameters). Layer 2 should detect and adapt SelectMethod signatures automatically. `SelectMethod` requires adapting one method signature vs `Items` requiring 3 new code constructs.
+**Why:** Every data-bound control with SelectMethod gets valid BWFC attributes stripped, forcing developers into MORE manual work. BWFC's SelectMethod is the minimum-effort migration path — the markup stays identical (minus `asp:` prefix), only the code-behind method signature needs 4 parameters added. 20+ test files confirm this pattern works.
+**Migration items:**
+- Rewrite `ConvertFrom-SelectMethod` in `bwfc-migrate.ps1` to preserve the attribute
+- Update Layer 2 Pattern A to detect and adapt SelectMethod signatures
+- Update migration-standards SKILL.md with SelectMethod preservation guidance
+- Re-run ContosoUniversity migration to validate improvement
+
+### 2026-03-08: WingtipToys hardcoding audit of migration-toolkit
+**By:** Cyclops
+**What:** Full audit results — 23 findings across 9 files
+**Why:** Migration toolkit must be generic — any Web Forms app, not just WingtipToys
+
+---
+
+## CRITICAL — Breaks other apps (generates wrong entity names / wrong code)
+
+| # | File | Line(s) | What's hardcoded | Impact | Suggested fix |
+|---|------|---------|-----------------|--------|---------------|
+| 1 | `scripts/bwfc-migrate-layer2.ps1` | 242-244 | Entity type detection: `if ($content -match 'Product') { $entityType = 'Product' } elseif (… 'Category') { … 'Order' }` — hardcoded WingtipToys entity names | Non-WingtipToys apps get `$entityType = 'object'` for ALL code-behinds, producing `List<object>` and broken queries. Apps with different entity names (Student, Employee, Invoice) generate unusable code. | Parse `ItemType` from the `.razor` file (`TItem="X"` or `ItemType="NS.X"`). If not found, scan Models/ for `public class X` and match against content mentions. Fall back to `object` only as last resort with a clear TODO. |
+| 2 | `scripts/bwfc-migrate-layer2.ps1` | 184 | Detection heuristic: `$content -match 'SelectMethod\|GetProducts\|GetProduct\|GetCategories'` — hardcoded WingtipToys method names | For apps without methods named `GetProducts`/`GetProduct`/`GetCategories`, Pattern A detection misses pages that DO need transformation. Pages with `GetStudents`, `GetInvoices`, etc. are skipped. | Use only the generic `SelectMethod` pattern for detection, or regex for `Get\w+` method-name patterns. Remove hardcoded method names. |
+| 3 | `scripts/bwfc-migrate-layer2.ps1` | 301-323 | DbSet name derivation: `$dbSetName = $entityType + 's'` with special-case `if ($entityType -eq 'Category') { $dbSetName = 'Categories' }` — only handles WingtipToys pluralization | Generates `db.Categorys` for other apps, or fails to pluralize irregularly (e.g., `Person` → `Persons` not `People`). Only `Category→Categories` is special-cased. | Use a simple pluralization helper that handles common English patterns (y→ies, s→ses, etc.), or better yet, read actual `DbSet<T>` property names from the detected DbContext source file. |
+| 4 | `scripts/bwfc-migrate.ps1` | 258, 262 | Hardcoded `ProductContext` in Program.cs template: `AddDbContextFactory<ProductContext>` and `AddEntityFrameworkStores<ProductContext>` | Every migrated app gets `ProductContext` in its commented boilerplate — confusing and wrong for apps with `SchoolContext`, `AppDbContext`, etc. | Use the auto-detected `$DbCtxName` variable (already available from `Find-DbContextName` in Layer 2). Pass it into the template, or use a placeholder like `<YourDbContext>`. |
+| 5 | `scripts/bwfc-migrate.ps1` | 1071 | GetRouteUrl hint: `e.g., /ProductDetails?ProductID=@Item.ProductID` | Every app's GetRouteUrl TODO references WingtipToys URL structure. Developers migrating e.g. a school app see "ProductDetails" in their manual-items report. | Generate the hint from the actual route name captured in `$routeName`, e.g., `"Replace route name '$routeName' with direct URL pattern"` without the WingtipToys-specific example. |
+
+## HIGH — Causes build errors or misleading detection in other apps
+
+| # | File | Line(s) | What's hardcoded | Impact | Suggested fix |
+|---|------|---------|-----------------|--------|---------------|
+| 6 | `scripts/bwfc-migrate.ps1` | 1271-1272 | Unconvertible page patterns include `'PayPal'` and `'Checkout'` | Pages named "Checkout" in ANY app (including a library checkout system, hotel checkout, etc.) are incorrectly stubbed as unconvertible. `PayPal` is WingtipToys-specific — other payment integrations (Stripe, Square) aren't detected. | Replace with generic pattern matching: detect payment SDK namespaces (`PayPal`, `Stripe`, `Braintree`, `Square`) rather than just `PayPal`. For `Checkout`, check for actual payment processing code rather than the word alone. |
+| 7 | `scripts/bwfc-migrate-layer2.ps1` | 672 | Seed data detection: `class\s+(\w+DatabaseInitializer\|Seed\w+)` — the `\w+DatabaseInitializer` pattern matches WingtipToys' `ProductDatabaseInitializer` | Apps using different initializer naming (e.g., `DbInitializer`, `DataSeeder`, `SeedHelper`) won't match the `\w+DatabaseInitializer` part. The `Seed\w+` alternative helps but is incomplete. | Broaden to also match `\w+Initializer`, `\w+Seeder`, `DbInitializer`, or classes inheriting from `DropCreateDatabaseIfModelChanges`/`CreateDatabaseIfNotExists`. |
+| 8 | `skills/migration-standards/SKILL.md` | 270 | Code example: `[Inject] private ProductContext Db { get; set; }` | AI assistants reading this skill file learn to inject `ProductContext` by name, then generate that in non-WingtipToys projects. | Replace with generic name: `[Inject] private AppDbContext Db { get; set; }` or `[Inject] private YourDbContext Db { get; set; }`. |
+
+## MEDIUM — Generates misleading examples / documentation
+
+| # | File | Line(s) | What's hardcoded | Impact | Suggested fix |
+|---|------|---------|-----------------|--------|---------------|
+| 9 | `skills/bwfc-migration/SKILL.md` | 260, 294, 325 | All data control examples use `ItemType="WingtipToys.Models.Product"` | AI assistants may learn that `WingtipToys.Models` is the canonical namespace pattern. Developers copying examples get WingtipToys namespaces. | Replace with `ItemType="YourApp.Models.Product"` or `ItemType="MyApp.Models.Entity"` — use a clearly-generic namespace. |
+| 10 | `skills/migration-standards/SKILL.md` | 255 | Example: `ItemType="WingtipToys.Models.Product"` | Same as above — in the migration-standards skill that ALL agents read. | Replace with `ItemType="YourApp.Models.YourEntity"`. |
+| 11 | `skills/bwfc-data-migration/SKILL.md` | 84, 110, 117, 123, 207, 320 | Multiple examples use `ProductContext` as the DbContext class name | AI learns `ProductContext` as the canonical DbContext name pattern. | Replace with `AppDbContext` or `YourDbContext` in generic guidance sections. Keep one WingtipToys-labeled example if desired, but mark it explicitly as "WingtipToys example". |
+| 12 | `skills/bwfc-data-migration/SKILL.md` | 45-50, 69-72, 84, 233-234, 239-247, 275-276, 309, 321 | Extensive ShoppingCart/CartService examples throughout | The entire session state and cart migration section is WingtipToys-specific. Non-e-commerce apps need different patterns (e.g., form wizard state, user preferences). | Restructure: lead with a generic pattern (scoped service replacing Session), then show ShoppingCart as ONE labeled example. Add a second non-e-commerce example. |
+| 13 | `skills/bwfc-data-migration/SKILL.md` | 108, 125, 131, 191-198, 218-219 | `GetProducts`, `GetProductsAsync`, `GetProductAsync`, `ProductService` used as the canonical service pattern | Non-product-oriented apps will need different service patterns. AI may generate `ProductService` boilerplate regardless. | Use generic names: `EntityService`, `GetItemsAsync`, `GetItemAsync` in the primary pattern tables. Show Product as a labeled example. |
+| 14 | `skills/bwfc-data-migration/SKILL.md` | 390-402 | Route examples: `ProductRoute`, `CategoryRoute`, `~/ProductDetail.aspx`, `~/ProductList.aspx` | Route migration examples only show WingtipToys URL structure. | Use generic route names: `DetailRoute`, `ListRoute` → `/Items/{ItemId:int}`, `/Items`. |
+| 15 | `METHODOLOGY.md` | 66, 99, 228, 247 | WingtipToys referenced as the sole source of accuracy metrics and methodology data | Readers may assume the methodology only applies to WingtipToys-style apps. | Add a note: "Metrics derived from WingtipToys PoC — representative of a typical medium-complexity Web Forms app. Your results will vary." Already partially done on line 99 but not consistently. |
+| 16 | `CHECKLIST.md` | 102, 105 | Example tracking entries: `ProductList.aspx → ProductList.razor`, `ShoppingCart.aspx → ShoppingCart.razor` | Template's example section looks like it's only for WingtipToys. Users may not realize they should replace these. | Wrap in a clear `<!-- EXAMPLE — replace with your pages -->` comment or use obviously-generic names like `[YourList].aspx`. |
+| 17 | `copilot-instructions-template.md` | 131-135, 167 | Example table uses `ProductGrid`, `CategoryList`, `ProductDetail`, `Category filter`, `/Products/{ProductId:int}` | Template's placeholder examples are WingtipToys page names. When users don't replace them, Copilot gets confused context. | Use obviously-template names: `[YourGrid]`, `[YourList]`, `[YourDetail]`. The bracketed `[e.g., ...]` format is already used but the examples inside are too WingtipToys-specific. |
+| 18 | `README.md` | 151 | WingtipToys PoC referenced for metrics | Same as METHODOLOGY — readers see WingtipToys as the only validated scenario. | Add "and other sample apps" or note this is a representative example. |
+
+## LOW — Cosmetic / informational mentions
+
+| # | File | Line(s) | What's hardcoded | Impact | Suggested fix |
+|---|------|---------|-----------------|--------|---------------|
+| 19 | `CONTROL-COVERAGE.md` | 21 | "WingtipToys PoC coverage — 96.6%" | Cosmetic — fine as a documented data point. | Add context: "WingtipToys PoC" is intentional attribution. No change needed, but add a note that coverage % is project-dependent. |
+| 20 | `QUICKSTART.md` | 67, 160 | Examples: `ItemType="NS.Product" → TItem="Product"`, `SelectMethod="GetProducts"` | Generic enough in context (using short `NS.Product`), but still WingtipToys-flavored. | Minor: could use `ItemType="NS.Entity"` but current form is acceptable as a generic example since Product is a common domain concept. |
+| 21 | `CONTROL-COVERAGE.md` | 93-106, 219, 316 | Code examples use `Product`, `ProductService.GetProductsAsync()` | These are in a reference doc showing control-by-control examples. The `MyApp.Models.Product` form on line 93 is already generic. | Acceptable — `Product` is used as a familiar example entity. The `MyApp.Models` namespace on line 93 is already correctly generic. |
+| 22 | `skills/migration-standards/SKILL.md` | 13 | "Established through nine WingtipToys migration benchmark runs (Runs 8–16)" | Historical context — fine for provenance. | No change needed — this is factual attribution. |
+| 23 | `skills/bwfc-migration/SKILL.md` | 265, 275, 279 | `HeaderText="Product"` in GridView column examples | Column header text "Product" is a reasonable generic example. | No change needed — this is column display text, not a namespace or code reference. |
+
+---
+
+## Summary
+
+| Severity | Count | Key theme |
+|----------|-------|-----------|
+| CRITICAL | 5 | Entity detection, DbSet generation, Program.cs template all hardcoded to WingtipToys entities |
+| HIGH | 3 | Detection heuristics and skill examples bias toward WingtipToys patterns |
+| MEDIUM | 10 | Skill file examples and docs use WingtipToys names where generic names should be used |
+| LOW | 5 | Cosmetic mentions that are fine as attributed examples |
+
+## Top 3 priorities for genericization:
+1. **Layer 2 entity detection** (findings 1-3) — the `Product`/`Category`/`Order` hardcoding is the #1 blocker for non-WingtipToys apps
+2. **Program.cs template** (finding 4) — `ProductContext` should use auto-detected name
+3. **Skill files** (findings 8-14) — AI assistants reading these skills will perpetuate WingtipToys patterns in all migrations

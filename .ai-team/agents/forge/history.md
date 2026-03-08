@@ -139,3 +139,23 @@ Reviewed Jeff's 7 questions about the Run 01 results (31/40, 77.5%). Key finding
 Decision inbox entry filed with Run 02 priorities.
 
 📌 Team update (2026-03-08): ContosoUniversity Run 01 review — 7 improvements confirmed valid. Run 02 priorities: Fix Pattern A entity detection (CRITICAL), preserve SelectMethod (HIGH), add dotnet ef scaffold (HIGH), add GridView PageIndexChanging (HIGH), WebMethod→Minimal API (MEDIUM), CSS isolation (MEDIUM), ViewState docs (MEDIUM) — decided by Forge, reviewed by Jeffrey T. Fritz
+
+### SelectMethod Migration Analysis (2026-03-09)
+
+**Task:** Deep analysis of why `ConvertFrom-SelectMethod` strips SelectMethod instead of preserving it.
+
+**Key findings:**
+
+1. **ConvertFrom-SelectMethod (L1081–L1104)** strips `SelectMethod="MethodName"` from all tags and replaces with a TODO directing developers to use `Items="@_data"` + `OnInitializedAsync`. This is wrong — it discards a valid BWFC parameter.
+
+2. **BWFC's SelectMethod is first-class:** `DataBoundComponent<T>.SelectMethod` is a `SelectHandler<TItemType>` delegate (`IQueryable<T>(int maxRows, int startRowIndex, string sortByExpression, out int totalRowCount)`). Called in `OnAfterRender(firstRender)`, assigns result to `Items`. All data-bound controls (GridView, DetailsView, ListView, DataGrid, DataList, Repeater, FormView) inherit this.
+
+3. **Signature mismatch is the reason it was stripped:** Web Forms SelectMethod takes 0 params; BWFC SelectHandler takes 4. Layer 1 chose `Items` as the "safe" path to avoid the signature gap. But this creates MORE manual work (3 new constructs vs 1 signature adaptation).
+
+4. **20+ test files** use `SelectMethod="GetWidgets"` with the BWFC delegate pattern. This is the canonical BWFC data-binding approach — not Items + OnInitializedAsync.
+
+5. **Recommendation filed:** Preserve SelectMethod in markup, add TODO for signature adaptation only. Layer 2 Pattern A should generate the adapted delegate. Decision document at `.ai-team/decisions/inbox/forge-selectmethod-migration.md`.
+
+**Key learning:** Web Forms SelectMethod (`IQueryable<T> Method()`) → BWFC SelectHandler (`IQueryable<T> Method(int maxRows, int startRowIndex, string sortByExpression, out int totalRowCount)`). The 4-parameter signature is the ONLY difference. Layer 1 should never strip markup attributes that map to real BWFC parameters — it should preserve and annotate.
+
+📌 Team update (2026-03-08): WingtipToys hardcoding audit — 23 findings (5 CRITICAL, 3 HIGH, 10 MEDIUM, 5 LOW). Layer 2 entity detection, Program.cs template, and skill files need genericization — decided by Cyclops

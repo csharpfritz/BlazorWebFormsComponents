@@ -127,3 +127,19 @@ The `-TestMode` switch redirected all output to a `Layer2Output/` subdirectory i
  Team update (2026-03-08): ContosoUniversity local setup  LocalDB connection strings, AjaxControlToolkit HintPath fix, NBGV block — decided by Colossus
 
 📌 Team update (2026-03-08): ContosoUniversity Run 01 review — GridView missing PageIndexChanging event (library gap, HIGH priority), SelectMethod should be preserved by migration scripts, Pattern A entity detection hardcoded to WingtipToys (CRITICAL) — decided by Forge
+
+### WingtipToys Hardcoding Audit (2026-03-08)
+
+**Completed full audit of migration-toolkit/ for WingtipToys-specific hardcoding — 23 findings across 9 files.**
+
+Key learnings:
+- **Layer 2 entity detection (CRITICAL):** `bwfc-migrate-layer2.ps1` lines 242-244 hardcode `Product`/`Category`/`Order` as the only recognized entity types. All other entities fall back to `object`. Fix: parse `TItem`/`ItemType` from .razor files, or scan Models/ for class declarations.
+- **Layer 2 detection heuristic (CRITICAL):** Line 184 matches `GetProducts|GetProduct|GetCategories` — WingtipToys method names. Apps with `GetStudents` etc. are missed. Fix: use generic `SelectMethod` pattern only.
+- **Layer 2 DbSet pluralization (CRITICAL):** Only `Category→Categories` is special-cased. All other irregular plurals break. Fix: read actual DbSet property names from DbContext source.
+- **Layer 1 Program.cs template (CRITICAL):** Lines 258/262 hardcode `ProductContext`. Fix: use auto-detected DbContext name or placeholder.
+- **Layer 1 GetRouteUrl hint (CRITICAL):** Line 1071 example says `ProductDetails?ProductID=` — wrong for non-WingtipToys apps.
+- **Unconvertible page detection (HIGH):** `Checkout` as a keyword (line 1272) false-positives on any page with "Checkout" in its name regardless of context.
+- **Skill files (MEDIUM):** 4 skill files use `WingtipToys.Models.Product`, `ProductContext`, `ProductService`, `ShoppingCart`/`CartService` as canonical examples. AI agents learning from these will replicate WingtipToys patterns in all migrations.
+- **Audit wrote decision to:** `.ai-team/decisions/inbox/cyclops-wingtiptoys-audit.md`
+
+📌 Team update (2026-03-08): Preserve SelectMethod in migration scripts — BWFC supports it natively via SelectHandler<T>. Stop stripping the attribute, add signature-adaptation TODO instead — decided by Forge
