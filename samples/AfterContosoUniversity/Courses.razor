@@ -1,0 +1,36 @@
+@page "/Courses"
+<HeadContent>
+    <link href="CSS/CSS_Courses.css" rel="stylesheet" />
+    <script src="JQuery/JQuery_Courses.js"></script>
+</HeadContent>
+
+<div id="dropList">
+    <h1 id="hdrCourse">Select Course</h1>
+    <DropDownList TItem="Department" ID="drpDepartments" Items="@Departments" 
+        DataTextField="DepartmentName" DataValueField="DepartmentName"
+        @bind-SelectedValue="SelectedDepartment"></DropDownList>
+    <Button ID="btnSearchCourse" Text="Search Courses" @onclick="btnSearchCourse_Click"></Button>
+    <br />
+    <br />
+    <GridView ItemType="Course" ID="grvCourses" AllowPaging="true" DataKeyNames="CourseId"
+        PageSize="5" AutoGenerateColumns="false" Items="@CoursesForGrid"
+        EmptyDataText="Choose Department To Display Courses">
+        <Columns>
+            <BoundField DataField="CourseId" HeaderText="ID" />
+            <BoundField DataField="CourseName" HeaderText="Course Name" />
+            <BoundField DataField="StudentsMax" HeaderText="Max Capacity" />
+        </Columns>
+    </GridView>
+</div>
+<div id="autoComplete">
+    <h1 id="crsByName">Courses By Name</h1>
+    <TextBox ID="txtCourse" placeholder="Search Course..." @bind-Text="CourseSearchText"></TextBox>
+    <Button ID="search" Text="Search" @onclick="search_Click"></Button>
+    <br />
+    <br />
+    <DetailsView ItemType="Course" ID="dtlCourses" CssClass="details" 
+        Items="@CourseDetails" AutoGenerateRows="true">
+    </DetailsView>
+</div>
+
+

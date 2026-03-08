@@ -32,14 +32,12 @@ public partial class SchoolContext : DbContext
         // This fallback is only used for design-time tools (e.g., migrations)
         if (!optionsBuilder.IsConfigured)
         {
-            optionsBuilder.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ContosoUniversity;Trusted_Connection=True;MultipleActiveResultSets=true");
+            optionsBuilder.UseSqlite("Data Source=ContosoUniversity.db");
         }
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.UseCollation("Cyrillic_General_CI_AS");
-
         modelBuilder.Entity<Course>(entity =>
         {
             entity.Property(e => e.CourseId).HasColumnName("CourseID");
@@ -59,9 +57,7 @@ public partial class SchoolContext : DbContext
         modelBuilder.Entity<Department>(entity =>
         {
             entity.Property(e => e.DepartmentId).HasColumnName("DepartmentID");
-            entity.Property(e => e.DepartmentName)
-                .HasMaxLength(20)
-                .IsFixedLength();
+            entity.Property(e => e.DepartmentName).HasMaxLength(20);
             entity.Property(e => e.ManagingInstructorId).HasColumnName("ManagingInstructorID");
         });
 
