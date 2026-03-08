@@ -411,3 +411,70 @@ the link's purpose.
 **Verify:** After Layer 1 (script) conversion, check that all action links from the
 original page survive in the converted output. If any are missing, add them manually
 in Layer 2 using the `@context.PropertyName` syntax for data-bound values.
+
+## SSR Enhanced Navigation Bypass
+
+When using SSR (Static Server Rendering) as the default render mode, Blazor's enhanced
+navigation intercepts `<a>` link clicks and fetches the target via `fetch()`. This breaks
+links to minimal API endpoints that return 302 redirects or non-HTML responses.
+
+**Rule:** Add `data-enhance-nav="false"` to any `<a>` tag whose href targets a server-side
+endpoint rather than a Blazor page.
+
+**Patterns that require the attribute (auto-detected by the migration script):**
+
+| href Pattern | Example | Why |
+|-------------|---------|-----|
+| `/api/` | `/api/products/1` | REST API endpoints |
+| `AddToCart` | `/AddToCart?productId=1` | Cart operations returning redirects |
+| `RemoveFromCart` | `/RemoveFromCart?itemId=5` | Cart operations returning redirects |
+| `-handler` | `/account/login-handler` | Minimal API handler convention |
+| `logout` / `signout` | `/account/logout` | Auth endpoints |
+
+```html
+<!-- CORRECT: opt out of enhanced navigation for API endpoints -->
+<a href="/AddToCart?productId=@context.ProductID" data-enhance-nav="false">Add To Cart</a>
+
+<!-- WRONG: enhanced navigation intercepts and mishandles the 302 redirect -->
+<a href="/AddToCart?productId=@context.ProductID">Add To Cart</a>
+```
+
+**Auth forms** should use `data-enhance="false"` (not `data-enhance-nav`) to disable
+all enhanced form handling:
+```html
+<form method="post" action="/account/login-handler" data-enhance="false">
+```
+
+## LoginStatus to Link Conversion
+
+`<asp:LoginStatus>` must be converted to a plain `<a>` link, not a `<form>` + `<button>`.
+
+**Why not form+button:**
+1. Playwright's `page.GetByRole(AriaRole.Button).First` finds the logout button before
+   page-level submit buttons, breaking test automation
+2. Form POST requires antiforgery token handling; GET link is simpler for SSR
+
+```html
+<!-- WRONG: form+button pattern causes test selector conflicts -->
+<form method="post" action="/account/logout-handler">
+    <button type="submit" class="navbar-link">Log off</button>
+</form>
+
+<!-- CORRECT: simple link with enhanced nav disabled -->
+<a href="/account/logout" class="navbar-link" data-enhance-nav="false">Log off</a>
+```
+
+The migration script handles this automatically: `ConvertFrom-LoginStatus` converts
+`<asp:LoginStatus>` to an `<a>` link, and `Convert-LogoutFormToLink` catches any
+form+button patterns introduced during Layer 2.
+
+## ReadOnly Attribute Review
+
+Web Forms `TextBox` controls with `ReadOnly="True"` get preserved during migration.
+The migration script adds a `@* MIGRATION NOTE *@` comment rather than removing the
+attribute, since ReadOnly may be intentional (e.g., display-only fields).
+
+**Always review ReadOnly attributes on:**
+- Cart quantity inputs (should be editable)
+- Form fields inside update/edit contexts
+- Any input near a submit/update button

@@ -1345,6 +1345,302 @@ function Convert-TemplatePlaceholders {
 
 #endregion
 
+#region --- SSR Fix 1: Enhanced Navigation Disable ---
+
+function Add-EnhancedNavDisable {
+    <#
+    .SYNOPSIS
+        Adds data-enhance-nav="false" to <a> links targeting server-side API endpoints.
+    .DESCRIPTION
+        In SSR (Static Server Rendering) mode, Blazor's enhanced navigation intercepts <a> link
+        clicks and tries to fetch the target as a Blazor page via fetch(). When links point to
+        minimal API endpoints (e.g., /api/..., /AddToCart, /RemoveFromCart) that return 302 redirects
+        or non-HTML responses, enhanced navigation breaks — the URL bar doesn't update and the
+        redirect target isn't rendered.
+
+        This function scans content for <a> tags whose href matches known API endpoint patterns
+        and adds data-enhance-nav="false" to opt out of enhanced navigation.
+
+        Identified in Run 13 (2026-03-08) as a required fix for SSR migrations.
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    # Href patterns indicating server-side endpoints (not Blazor pages)
+    $apiHrefPatterns = @(
+        '/api/',           # Standard REST API prefix
+        'AddToCart',       # Cart add endpoint
+        'RemoveFromCart',  # Cart remove endpoint
+        '-handler',        # Minimal API handler convention (e.g., /account/login-handler)
+        'logout',          # Logout endpoints
+        'signout'          # Sign-out endpoints
+    )
+
+    $replacementsMade = 0
+
+    # Find all <a ...> tags
+    $anchorRegex = [regex]'(?si)<a\s[^>]*>'
+    $anchorMatches = $anchorRegex.Matches($Content)
+
+    # Process in reverse order to preserve string positions during replacement
+    for ($i = $anchorMatches.Count - 1; $i -ge 0; $i--) {
+        $m = $anchorMatches[$i]
+        $tag = $m.Value
+
+        # Skip if already has data-enhance-nav
+        if ($tag -match 'data-enhance-nav') { continue }
+
+        # Extract href value
+        if ($tag -notmatch 'href\s*=\s*"([^"]*)"') { continue }
+        $href = $Matches[1]
+
+        # Check if href matches any API endpoint pattern (case-insensitive)
+        $isApiEndpoint = $false
+        foreach ($pattern in $apiHrefPatterns) {
+            if ($href -match "(?i)$([regex]::Escape($pattern))") {
+                $isApiEndpoint = $true
+                break
+            }
+        }
+
+        if (-not $isApiEndpoint) { continue }
+
+        # Insert data-enhance-nav="false" before the closing > or />
+        $newTag = $tag -replace '\s*(/?>)\s*$', ' data-enhance-nav="false"$1'
+        $Content = $Content.Substring(0, $m.Index) + $newTag + $Content.Substring($m.Index + $m.Length)
+        $replacementsMade++
+    }
+
+    if ($replacementsMade -gt 0) {
+        Write-TransformLog -File $RelPath -Transform 'EnhancedNavDisable' -Detail "Added data-enhance-nav=""false"" to $replacementsMade link(s) targeting server endpoints"
+    }
+
+    return $Content
+}
+
+#endregion
+
+#region --- SSR Fix 2: ReadOnly Attribute Warning ---
+
+function Add-ReadOnlyWarning {
+    <#
+    .SYNOPSIS
+        Adds MIGRATION NOTE comments when ReadOnly="True" is preserved on TextBox/input elements.
+    .DESCRIPTION
+        Some Web Forms TextBox controls have ReadOnly="True" which gets preserved during migration.
+        In the Blazor version, this may prevent users from editing fields that should be editable
+        (e.g., cart quantity inputs).
+
+        Rather than automatically removing ReadOnly (which could break intentional uses like
+        display-only fields), this function adds a warning comment so developers can review
+        each case and decide whether to remove it.
+
+        Identified in Run 13 (2026-03-08) — cart quantity input had readonly that blocked editing.
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    $warningsMade = 0
+
+    # Pattern 1: <TextBox ... ReadOnly="True" ...> (BWFC component after asp: prefix removal)
+    $tbWarning = '@* MIGRATION NOTE: ReadOnly="True" was preserved from Web Forms. Remove if this field should be editable in Blazor. *@'
+    $textBoxRegex = [regex]'(?i)(<TextBox\s[^>]*ReadOnly\s*=\s*"True"[^>]*/?>)'
+    $tbMatches = $textBoxRegex.Matches($Content)
+
+    # Process in reverse order to preserve string positions
+    for ($i = $tbMatches.Count - 1; $i -ge 0; $i--) {
+        $m = $tbMatches[$i]
+        $Content = $Content.Substring(0, $m.Index) + $tbWarning + "`n" + $Content.Substring($m.Index)
+        $warningsMade++
+    }
+
+    # Pattern 2: <input ... readonly ...> (plain HTML — skip hidden/submit/button types)
+    $inputWarning = '@* MIGRATION NOTE: readonly attribute was preserved. Remove if this field should be editable. *@'
+    $inputRegex = [regex]'(?i)(<input\s[^>]*\breadonly\b[^>]*/?>)'
+    $inputMatches = $inputRegex.Matches($Content)
+
+    for ($i = $inputMatches.Count - 1; $i -ge 0; $i--) {
+        $m = $inputMatches[$i]
+        $tag = $m.Value
+        # Skip hidden, submit, and button inputs — readonly is irrelevant for those
+        if ($tag -match '(?i)type\s*=\s*"(hidden|submit|button)"') { continue }
+        $Content = $Content.Substring(0, $m.Index) + $inputWarning + "`n" + $Content.Substring($m.Index)
+        $warningsMade++
+    }
+
+    if ($warningsMade -gt 0) {
+        Write-TransformLog -File $RelPath -Transform 'ReadOnlyWarning' -Detail "Added $warningsMade MIGRATION NOTE(s) for ReadOnly/readonly attributes"
+        Write-ManualItem -File $RelPath -Category 'ReadOnly' -Detail "$warningsMade ReadOnly attribute(s) preserved — review if fields should be editable"
+    }
+
+    return $Content
+}
+
+#endregion
+
+#region --- SSR Fix 3: LoginStatus and Logout Form Conversion ---
+
+function ConvertFrom-LoginStatus {
+    <#
+    .SYNOPSIS
+        Converts <asp:LoginStatus> to an <a> link with data-enhance-nav="false".
+    .DESCRIPTION
+        <asp:LoginStatus> is a Web Forms server control that renders a login/logout link.
+        In SSR Blazor, this must become a plain <a> link pointing to a logout endpoint with
+        data-enhance-nav="false" to prevent Blazor enhanced navigation from intercepting it.
+
+        Using a <form>+<button> pattern for logout causes Playwright button-ordering conflicts
+        (page.GetByRole(AriaRole.Button).First finds the logout button before the login submit).
+
+        The function extracts LogoutText and LogoutPageUrl attributes to construct the link,
+        and adds a MIGRATION NOTE with instructions for setting up the logout endpoint.
+
+        Must run BEFORE ConvertFrom-AspPrefix so the asp: prefix is still present for matching.
+
+        Identified in Run 13 (2026-03-08) as Fix 3.
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    # Match self-closing: <asp:LoginStatus ... />
+    $selfClosingRegex = [regex]'(?i)<asp:LoginStatus\s[^>]*/>'
+    # Match open+close: <asp:LoginStatus ...>...</asp:LoginStatus>
+    $openCloseRegex = [regex]'(?si)<asp:LoginStatus\s[^>]*>.*?</asp:LoginStatus\s*>'
+
+    $allMatches = [System.Collections.Generic.List[object]]::new()
+    foreach ($m in $selfClosingRegex.Matches($Content)) { $allMatches.Add($m) }
+    foreach ($m in $openCloseRegex.Matches($Content)) { $allMatches.Add($m) }
+
+    if ($allMatches.Count -eq 0) { return $Content }
+
+    $matchCount = $allMatches.Count
+
+    # Sort by Index descending to replace from end to start (preserves positions)
+    $allMatches = @($allMatches | Sort-Object { $_.Index } -Descending)
+
+    foreach ($m in $allMatches) {
+        $tag = $m.Value
+
+        # Extract LogoutText (default: "Log off")
+        $logoutText = 'Log off'
+        if ($tag -match '(?i)LogoutText\s*=\s*"([^"]*)"') {
+            $logoutText = $Matches[1]
+        }
+
+        # Extract LogoutPageUrl — where to redirect AFTER logout (not the endpoint itself)
+        $redirectUrl = '/'
+        if ($tag -match '(?i)LogoutPageUrl\s*=\s*"([^"]*)"') {
+            $redirectUrl = $Matches[1] -replace '^~/', '/'
+        }
+
+        # Build replacement: <a> link to logout endpoint
+        $logoutEndpoint = '/account/logout'
+        $replacement = "<a href=""$logoutEndpoint"" data-enhance-nav=""false"">$logoutText</a>"
+        $replacement += "`n@* MIGRATION NOTE: <asp:LoginStatus> converted to logout link for SSR compatibility."
+        $replacement += " Configure endpoint in Program.cs: app.MapGet(""$logoutEndpoint"", async (HttpContext ctx) => {"
+        $replacement += " await ctx.SignOutAsync(); return Results.Redirect(""$redirectUrl""); }); *@"
+
+        $Content = $Content.Substring(0, $m.Index) + $replacement + $Content.Substring($m.Index + $m.Length)
+
+        # Flag event handlers as manual items
+        if ($tag -match '(?i)OnLoggingOut\s*=\s*"([^"]*)"') {
+            Write-ManualItem -File $RelPath -Category 'LoginStatus' -Detail "OnLoggingOut=""$($Matches[1])"" handler removed — implement logout logic in the endpoint"
+        }
+    }
+
+    Write-TransformLog -File $RelPath -Transform 'LoginStatus' -Detail "Converted $matchCount <asp:LoginStatus> to <a> link(s) for SSR compatibility"
+
+    return $Content
+}
+
+function Convert-LogoutFormToLink {
+    <#
+    .SYNOPSIS
+        Converts logout <form>+<button> patterns to <a> links with data-enhance-nav="false".
+    .DESCRIPTION
+        In SSR mode, a logout <form> with a submit <button> has two problems:
+        1. Playwright's page.GetByRole(AriaRole.Button).First may find the logout button
+           before the intended page button (e.g., Login submit), breaking test automation.
+        2. Form POST requires antiforgery token handling; a simple GET link to the logout
+           endpoint is more reliable in SSR mode.
+
+        This function detects <form> elements containing buttons with logout-related text
+        (Log off, Logout, Log out, Sign out) or posting to logout-related URLs, and converts
+        them to simple <a> links.
+
+        Identified in Run 13 (2026-03-08) as part of Fix 3.
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    $replacementsMade = 0
+
+    # Match <form ...>...</form> blocks
+    $formRegex = [regex]'(?si)<form\b[^>]*>.*?</form>'
+    $formMatches = $formRegex.Matches($Content)
+
+    # Process in reverse order to preserve string positions
+    for ($i = $formMatches.Count - 1; $i -ge 0; $i--) {
+        $m = $formMatches[$i]
+        $formBlock = $m.Value
+
+        # Determine if this is a logout form by checking action URL and button text
+        $isLogout = $false
+        $actionUrl = ''
+
+        if ($formBlock -match '(?i)action\s*=\s*"([^"]*)"') {
+            $actionUrl = $Matches[1]
+            if ($actionUrl -match '(?i)(logout|signout|log-off|log_out)') {
+                $isLogout = $true
+            }
+        }
+
+        if (-not $isLogout) {
+            # Check button text for logout patterns
+            if ($formBlock -match '(?i)<button[^>]*>\s*([^<]*(?:log\s*o(?:ut|ff)|sign\s*out)[^<]*)\s*</button>') {
+                $isLogout = $true
+            }
+        }
+
+        if (-not $isLogout) { continue }
+
+        # Extract button text for the link
+        $linkText = 'Log off'
+        if ($formBlock -match '(?i)<button[^>]*>([^<]+)</button>') {
+            $linkText = $Matches[1].Trim()
+        }
+
+        # Extract CSS class from button for the link
+        $cssClass = ''
+        if ($formBlock -match '(?i)<button[^>]*class\s*=\s*"([^"]*)"') {
+            $cssClass = " class=""$($Matches[1])"""
+        }
+
+        # Use action URL or default logout endpoint
+        if (-not $actionUrl) { $actionUrl = '/account/logout' }
+
+        $replacement = "<a href=""$actionUrl""$cssClass data-enhance-nav=""false"">$linkText</a>"
+        $Content = $Content.Substring(0, $m.Index) + $replacement + $Content.Substring($m.Index + $m.Length)
+        $replacementsMade++
+    }
+
+    if ($replacementsMade -gt 0) {
+        Write-TransformLog -File $RelPath -Transform 'LogoutFormToLink' -Detail "Converted $replacementsMade logout form(s) to <a> link(s) for SSR compatibility"
+    }
+
+    return $Content
+}
+
+#endregion
+
 #region --- Main File Transform Pipeline ---
 
 function Convert-WebFormsFile {
@@ -1433,6 +1729,10 @@ function Convert-WebFormsFile {
     $content = ConvertFrom-GetRouteUrl -Content $content -RelPath $relativePath
     $content = ConvertFrom-Expressions -Content $content -RelPath $relativePath
     $content = ConvertFrom-LoginView -Content $content -RelPath $relativePath
+
+    # SSR Fix 3a: Convert <asp:LoginStatus> to <a> link (must run before asp: prefix stripping)
+    $content = ConvertFrom-LoginStatus -Content $content -RelPath $relativePath
+
     $content = ConvertFrom-SelectMethod -Content $content -RelPath $relativePath
 
     # RF-13: Detect ListView GroupItemCount before asp: prefix is stripped
@@ -1445,10 +1745,20 @@ function Convert-WebFormsFile {
 
     $content = ConvertFrom-AspPrefix -Content $content -RelPath $relativePath
     $content = Remove-WebFormsAttributes -Content $content -RelPath $relativePath
+
+    # SSR Fix 2: Add warnings for ReadOnly attributes on editable fields
+    $content = Add-ReadOnlyWarning -Content $content -RelPath $relativePath
+
     $content = ConvertFrom-UrlReferences -Content $content -RelPath $relativePath
 
     # Fix 2: Convert placeholder elements inside *Template blocks to @context
     $content = Convert-TemplatePlaceholders -Content $content -RelPath $relativePath
+
+    # SSR Fix 1: Add data-enhance-nav="false" to links targeting API endpoints
+    $content = Add-EnhancedNavDisable -Content $content -RelPath $relativePath
+
+    # SSR Fix 3b: Convert logout <form>+<button> patterns to <a> links
+    $content = Convert-LogoutFormToLink -Content $content -RelPath $relativePath
 
     # Clean up leftover blank lines from removed directives (collapse 3+ consecutive blank lines to 2)
     $content = $content -replace '(\r?\n){3,}', "`n`n"

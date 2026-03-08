@@ -194,3 +194,36 @@ Added `Convert-TemplatePlaceholders` function in new `#region --- Template Place
 📌 Team update (2026-03-08): DbContext registration simplified — `AddDbContextFactory` only, no dual registration needed (supersedes Run 12 pattern) — decided by Cyclops
 📌 Team update (2026-03-08): Middleware order confirmed: UseAuthentication → UseAuthorization → UseAntiforgery — decided by Cyclops
 📌 Team update (2026-03-08): Logout must use `<a>` link not `<button>` in navbar to avoid Playwright button ordering conflicts — decided by Cyclops
+
+### Run 13 Fixes Baked Into Migration Script (2026-03-08)
+
+**Completed:** Baked all 3 Run 13 manual fixes into `migration-toolkit/scripts/bwfc-migrate.ps1`. These were the last 3 fixes that required post-script intervention in Run 13.
+
+**Functions added (4 new functions, 3 new regions):**
+
+1. **`Add-EnhancedNavDisable`** (SSR Fix 1) — Scans `<a>` tags for href patterns matching API endpoints (`/api/`, `AddToCart`, `RemoveFromCart`, `-handler`, `logout`, `signout`) and adds `data-enhance-nav="false"`. Processes matches in reverse order to preserve string positions. Runs after all other conversions in the pipeline.
+
+2. **`Add-ReadOnlyWarning`** (SSR Fix 2) — Detects `ReadOnly="True"` on `<TextBox>` components and `readonly` on `<input>` elements (excluding hidden/submit/button types). Inserts `@* MIGRATION NOTE *@` comment rather than removing the attribute, since ReadOnly may be intentional. Also flags as a manual review item.
+
+3. **`ConvertFrom-LoginStatus`** (SSR Fix 3a) — Converts `<asp:LoginStatus>` server control to `<a href="/account/logout" data-enhance-nav="false">` link. Extracts `LogoutText` and `LogoutPageUrl` attributes. Adds MIGRATION NOTE with Program.cs endpoint configuration snippet. Runs before `ConvertFrom-AspPrefix` so the asp: prefix is still present for matching. Flags `OnLoggingOut` event handlers as manual items.
+
+4. **`Convert-LogoutFormToLink`** (SSR Fix 3b) — Detects `<form>` elements containing logout-related buttons (text matching "log out/off", "sign out" or action URL containing "logout/signout") and converts to `<a>` links with `data-enhance-nav="false"`. Preserves CSS class from button. Catches patterns introduced during Layer 2 if script is re-run.
+
+**Pipeline integration:**
+- `ConvertFrom-LoginStatus`: After `ConvertFrom-LoginView`, before `ConvertFrom-SelectMethod`
+- `Add-ReadOnlyWarning`: After `Remove-WebFormsAttributes`, before `ConvertFrom-UrlReferences`
+- `Add-EnhancedNavDisable`: After `Convert-TemplatePlaceholders`
+- `Convert-LogoutFormToLink`: After `Add-EnhancedNavDisable`
+
+**Test results (WingtipToys):**
+- ✅ ProductList.razor: AddToCart link gets `data-enhance-nav="false"` automatically
+- ✅ MainLayout.razor: `<asp:LoginStatus>` → `<a href="/account/logout" data-enhance-nav="false">Log off</a>` with MIGRATION NOTE
+- ✅ ReadOnly warning: No false positives on WingtipToys (no ReadOnly TextBoxes in source)
+- ✅ Transform count: 303 → 305 (2 new transforms), 0 errors
+- ✅ Manual items: LoginStatus OnLoggingOut handler flagged correctly
+
+**Edge cases considered:**
+- Enhanced nav: Skip tags already having `data-enhance-nav`; case-insensitive href matching; handles both `>` and `/>` closings
+- ReadOnly: Skip hidden/submit/button inputs; process TextBox and input patterns separately to avoid position conflicts
+- LoginStatus: Handle both self-closing (`/>`) and open-close tag variants; extract attributes with defaults; Sort-Object wrapped in `@()` to prevent single-item collection issue
+- Logout form: Non-greedy `.*?` for form content; check both action URL and button text for logout patterns; preserve CSS classes
