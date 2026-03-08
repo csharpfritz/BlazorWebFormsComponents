@@ -108,3 +108,5 @@
 
 
  Team update (2026-03-08): Default to SSR (Static Server Rendering) with per-component InteractiveServer opt-in; eliminates HttpContext/cookie/session problems  decided by Forge
+
+ Team update (2026-03-08): Component audit priorities  BulletedList/Panel/id-rendering fixes, field column docs, zero-touch migration script  decided by Forge

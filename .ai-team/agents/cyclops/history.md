@@ -244,3 +244,7 @@ Added `Convert-TemplatePlaceholders` function in new `#region --- Template Place
 - Runtime SQLite .db files must not be committed  clean up after acceptance test runs
 
 **Efficiency insight:** When Layer 2 fixes are stable across runs (same errors, same fixes), bulk-extracting from a known-good commit is the optimal approach. Only investigate individual diffs when the Layer 1 output changes structurally.
+
+ Team update (2026-03-08): Component audit priorities  BulletedList/Panel/id-rendering fixes, field column docs, zero-touch migration script  decided by Forge
+
+ Team update (2026-03-08): Documentation refreshed  Runs 8-13 summaries, SSR-as-default guidance, package pinning, component coverage gap analysis  decided by Beast

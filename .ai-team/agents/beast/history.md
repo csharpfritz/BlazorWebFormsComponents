@@ -88,3 +88,9 @@ WebFormsPageBase docs and Page System rewrite shipped (2026-03-05). Skills cross
 ### Run 15 Migration Report (2026-03-08)
 
 - Run 15 report written to dev-docs/migration-tests/ (not docs/ — internal dev docs)
+
+ Team update (2026-03-08): Layer 2 bulk-extract from known-good commit is default approach until Layer 1 output changes structurally  decided by Cyclops
+
+ Team update (2026-03-08): Migration script gained 4 new functions (EnhancedNavDisable, ReadOnlyWarning, LoginStatus conversion, LogoutFormToLink)  targets 0 manual fixes  decided by Cyclops
+
+ Team update (2026-03-08): Component audit priorities  BulletedList/Panel/id-rendering fixes, field column docs, zero-touch migration script  decided by Forge

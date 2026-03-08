@@ -1,5 +1,0 @@
-### 2026-03-08: Migration script perf tuning — 3 fixes baked in
-
-**By:** Cyclops
-**What:** Baked all 3 Run 13 manual fixes into `bwfc-migrate.ps1` as 4 new functions: `Add-EnhancedNavDisable` (adds `data-enhance-nav="false"` to API endpoint links), `Add-ReadOnlyWarning` (adds MIGRATION NOTE comments for ReadOnly attributes), `ConvertFrom-LoginStatus` (converts `<asp:LoginStatus>` to `<a>` logout link), and `Convert-LogoutFormToLink` (converts logout form+button patterns to `<a>` links). All functions follow existing script conventions (Verb-Noun, `-Verbose` support, `Write-TransformLog`/`Write-ManualItem` integration).
-**Why:** Run 13 achieved 25/25 with 3 manual post-script fixes. Baking these in targets 0 manual fixes for Run 14. The fixes address SSR-specific behavior: enhanced navigation intercepting API links, ReadOnly preservation breaking editable fields, and form+button logout causing Playwright selector conflicts. Each fix uses conservative heuristics — `Add-ReadOnlyWarning` adds comments rather than removing attributes, `ConvertFrom-LoginStatus` includes a MIGRATION NOTE with endpoint setup instructions.

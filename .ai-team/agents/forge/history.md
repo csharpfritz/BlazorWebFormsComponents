@@ -87,3 +87,7 @@ Key findings from post-Run 12/13 audit:
 4. **Documentation is strong** at primary control level (59 mkdocs.yml pages) but weak for infrastructure: field columns (BoundField, etc.), 63 style sub-components, and infrastructure components (ContentPlaceHolder, NamingContainer) have no standalone docs.
 
 5. **Top 5 priorities:** (1) Fix 3 migration script gaps, (2) Fix BulletedList `<ol>` rendering, (3) Add `id` rendering to key controls, (4) Document field columns, (5) Fix Panel GroupingText `<fieldset>` rendering.
+
+ Team update (2026-03-08): Layer 2 bulk-extract from known-good commit is default approach until Layer 1 output changes structurally  decided by Cyclops
+
+ Team update (2026-03-08): Documentation refreshed  Runs 8-13 summaries, SSR-as-default guidance, package pinning, component coverage gap analysis  decided by Beast
