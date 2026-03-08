@@ -105,3 +105,31 @@ Added 5 smoke tests (Timer, UpdatePanel, UpdateProgress, ScriptManager, Substitu
 
  Team update (2026-03-08): P0 HTML fidelity fixes complete  CheckBox span wrapper, BaseValidator id/class, FormView CssClass. 1488 tests pass.  decided by Cyclops, Forge
  Team update (2026-03-08): Second sample project will be purpose-built 'EventManager' Control Gallery targeting ~12-15 pages with controls WingtipToys doesn't cover  decided by Forge
+
+## ContosoUniversity Web Forms Setup (2026-03-08)
+
+Set up the ContosoUniversity ASP.NET Web Forms sample project for local development and captured baseline screenshots of all 5 pages.
+
+### Setup Learnings
+
+- **MSBuild selection**: VS 2017 BuildTools (MSBuild 15.0) lacks `Microsoft.WebApplication.targets`. Must use VS 18 Insiders MSBuild (or any VS with web workloads) for Web Forms `.csproj` builds.
+- **NBGV vs legacy .NET Framework**: Repo-root `Directory.Build.props` injects Nerdbank.GitVersioning into all projects. Legacy projects with manual `AssemblyInfo.cs` get duplicate `AssemblyVersion` attributes. Fix: place empty `Directory.Build.props` at sample root to block inheritance.
+- **AjaxControlToolkit NuGet**: Package version `16.1.1` creates folder `AjaxControlToolkit.16.1.1.0`. DLL is under `lib\net40\`, not `lib\net45\`.
+- **LocalDB database attach**: The shipped `.mdf` (internal version 782) auto-upgrades to version 998 on LocalDB v17.0. Use `FOR ATTACH_REBUILD_LOG` when the `.ldf` is missing.
+- **IIS Express**: Launch with `/path:` and `/port:` flags. Press `Q` to gracefully stop.
+
+### Pages & Controls Observed
+
+| Page | Key Web Forms Controls |
+|------|----------------------|
+| Home.aspx | Master Page nav menu, static content |
+| About.aspx | GridView (enrollment statistics, 11 rows) |
+| Students.aspx | GridView (11 students), DetailsView (Add Student form), AutoCompleteExtender |
+| Courses.aspx | DropDownList (department filter), AutoCompleteExtender, GridView (empty-state) |
+| Instructors.aspx | GridView (7 instructors, sortable columns) |
+
+### Artifacts
+
+- Screenshots: `dev-docs/contoso-screenshots/` (5 PNG files)
+- Setup guide: `dev-docs/contoso-university-setup.md`
+- Commit: `ce2e90fc` on `squad/audit-docs-perf`
