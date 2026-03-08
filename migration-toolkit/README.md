@@ -4,6 +4,8 @@
 
 This toolkit packages everything you need to take a Web Forms app and bring it to Blazor using the [BlazorWebFormsComponents](https://www.nuget.org/packages/Fritz.BlazorWebFormsComponents) (BWFC) library. It combines automated scripts, Copilot skills, and a decision-making agent into a three-layer pipeline that handles ~85% of migration work mechanically or with AI assistance, leaving you to focus on the architecture decisions that actually need a human.
 
+> **Latest (Run 13):** 25/25 integration tests passing. The migration script now bakes in 3 previously-manual fixes — SSR enhanced-navigation disabling, ReadOnly attribute warnings, and LoginStatus→logout link conversion — targeting **0 manual fixes** for Run 14. SSR (Static Server Rendering) is the default architecture; package version pinned to **stable 10.0.0**.
+
 - **NuGet Package:** <https://www.nuget.org/packages/Fritz.BlazorWebFormsComponents>
 - **GitHub Repository:** <https://github.com/FritzAndFriends/BlazorWebFormsComponents>
 
@@ -19,9 +21,9 @@ You're a .NET developer who owns a Web Forms application and wants to migrate it
 
 | Requirement | Version | Why |
 |---|---|---|
-| .NET SDK | 10.0+ | Blazor Server target framework (.NET 10 Global Server Interactive) |
+| .NET SDK | 10.0+ | Blazor Server target framework (.NET 10 — SSR default) |
 | PowerShell | 7.0+ | Migration scripts require PowerShell Core |
-| BWFC NuGet package | Latest | `dotnet add package Fritz.BlazorWebFormsComponents` |
+| BWFC NuGet package | 10.0.0 (stable) | `dotnet add package Fritz.BlazorWebFormsComponents --version 10.0.0` |
 | GitHub Copilot | Any tier | Used for Layer 2 structural transforms |
 
 ---
@@ -30,7 +32,7 @@ You're a .NET developer who owns a Web Forms application and wants to migrate it
 
 1. **Copy the `skills/` folder** into your project's `.github/skills/` directory.
 2. **Copy the `scripts/` folder** to your project root.
-3. Install the BWFC NuGet package: `dotnet add package Fritz.BlazorWebFormsComponents`
+3. Install the BWFC NuGet package: `dotnet add package Fritz.BlazorWebFormsComponents --version 10.0.0`
 4. Follow the [QUICKSTART.md](QUICKSTART.md) guide.
 
 ---
@@ -54,7 +56,7 @@ Copy these to your project root. Requires PowerShell 7.0+.
 | Script | Description |
 |---|---|
 | [`bwfc-scan.ps1`](scripts/bwfc-scan.ps1) | **Scanner** — inventories your Web Forms project, identifies controls, counts pages, and outputs a migration readiness report. Run this first. |
-| [`bwfc-migrate.ps1`](scripts/bwfc-migrate.ps1) | **Mechanical transformer** — Layer 1 automated transforms: strips `asp:` prefixes, removes `runat="server"`, converts expressions, renames `.aspx`→`.razor`. Handles ~40% of migration work deterministically. |
+| [`bwfc-migrate.ps1`](scripts/bwfc-migrate.ps1) | **Mechanical transformer** — Layer 1 automated transforms: strips `asp:` prefixes, removes `runat="server"`, converts expressions, renames `.aspx`→`.razor`. Also handles SSR enhanced-nav disabling, ReadOnly attribute warnings, LoginStatus→logout link conversion, and logout form→link conversion. Handles ~40% of migration work deterministically. |
 
 ---
 
@@ -93,6 +95,25 @@ Migration isn't one step — it's three layers that handle different kinds of wo
 | [**METHODOLOGY.md**](METHODOLOGY.md) | Three-layer pipeline deep-dive |
 | [**CHECKLIST.md**](CHECKLIST.md) | Per-page migration checklist template |
 | [**copilot-instructions-template.md**](copilot-instructions-template.md) | Drop-in `.github/copilot-instructions.md` for your project |
+
+---
+
+## What's New (Run 13)
+
+The migration script now automates 3 fixes that previously required manual intervention:
+
+| Fix | Function | What It Does |
+|---|---|---|
+| **SSR enhanced-nav disabling** | `Add-EnhancedNavDisable` | Adds `data-enhance-nav="false"` to `<a>` links targeting API endpoints, logout, and cart actions — prevents SSR enhanced navigation from intercepting 302 redirects |
+| **ReadOnly attribute warnings** | `Add-ReadOnlyWarning` | Inserts `<!-- MIGRATION NOTE -->` comments for `ReadOnly="True"` on TextBox and `readonly` on `<input>`, flagging for developer review |
+| **LoginStatus → logout link** | `ConvertFrom-LoginStatus` | Converts `<asp:LoginStatus>` to an `<a>` logout link with `data-enhance-nav="false"`, extracting `LogoutText`/`LogoutPageUrl` attributes |
+| **Logout form → link** | `Convert-LogoutFormToLink` | Detects logout `<form>`+`<button>` patterns and converts to `<a>` links, avoiding Playwright button-ordering conflicts |
+
+**Key changes:**
+
+- **SSR is the default architecture** — the pipeline targets Static Server Rendering with selective interactivity, matching the .NET 10 Blazor template defaults
+- **Package version pinned to 10.0.0** — use `dotnet add package Fritz.BlazorWebFormsComponents --version 10.0.0` for stable, reproducible builds
+- **Test results:** Run 13 achieved **25/25 integration tests passing** (305 transforms). Run 14 targets **0 manual fixes**.
 
 ---
 

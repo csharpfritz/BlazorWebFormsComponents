@@ -22,7 +22,7 @@ Create your Blazor project and add the BWFC package:
 ```bash
 dotnet new blazor -n MyBlazorApp --interactivity Server
 cd MyBlazorApp
-dotnet add package Fritz.BlazorWebFormsComponents
+dotnet add package Fritz.BlazorWebFormsComponents --version 10.0.0
 ```
 
 ---
