@@ -1,0 +1,26 @@
+@inherits BlazorWebFormsTestContext
+@using Shouldly
+
+@code {
+	[Fact]
+	public void Calendar_WithID_RendersIDInHTML()
+	{
+		// Arrange & Act
+		var cut = Render(@<Calendar ID="myCalendar" />);
+
+		// Assert
+		var table = cut.Find("table");
+		table.GetAttribute("id").ShouldBe("myCalendar");
+	}
+
+	[Fact]
+	public void Calendar_WithoutID_DoesNotRenderIDInHTML()
+	{
+		// Arrange & Act
+		var cut = Render(@<Calendar />);
+
+		// Assert
+		var table = cut.Find("table");
+		table.HasAttribute("id").ShouldBeFalse();
+	}
+}

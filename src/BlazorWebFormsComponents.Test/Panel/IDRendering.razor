@@ -1,0 +1,37 @@
+@inherits BlazorWebFormsTestContext
+@using Shouldly
+
+@code {
+	[Fact]
+	public void Panel_WithID_RendersIDOnDiv()
+	{
+		// Arrange & Act
+		var cut = Render(@<Panel ID="myPanel"><p>Content</p></Panel>);
+
+		// Assert
+		var div = cut.Find("div");
+		div.GetAttribute("id").ShouldBe("myPanel");
+	}
+
+	[Fact]
+	public void Panel_WithoutID_DoesNotRenderIDOnDiv()
+	{
+		// Arrange & Act
+		var cut = Render(@<Panel><p>Content</p></Panel>);
+
+		// Assert
+		var div = cut.Find("div");
+		div.HasAttribute("id").ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Panel_WithID_RendersIDOnFieldset()
+	{
+		// Arrange & Act
+		var cut = Render(@<Panel ID="myFieldset" GroupingText="Group"><p>Content</p></Panel>);
+
+		// Assert
+		var fieldset = cut.Find("fieldset");
+		fieldset.GetAttribute("id").ShouldBe("myFieldset");
+	}
+}

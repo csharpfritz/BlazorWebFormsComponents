@@ -1,0 +1,26 @@
+@inherits BlazorWebFormsTestContext
+@using Shouldly
+
+@code {
+	[Fact]
+	public void LinkButton_WithID_RendersIDInHTML()
+	{
+		// Arrange & Act
+		var cut = Render(@<LinkButton ID="myLink" Text="Click me" />);
+
+		// Assert
+		var anchor = cut.Find("a");
+		anchor.GetAttribute("id").ShouldBe("myLink");
+	}
+
+	[Fact]
+	public void LinkButton_WithoutID_DoesNotRenderIDInHTML()
+	{
+		// Arrange & Act
+		var cut = Render(@<LinkButton Text="Click me" />);
+
+		// Assert
+		var anchor = cut.Find("a");
+		anchor.HasAttribute("id").ShouldBeFalse();
+	}
+}

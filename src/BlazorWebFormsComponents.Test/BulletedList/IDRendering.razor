@@ -1,0 +1,38 @@
+@inherits BlazorWebFormsTestContext
+@using Shouldly
+
+@code {
+	[Fact]
+	public void BulletedList_WithID_RendersIDInHTML()
+	{
+		// Arrange
+		var items = new ListItemCollection
+		{
+			new ListItem("Item 1", "1")
+		};
+
+		// Act
+		var cut = Render(@<BulletedList TItem="object" StaticItems="items" ID="myList" />);
+
+		// Assert
+		var ul = cut.Find("ul");
+		ul.GetAttribute("id").ShouldBe("myList");
+	}
+
+	[Fact]
+	public void BulletedList_WithoutID_DoesNotRenderIDInHTML()
+	{
+		// Arrange
+		var items = new ListItemCollection
+		{
+			new ListItem("Item 1", "1")
+		};
+
+		// Act
+		var cut = Render(@<BulletedList TItem="object" StaticItems="items" />);
+
+		// Assert
+		var ul = cut.Find("ul");
+		ul.HasAttribute("id").ShouldBeFalse();
+	}
+}
