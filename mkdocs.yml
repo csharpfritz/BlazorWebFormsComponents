@@ -148,4 +148,16 @@ nav:
       - Web Forms Application Migration Readiness: Migration/migration_readiness.md
   - Migration Tests:
       - Overview: migration-tests/README.md
-      - WingtipToys 2026-03-04: migration-tests/wingtiptoys-2026-03-04/report.md
+      - WingtipToys Run 1: migration-tests/wingtiptoys-2026-03-04/report.md
+      - WingtipToys Run 2: migration-tests/wingtiptoys-run2-2026-03-04/report.md
+      - WingtipToys Run 3: migration-tests/wingtiptoys-run3-2026-03-04/report.md
+      - WingtipToys Run 4: migration-tests/wingtiptoys-run4-2026-03-04/report.md
+      - WingtipToys Run 5: migration-tests/wingtiptoys-run5-2026-03-04/report.md
+      - WingtipToys Run 6: migration-tests/wingtiptoys-run6-2026-03-04/report.md
+      - WingtipToys Run 8: migration-tests/wingtiptoys-run8.md
+      - WingtipToys Run 9: migration-tests/wingtiptoys-run9.md
+      - WingtipToys Run 10: migration-tests/wingtiptoys-run10.md
+      - WingtipToys Run 11: migration-tests/wingtiptoys-run11.md
+      - WingtipToys Run 12: migration-tests/wingtiptoys-run12.md
+      - WingtipToys Run 13: migration-tests/wingtiptoys-run13.md
+      - Component Coverage: migration-tests/component-coverage.md

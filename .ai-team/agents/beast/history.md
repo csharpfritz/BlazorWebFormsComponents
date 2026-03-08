@@ -65,3 +65,13 @@ WebFormsPageBase docs and Page System rewrite shipped (2026-03-05). Skills cross
  Team update (2026-03-08): @using BlazorWebFormsComponents.LoginControls must be in every generated _Imports.razor  decided by Cyclops
 
  Team update (2026-03-08): Run 12 migration patterns: auth via plain HTML forms with data-enhance=false, dual DbContext, LoginView _userName from cascading auth state  decided by Cyclops
+
+### Documentation Refresh — Runs 8–13 (2026-03-08)
+
+- **AutomatedMigration.md updated:** Added SSR-as-default section, package version pinning, enhanced navigation (`data-enhance-nav="false"`) guidance, updated pipeline table (Script layer from ~40% to ~60%), added pipeline convergence note (56% → 100% across 13 runs), expanded transform table with JS/CSS detection, placeholder conversion, and static asset copying.
+- **6 new run summary pages created:** `docs/migration-tests/wingtiptoys-run{8-13}.md` — each with date, score, render mode, key changes, remaining fixes, and link to full report in dev-docs.
+- **migration-tests/README.md rewritten:** Full run history table with all 10 published runs (1-4, 8-13), plus convergence summary section.
+- **mkdocs.yml updated:** Added all 6 new run pages, Runs 5-6 (previously missing), and component-coverage.md to the Migration Tests nav section.
+- **component-coverage.md created:** Gap analysis of 52 components vs docs. Result: 100% coverage — no gaps found. Sub-components (View, RoleGroup, MenuItem, TreeNode, etc.) are documented within parent pages.
+- **Patterns followed:** Run summary pages use consistent table format (metric/value), root cause abbreviations where applicable, and link to full dev-docs report. Followed existing migration-tests page style from Runs 1-4.
+- **Key decisions documented:** SSR default render mode, package version pinning, `data-enhance-nav="false"` for non-Blazor endpoints.

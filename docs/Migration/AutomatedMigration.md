@@ -9,12 +9,53 @@ The BWFC migration system uses a three-layer pipeline:
 | Layer | Tool | Automation | What It Handles |
 |-------|------|-----------|-----------------|
 | **1. Scanner** | `bwfc-scan.ps1` | Inventory | Analyzes your Web Forms project and reports migration readiness |
-| **2. Script** | `bwfc-migrate.ps1` | ~40% | Mechanical regex transforms (strip `asp:`, fix expressions, rename files) |
-| **3. Copilot Skill** | `webforms-migration` | ~45% | Structural transforms (code-behind, data binding, lifecycle methods) |
-| **4. Agent** | `migration.agent.md` | ~15% | Semantic decisions (Session→DI, Identity, EF Core, architecture) |
+| **2. Script** | `bwfc-migrate.ps1` | ~60% | Mechanical transforms (strip `asp:`, fix expressions, rename files, copy static assets, convert template placeholders, detect JS/CSS) |
+| **3. Copilot Skill** | `webforms-migration` | ~30% | Structural transforms (code-behind, data binding, lifecycle methods) |
+| **4. Agent** | `migration.agent.md` | ~10% | Semantic decisions (Session→DI, Identity, EF Core, architecture) |
 
 !!! tip "Core Principle"
     Strip `asp:` and `runat="server"`, keep everything else, and it just works. BWFC components match Web Forms control names, property names, and rendered HTML.
+
+!!! info "Pipeline Maturity"
+    Across 13 iterative benchmark runs on the WingtipToys reference application, the pipeline improved from a 56% acceptance test pass rate to **100%** — with total migration time dropping from ~2 hours to ~22 minutes. See [Migration Test Runs](../migration-tests/README.md) for the full history.
+
+## Render Mode: SSR by Default
+
+Migrated applications use **Static Server Rendering (SSR)** as the default render mode. This is the closest Blazor equivalent to how Web Forms pages work — pages render on the server during the HTTP request/response cycle, with full access to `HttpContext`, cookies, and session state.
+
+| Render Mode | When to Use | HttpContext Available? |
+|-------------|-------------|----------------------|
+| **SSR (default)** | Most pages — especially those that read cookies, session, or auth state | ✅ Yes |
+| **InteractiveServer** | Pages that need real-time UI updates (e.g., chat, live dashboards) | ❌ No (`HttpContext` is null inside SignalR circuits) |
+
+To opt a specific page into interactive rendering, add the directive at the top of the `.razor` file:
+
+```razor
+@rendermode InteractiveServer
+```
+
+!!! warning "SSR Enhanced Navigation"
+    In SSR mode, Blazor's enhanced navigation intercepts `<a>` link clicks and fetches the target URL via `fetch()` instead of performing a full browser navigation. This is seamless for links between Blazor pages, but **breaks links to server-side API endpoints** (e.g., `/AddToCart`, `/account/logout-handler`) that return 302 redirects.
+
+    Add `data-enhance-nav="false"` to any link targeting a non-Blazor endpoint:
+
+    ```html
+    <a href="/AddToCart?productId=1" data-enhance-nav="false">Add To Cart</a>
+    ```
+
+## Package Version Pinning
+
+NuGet package references in generated `.csproj` files must use **explicit stable versions** — never preview or wildcard versions.
+
+```xml
+<!-- ✅ Correct — pinned to stable release -->
+<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.0" />
+
+<!-- ❌ Wrong — wildcard version -->
+<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.0-*" />
+```
+
+The .NET 10 SDK preview is acceptable for building; NuGet package preview versions are not.
 
 ## Prerequisites
 
@@ -89,6 +130,11 @@ pwsh scripts/bwfc-migrate.ps1 -Path ./MyWebFormsApp -Output ./MyBlazorApp
 | Remove `<form runat>` | `<form runat="server">` | (removed) |
 | Fix type params | `ItemType="NS.Class"` | `TItem="Class"` |
 | Remove dead attrs | `EnableViewState`, `AutoEventWireup` | (removed) |
+| Detect CSS bundles | `<webopt:bundlereference>` for CSS | `<link>` tags in App.razor |
+| Detect JS bundles | `<webopt:bundlereference>` for JS | `<script>` tags in App.razor |
+| Copy static assets | `Content/`, `Scripts/`, `Images/`, `Catalog/`, `fonts/` | `wwwroot/` equivalents |
+| Convert placeholders | `<tr id="groupPlaceholder">` | `@context` (inside templates) |
+| Pin package versions | (generated `.csproj`) | Stable versions (e.g., `10.0.0`) |
 
 ### Preview Mode
 
@@ -263,3 +309,4 @@ BWFC provides **52 Blazor components** covering the most commonly used Web Forms
 - [Migration Readiness Checklist](migration_readiness.md)
 - [Custom Control Migration](Custom-Controls.md)
 - [Deferred Controls](DeferredControls.md)
+- [Migration Test Runs](../migration-tests/README.md)
