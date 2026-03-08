@@ -729,7 +729,7 @@ function ConvertFrom-ContentWrappers {
         $headContentCount = ([regex]'<HeadContent>').Matches($Content).Count
         if ($headContentCount -gt 0) {
             # Replace first N closing tags with </HeadContent>, remove the rest
-            $replaced = 0
+            $script:replaced_count = 0
             $Content = $closeRegex.Replace($Content, {
                 param($m)
                 $script:replaced_count++
@@ -1172,6 +1172,47 @@ function Remove-WebFormsAttributes {
     return $Content
 }
 
+function ConvertFrom-ButtonOnClick {
+    <#
+    .SYNOPSIS
+        Converts Web Forms OnClick="HandlerName" to Blazor @onclick="HandlerName" on Button elements.
+    .DESCRIPTION
+        In Web Forms, <asp:Button OnClick="btnSubmit_Click"> wires the button to a server-side handler.
+        In Blazor, this becomes <Button @onclick="btnSubmit_Click">.
+        
+        This function finds OnClick attributes on Button/LinkButton/ImageButton elements and converts 
+        them to @onclick. A manual item is logged reminding the developer to add the handler stub
+        in the code-behind if it doesn't already exist.
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    # Match OnClick="HandlerName" within Button, LinkButton, or ImageButton tags (after asp: prefix removal)
+    # This regex captures the handler name and replaces OnClick with @onclick
+    $onClickRegex = [regex]'(<(?:Button|LinkButton|ImageButton)\s+[^>]*?)OnClick="([^"]+)"'
+    $onClickMatches = $onClickRegex.Matches($Content)
+    
+    if ($onClickMatches.Count -gt 0) {
+        $handlers = @()
+        foreach ($m in $onClickMatches) {
+            $handlers += $m.Groups[2].Value
+        }
+        
+        $Content = $onClickRegex.Replace($Content, '$1@onclick="$2"')
+        Write-TransformLog -File $RelPath -Transform 'ButtonHandler' -Detail "Converted $($onClickMatches.Count) OnClick to @onclick"
+        
+        # Log unique handlers as manual items for verification
+        $uniqueHandlers = $handlers | Select-Object -Unique
+        foreach ($h in $uniqueHandlers) {
+            Write-ManualItem -File $RelPath -Category 'ButtonHandler' -Detail "Converted OnClick=""$h"" → @onclick=""$h"". Verify handler exists in code-behind as: private void $h() { }"
+        }
+    }
+
+    return $Content
+}
+
 function ConvertFrom-UrlReferences {
     param([string]$Content, [string]$RelPath)
 
@@ -1187,6 +1228,16 @@ function ConvertFrom-UrlReferences {
             $Content = $Content.Replace($up.Pattern, $up.Replacement)
             Write-TransformLog -File $RelPath -Transform 'URL' -Detail "Converted $count $($up.Name) ~/ reference(s) to /"
         }
+    }
+
+    # Convert relative .aspx hrefs to rooted paths without extension
+    # e.g., href="Home.aspx" → href="/Home", href="Account/Login.aspx" → href="/Account/Login"
+    # But NOT hrefs with ~/ (already handled) or absolute URLs or anchors
+    $relativeAspxRegex = [regex]'href="(?!~/|https?://|/|#)([^"]*?)\.aspx"'
+    $relativeAspxMatches = $relativeAspxRegex.Matches($Content)
+    if ($relativeAspxMatches.Count -gt 0) {
+        $Content = $relativeAspxRegex.Replace($Content, 'href="/$1"')
+        Write-TransformLog -File $RelPath -Transform 'URL' -Detail "Converted $($relativeAspxMatches.Count) relative .aspx href(s) to rooted paths"
     }
 
     return $Content
@@ -1871,6 +1922,9 @@ function Convert-WebFormsFile {
 
     $content = ConvertFrom-AspPrefix -Content $content -RelPath $relativePath
     $content = Remove-WebFormsAttributes -Content $content -RelPath $relativePath
+
+    # Convert Button OnClick handlers to @onclick (must run after asp: prefix removal)
+    $content = ConvertFrom-ButtonOnClick -Content $content -RelPath $relativePath
 
     # SSR Fix 2: Add warnings for ReadOnly attributes on editable fields
     $content = Add-ReadOnlyWarning -Content $content -RelPath $relativePath

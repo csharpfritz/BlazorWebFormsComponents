@@ -215,13 +215,14 @@ function Find-EntityType {
     $razorPath = $CodeBehindPath -replace '\.cs$', ''
     if (Test-Path $razorPath) {
         $razorContent = Get-Content -Path $razorPath -Raw -Encoding UTF8
-        if ($razorContent -match 'ItemType="([^"]+)"') {
+        # Use word boundary (\b) to avoid partial matches like 'ShowOnlyCurrentWordInCompletionListItem="true"'
+        if ($razorContent -match '\bItemType="([^"]+)"') {
             $typeName = $Matches[1]
             # Strip namespace prefix (e.g., WingtipToys.Models.Product → Product)
             if ($typeName -match '\.(\w+)$') { $typeName = $Matches[1] }
             return $typeName
         }
-        if ($razorContent -match 'TItem="([^"]+)"') {
+        if ($razorContent -match '\bTItem="([^"]+)"') {
             $typeName = $Matches[1]
             if ($typeName -match '\.(\w+)$') { $typeName = $Matches[1] }
             return $typeName
@@ -636,26 +637,65 @@ function Invoke-PatternA {
         [System.IO.Path]::GetFileNameWithoutExtension($CodeBehindPath)
     )
 
-    # Extract existing [SupplyParameterFromQuery] parameters
+    # Extract [SupplyParameterFromQuery] parameters
+    # Two patterns: 
+    # 1. Method parameter: [SupplyParameterFromQuery(Name = "X")] type? name,  or  type? name)
+    # 2. Property: [SupplyParameterFromQuery(Name = "X")] public type? Name { get; set; }
     $queryParams = @()
-    $paramRegex = [regex]'\[SupplyParameterFromQuery\(Name\s*=\s*"([^"]+)"\)\]\s*(?:public\s+)?(\w+\??)\s+(\w+)'
-    $paramMatches = $paramRegex.Matches($content)
-    foreach ($m in $paramMatches) {
+    
+    # Pattern 1: Method parameters - [SupplyParameterFromQuery(Name = "X")] type name
+    $queryMethodParamRegex = [regex]'\[SupplyParameterFromQuery\(Name\s*=\s*"([^"]+)"\)\]\s*(\w+\??)\s+(\w+)\s*[,)]'
+    $queryMethodMatches = $queryMethodParamRegex.Matches($content)
+    foreach ($m in $queryMethodMatches) {
         $queryParams += @{
             Name      = $m.Groups[1].Value
             Type      = $m.Groups[2].Value
-            Property  = $m.Groups[3].Value
+            Property  = (Get-Culture).TextInfo.ToTitleCase($m.Groups[3].Value)  # Capitalize for property
+        }
+    }
+    
+    # Pattern 2: Property declarations - [SupplyParameterFromQuery(Name = "X")] public type? Name { get; set; }
+    $queryPropRegex = [regex]'\[SupplyParameterFromQuery\(Name\s*=\s*"([^"]+)"\)\]\s*(?:public|private)\s+(\w+\??)\s+(\w+)\s*\{'
+    $queryPropMatches = $queryPropRegex.Matches($content)
+    foreach ($m in $queryPropMatches) {
+        # Avoid duplicates if both patterns matched
+        $existingNames = $queryParams | ForEach-Object { $_.Name }
+        if ($m.Groups[1].Value -notin $existingNames) {
+            $queryParams += @{
+                Name      = $m.Groups[1].Value
+                Type      = $m.Groups[2].Value
+                Property  = $m.Groups[3].Value
+            }
         }
     }
 
     # Extract [Parameter] (from RouteData) parameters
+    # Two patterns:
+    # 1. Method parameter: [Parameter] type name,  or  type name)
+    # 2. Property: [Parameter] public type? Name { get; set; }
     $routeParams = @()
-    $routeParamRegex = [regex]'\[Parameter\]\s*(?:public\s+)?(\w+\??)\s+(\w+)'
-    $routeParamMatches = $routeParamRegex.Matches($content)
-    foreach ($m in $routeParamMatches) {
+    
+    # Pattern 1: Method parameters - [Parameter] type name (may have newline/TODO comment between)
+    $routeMethodParamRegex = [regex]'\[Parameter\]\s*(\w+\??)\s+(\w+)\s*[,)]'
+    $routeMethodMatches = $routeMethodParamRegex.Matches($content)
+    foreach ($m in $routeMethodMatches) {
         $routeParams += @{
             Type     = $m.Groups[1].Value
-            Property = $m.Groups[2].Value
+            Property = (Get-Culture).TextInfo.ToTitleCase($m.Groups[2].Value)  # Capitalize for property
+        }
+    }
+    
+    # Pattern 2: Property declarations - [Parameter] public type? Name { get; set; }
+    $routePropRegex = [regex]'\[Parameter\]\s*(?:public|private)\s+(\w+\??)\s+(\w+)\s*\{'
+    $routePropMatches = $routePropRegex.Matches($content)
+    foreach ($m in $routePropMatches) {
+        # Avoid duplicates
+        $existingProps = $routeParams | ForEach-Object { $_.Property }
+        if ($m.Groups[2].Value -notin $existingProps) {
+            $routeParams += @{
+                Type     = $m.Groups[1].Value
+                Property = $m.Groups[2].Value
+            }
         }
     }
 
