@@ -3,28 +3,33 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using WingtipToys.Models;
 
-namespace WingtipToys.Components.Layout;
-
-public partial class MainLayout : LayoutComponentBase
+namespace WingtipToys.Components.Layout
 {
-    [Inject] private IDbContextFactory<ProductContext> DbFactory { get; set; } = null!;
-
-    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
-
-    private List<Category>? _categories;
-    private string? _userName;
-
-    protected override async Task OnInitializedAsync()
+    public partial class MainLayout : LayoutComponentBase
     {
-        using var db = DbFactory.CreateDbContext();
-        _categories = await db.Categories.OrderBy(c => c.CategoryID).ToListAsync();
+        [Inject] private IDbContextFactory<ProductContext> DbFactory { get; set; } = default!;
+        [Inject] private IHttpContextAccessor HttpContextAccessor { get; set; } = default!;
+        [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
 
-        if (AuthState != null)
+        private List<Category> _categories = new();
+        private int _cartCount;
+        private string _userName = "";
+
+        protected override async Task OnInitializedAsync()
         {
-            var auth = await AuthState;
-            if (auth.User.Identity?.IsAuthenticated == true)
+            using var db = DbFactory.CreateDbContext();
+            _categories = await db.Categories.OrderBy(c => c.CategoryID).ToListAsync();
+
+            var cartId = HttpContextAccessor.HttpContext?.Session.GetString("CartId") ?? "";
+            if (!string.IsNullOrEmpty(cartId))
             {
-                _userName = auth.User.Identity.Name;
+                _cartCount = db.ShoppingCartItems.Where(c => c.CartId == cartId).Sum(c => c.Quantity);
+            }
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                _userName = authState.User.Identity.Name ?? "";
             }
         }
     }

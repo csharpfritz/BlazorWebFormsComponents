@@ -1,46 +1,36 @@
 @page "/ProductDetails"
 <PageTitle>Product Details</PageTitle>
 
-@if (_product != null)
+@if (_product.Any())
 {
+    var product = _product.First();
     <div>
-        <h1>@_product.ProductName</h1>
+        <h1>@product.ProductName</h1>
     </div>
     <br />
     <table>
         <tr>
             <td>
-                <img src="/Catalog/Images/@_product.ImagePath" style="border:solid; height:300px" alt="@_product.ProductName" />
+                <img src="/Catalog/Images/@product.ImagePath" style="border:solid; height:300px" alt="@product.ProductName"/>
             </td>
             <td>&nbsp;</td>
             <td style="vertical-align: top; text-align:left;">
-                <b>Description:</b><br />@_product.Description
+                <b>Description:</b><br />@product.Description
                 <br />
-                <span><b>Price:</b>&nbsp;@($"{_product.UnitPrice:c}")</span>
+                <span><b>Price:</b>&nbsp;@($"{product.UnitPrice:c}")</span>
                 <br />
-                <span><b>Product Number:</b>&nbsp;@_product.ProductID</span>
+                <span><b>Product Number:</b>&nbsp;@product.ProductID</span>
                 <br />
                 <br />
-                <a href="/AddToCart?productId=@_product.ProductID" data-enhance-nav="false">Add To Cart</a>
+                <a href="/AddToCart?productID=@product.ProductID" data-enhance-nav="false">
+                    <b>Add To Cart</b>
+                </a>
             </td>
         </tr>
     </table>
 }
-
-@code {
-    [Inject] private IDbContextFactory<ProductContext> DbFactory { get; set; } = null!;
-
-    [SupplyParameterFromQuery(Name = "productID")] public int? ProductID { get; set; }
-
-    private Product? _product;
-
-    protected override async Task OnInitializedAsync()
-    {
-        if (ProductID.HasValue)
-        {
-            using var db = DbFactory.CreateDbContext();
-            _product = await db.Products.FindAsync(ProductID.Value);
-        }
-    }
+else
+{
+    <p>Product not found.</p>
 }
 

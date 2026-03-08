@@ -5,45 +5,51 @@ using WingtipToys.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+builder.Services.AddRazorComponents();
 
 builder.Services.AddBlazorWebFormsComponents();
 
-// Database — factory only (no dual registration)
+// Database
 builder.Services.AddDbContextFactory<ProductContext>(options =>
+    options.UseSqlite("Data Source=wingtiptoys.db"));
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite("Data Source=wingtiptoys.db"));
 
 // Identity
-builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
+builder.Services.AddDefaultIdentity<IdentityUser>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
-    options.Password.RequireDigit = false;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequireUppercase = false;
+    options.Password.RequireDigit = true;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequireUppercase = true;
     options.Password.RequiredLength = 6;
 })
-.AddEntityFrameworkStores<ProductContext>()
-.AddDefaultTokenProviders();
-
-builder.Services.ConfigureApplicationCookie(options =>
-{
-    options.LoginPath = "/Account/Login";
-    options.LogoutPath = "/Account/Login";
-});
+.AddEntityFrameworkStores<ApplicationDbContext>();
 
 builder.Services.AddCascadingAuthenticationState();
+
+// Session for cart
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
 builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
-// Seed database
+// Seed the database
 using (var scope = app.Services.CreateScope())
 {
-    var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ProductContext>>();
-    using var context = factory.CreateDbContext();
-    context.Database.EnsureCreated();
-    ProductDatabaseInitializer.Seed(context);
+    var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ProductContext>>();
+    using var db = dbFactory.CreateDbContext();
+    db.Database.EnsureCreated();
+    ProductDatabaseInitializer.Seed(db);
+
+    var identityDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    identityDb.Database.EnsureCreated();
 }
 
 if (!app.Environment.IsDevelopment())
@@ -54,109 +60,92 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
-// Cart endpoints — SSR with cookies
-app.MapGet("/AddToCart", async (int productId, HttpContext httpContext, IDbContextFactory<ProductContext> dbFactory) =>
+app.MapRazorComponents<WingtipToys.Components.App>();
+
+// Minimal API: Add to cart
+app.MapGet("/AddToCart", async (HttpContext ctx, int productID, IDbContextFactory<ProductContext> dbFactory) =>
 {
-    using var db = dbFactory.CreateDbContext();
-    var cartId = httpContext.Request.Cookies["WingtipToysCartId"];
+    var cartId = ctx.Session.GetString("CartId");
     if (string.IsNullOrEmpty(cartId))
     {
         cartId = Guid.NewGuid().ToString();
-        httpContext.Response.Cookies.Append("WingtipToysCartId", cartId, new CookieOptions { Expires = DateTimeOffset.Now.AddDays(30), HttpOnly = true, IsEssential = true });
+        ctx.Session.SetString("CartId", cartId);
     }
 
-    var product = await db.Products.FindAsync(productId);
-    if (product != null)
-    {
-        var existingItem = await db.ShoppingCartItems
-            .FirstOrDefaultAsync(c => c.CartId == cartId && c.ProductId == productId);
-
-        if (existingItem != null)
-        {
-            existingItem.Quantity++;
-        }
-        else
-        {
-            db.ShoppingCartItems.Add(new CartItem
-            {
-                ItemId = Guid.NewGuid().ToString(),
-                CartId = cartId,
-                ProductId = productId,
-                Quantity = 1,
-                DateCreated = DateTime.Now
-            });
-        }
-        await db.SaveChangesAsync();
-    }
-
-    return Results.Redirect("/ShoppingCart");
-});
-
-app.MapGet("/RemoveFromCart", async (string itemId, HttpContext httpContext, IDbContextFactory<ProductContext> dbFactory) =>
-{
     using var db = dbFactory.CreateDbContext();
-    var cartId = httpContext.Request.Cookies["WingtipToysCartId"];
-    if (!string.IsNullOrEmpty(cartId))
+    var existingItem = db.ShoppingCartItems
+        .FirstOrDefault(c => c.CartId == cartId && c.ProductId == productID);
+
+    if (existingItem != null)
     {
-        var item = await db.ShoppingCartItems.FirstOrDefaultAsync(c => c.ItemId == itemId && c.CartId == cartId);
-        if (item != null)
+        existingItem.Quantity++;
+    }
+    else
+    {
+        db.ShoppingCartItems.Add(new CartItem
         {
-            db.ShoppingCartItems.Remove(item);
-            await db.SaveChangesAsync();
-        }
+            ItemId = Guid.NewGuid().ToString(),
+            CartId = cartId,
+            ProductId = productID,
+            Quantity = 1,
+            DateCreated = DateTime.Now
+        });
+    }
+    db.SaveChanges();
+    return Results.Redirect("/ShoppingCart");
+});
+
+// Minimal API: Remove from cart
+app.MapPost("/api/remove-from-cart", async (HttpContext ctx, IDbContextFactory<ProductContext> dbFactory) =>
+{
+    var form = await ctx.Request.ReadFormAsync();
+    var itemId = form["itemId"].ToString();
+    var cartId = ctx.Session.GetString("CartId") ?? "";
+
+    using var db = dbFactory.CreateDbContext();
+    var item = db.ShoppingCartItems.FirstOrDefault(c => c.ItemId == itemId && c.CartId == cartId);
+    if (item != null)
+    {
+        db.ShoppingCartItems.Remove(item);
+        db.SaveChanges();
     }
     return Results.Redirect("/ShoppingCart");
 });
 
-// Auth endpoints
-app.MapPost("/account/register-handler", async (HttpContext httpContext, UserManager<IdentityUser> userManager, SignInManager<IdentityUser> signInManager) =>
+// Minimal API: Update cart quantity
+app.MapPost("/api/update-cart", async (HttpContext ctx, IDbContextFactory<ProductContext> dbFactory) =>
 {
-    var form = await httpContext.Request.ReadFormAsync();
-    var email = form["Email"].ToString();
-    var password = form["Password"].ToString();
+    var form = await ctx.Request.ReadFormAsync();
+    var cartId = ctx.Session.GetString("CartId") ?? "";
 
-    var user = new IdentityUser { UserName = email, Email = email };
-    var result = await userManager.CreateAsync(user, password);
-
-    if (result.Succeeded)
+    using var db = dbFactory.CreateDbContext();
+    foreach (var key in form.Keys.Where(k => k.StartsWith("qty-")))
     {
-        await signInManager.SignInAsync(user, isPersistent: false);
-        return Results.Redirect("/");
+        var itemId = key.Substring(4);
+        if (int.TryParse(form[key], out var qty) && qty > 0)
+        {
+            var item = db.ShoppingCartItems.FirstOrDefault(c => c.ItemId == itemId && c.CartId == cartId);
+            if (item != null)
+            {
+                item.Quantity = qty;
+            }
+        }
     }
-
-    var errors = string.Join(",", result.Errors.Select(e => e.Description));
-    return Results.Redirect($"/Account/Register?error={Uri.EscapeDataString(errors)}");
+    db.SaveChanges();
+    return Results.Redirect("/ShoppingCart");
 });
 
-app.MapPost("/account/login-handler", async (HttpContext httpContext, SignInManager<IdentityUser> signInManager) =>
-{
-    var form = await httpContext.Request.ReadFormAsync();
-    var email = form["Email"].ToString();
-    var password = form["Password"].ToString();
-    var rememberMe = form["RememberMe"].ToString() == "on";
-
-    var result = await signInManager.PasswordSignInAsync(email, password, rememberMe, lockoutOnFailure: false);
-
-    if (result.Succeeded)
-    {
-        return Results.Redirect("/");
-    }
-
-    return Results.Redirect("/Account/Login?error=Invalid+login+attempt");
-});
-
-app.MapGet("/account/logout-handler", async (SignInManager<IdentityUser> signInManager) =>
+// Minimal API: Logout
+app.MapGet("/account/logout", async (HttpContext ctx, SignInManager<IdentityUser> signInManager) =>
 {
     await signInManager.SignOutAsync();
     return Results.Redirect("/");
 });
-
-app.MapRazorComponents<WingtipToys.Components.App>()
-    .AddInteractiveServerRenderMode();
 
 app.Run();
 

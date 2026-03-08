@@ -1,42 +1,82 @@
 @page "/Account/Register"
+@using Microsoft.AspNetCore.Identity
+
 <PageTitle>Register</PageTitle>
+<h2>Register.</h2>
 
-<h2>Register</h2>
-
-@if (!string.IsNullOrEmpty(_error))
+@if (!string.IsNullOrEmpty(_errorMessage))
 {
-    <p class="text-danger">@_error</p>
+    <p class="text-danger">@_errorMessage</p>
 }
 
-<form method="post" action="/account/register-handler" data-enhance="false">
+<div class="form-horizontal">
     <h4>Create a new account</h4>
     <hr />
-    <div class="form-group">
-        <label class="col-md-2 control-label" for="Email">Email</label>
-        <div class="col-md-10">
-            <input type="email" id="Email" name="Email" class="form-control" required />
+    <form method="post" @onsubmit="CreateUser" @formname="register">
+        <AntiforgeryToken />
+        <div class="form-group">
+            <label class="col-md-2 control-label">Email</label>
+            <div class="col-md-10">
+                <input type="email" class="form-control" name="Email" value="@Email" required />
+            </div>
         </div>
-    </div>
-    <div class="form-group">
-        <label class="col-md-2 control-label" for="Password">Password</label>
-        <div class="col-md-10">
-            <input type="password" id="Password" name="Password" class="form-control" required />
+        <div class="form-group">
+            <label class="col-md-2 control-label">Password</label>
+            <div class="col-md-10">
+                <input type="password" class="form-control" name="Password" value="@Password" required />
+            </div>
         </div>
-    </div>
-    <div class="form-group">
-        <label class="col-md-2 control-label" for="ConfirmPassword">Confirm password</label>
-        <div class="col-md-10">
-            <input type="password" id="ConfirmPassword" name="ConfirmPassword" class="form-control" required />
+        <div class="form-group">
+            <label class="col-md-2 control-label">Confirm password</label>
+            <div class="col-md-10">
+                <input type="password" class="form-control" name="ConfirmPassword" value="@ConfirmPassword" required />
+            </div>
         </div>
-    </div>
-    <div class="form-group">
-        <div class="col-md-offset-2 col-md-10">
-            <button type="submit" class="btn btn-default">Register</button>
+        <div class="form-group">
+            <div class="col-md-offset-2 col-md-10">
+                <button type="submit" class="btn btn-default">Register</button>
+            </div>
         </div>
-    </div>
-</form>
+    </form>
+</div>
 
 @code {
-    [SupplyParameterFromQuery(Name = "error")] public string? _error { get; set; }
+    [Inject] private UserManager<IdentityUser> UserManager { get; set; } = default!;
+    [Inject] private SignInManager<IdentityUser> SignInManager { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+    [SupplyParameterFromForm] private string? Email { get; set; }
+    [SupplyParameterFromForm] private string? Password { get; set; }
+    [SupplyParameterFromForm] private string? ConfirmPassword { get; set; }
+
+    private string _errorMessage = "";
+
+    private async Task CreateUser()
+    {
+        if (string.IsNullOrEmpty(Email) || string.IsNullOrEmpty(Password))
+        {
+            _errorMessage = "Email and password are required.";
+            return;
+        }
+
+        if (Password != ConfirmPassword)
+        {
+            _errorMessage = "The password and confirmation password do not match.";
+            return;
+        }
+
+        var user = new IdentityUser { UserName = Email, Email = Email };
+        var result = await UserManager.CreateAsync(user, Password);
+
+        if (result.Succeeded)
+        {
+            await SignInManager.SignInAsync(user, isPersistent: false);
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        else
+        {
+            _errorMessage = string.Join(" ", result.Errors.Select(e => e.Description));
+        }
+    }
 }
 
