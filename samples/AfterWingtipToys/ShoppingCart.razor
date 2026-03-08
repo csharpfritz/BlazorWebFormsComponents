@@ -1,5 +1,86 @@
 @page "/ShoppingCart"
-<h3>ShoppingCart — not yet migrated</h3>
-@* TODO: Implement using ASP.NET Core Identity scaffolding *@
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ProductContext> DbFactory
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Shopping Cart</PageTitle>
+<h2>Shopping Cart</h2>
+
+@if (_cartItems == null || !_cartItems.Any())
+{
+    <p>Your shopping cart is empty.</p>
+}
+else
+{
+    <form method="post" action="/api/update-cart">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th>Subtotal</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _cartItems)
+                {
+                    <tr>
+                        <td>@item.Product?.ProductName</td>
+                        <td>@($"{item.Product?.UnitPrice:c}")</td>
+                        <td>
+                            <input type="number" name="qty-@item.ItemId" value="@item.Quantity" min="1" style="width:60px" />
+                        </td>
+                        <td>@($"{(item.Product?.UnitPrice ?? 0) * item.Quantity:c}")</td>
+                        <td>
+                            <a href="/api/remove-item?itemId=@item.ItemId" data-enhance-nav="false">
+                                <button type="button" class="btn btn-danger btn-sm"
+                                        onclick="event.preventDefault(); document.getElementById('remove-@item.ItemId').submit();">
+                                    Remove
+                                </button>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" style="text-align:right"><b>Total:</b></td>
+                    <td><b>@($"{_total:c}")</b></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+        <button type="submit" class="btn btn-primary">Update</button>
+    </form>
+
+    @foreach (var item in _cartItems)
+    {
+        <form id="remove-@item.ItemId" method="post" action="/api/remove-from-cart" style="display:none">
+            <input type="hidden" name="itemId" value="@item.ItemId" />
+        </form>
+    }
+
+    <hr />
+    <a href="/Checkout/CheckoutStart" class="btn btn-success">Proceed to Checkout</a>
+}
+
 @code {
+    private List<CartItem> _cartItems = new();
+    private double _total;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cartId = HttpContextAccessor.HttpContext?.Session.GetString("CartId") ?? "";
+        if (string.IsNullOrEmpty(cartId)) return;
+
+        using var db = DbFactory.CreateDbContext();
+        _cartItems = await db.ShoppingCartItems
+            .Where(c => c.CartId == cartId)
+            .Include(c => c.Product)
+            .ToListAsync();
+
+        _total = _cartItems.Sum(c => (c.Product?.UnitPrice ?? 0) * c.Quantity);
+    }
 }

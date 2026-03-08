@@ -1,4 +1,4 @@
-// TODO: Review — auto-copied from Web Forms source
+// TODO: Review ΓÇö auto-copied from Web Forms source
 
 using System.ComponentModel.DataAnnotations;
 
@@ -10,18 +10,18 @@ namespace WingtipToys.Models
     public int ProductID { get; set; }
 
     [Required, StringLength(100), Display(Name = "Name")]
-    public string ProductName { get; set; }
+    public string ProductName { get; set; } = "";
 
     [Required, StringLength(10000), Display(Name = "Product Description"), DataType(DataType.MultilineText)]
-    public string Description { get; set; }
+    public string Description { get; set; } = "";
 
-    public string ImagePath { get; set; }
+    public string ImagePath { get; set; } = "";
 
     [Display(Name = "Price")]
     public double? UnitPrice { get; set; }
 
     public int? CategoryID { get; set; }
 
-    public virtual Category Category { get; set; }
+    public virtual Category? Category { get; set; }
   }
 }

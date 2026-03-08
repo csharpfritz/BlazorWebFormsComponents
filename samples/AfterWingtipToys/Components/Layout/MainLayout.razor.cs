@@ -1,117 +1,36 @@
-// =============================================================================
-// TODO: This code-behind was copied from Web Forms and needs manual migration.
-//
-// Common transforms needed (use the BWFC Copilot skill for assistance):
-//   - Page_Load / Page_Init → OnInitializedAsync / OnParametersSetAsync
-//   - Page_PreRender → OnAfterRenderAsync
-//   - IsPostBack checks → remove or convert to state logic
-//   - ViewState usage → component [Parameter] or private fields
-//   - Session/Cache access → inject IHttpContextAccessor or use DI
-//   - Response.Redirect → NavigationManager.NavigateTo
-//   - Event handlers (Button_Click, etc.) → convert to Blazor event callbacks
-//   - Data binding (DataBind, DataSource) → component parameters or OnInitialized
-//   - UpdatePanel / ScriptManager references → remove (Blazor handles updates)
-//   - User controls → Blazor component references
-// =============================================================================
-using System;
-using System.Collections.Generic;
-using System.Security.Claims;
-using System.Security.Principal;
-using System.Web;
-using System.Web.Security;
-using System.Web.UI;
-using System.Web.UI.WebControls;
-using System.Linq;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.EntityFrameworkCore;
 using WingtipToys.Models;
-using WingtipToys.Logic;
 
-namespace WingtipToys
+namespace WingtipToys.Components.Layout
 {
-    public partial class SiteMaster : MasterPage
+    public partial class MainLayout : LayoutComponentBase
     {
-        private const string AntiXsrfTokenKey = "__AntiXsrfToken";
-        private const string AntiXsrfUserNameKey = "__AntiXsrfUserName";
-        private string _antiXsrfTokenValue;
+        [Inject] private IDbContextFactory<ProductContext> DbFactory { get; set; } = default!;
+        [Inject] private IHttpContextAccessor HttpContextAccessor { get; set; } = default!;
+        [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
 
-        protected void Page_Init(object sender, EventArgs e)
+        private List<Category> _categories = new();
+        private int _cartCount;
+        private string _userName = "";
+
+        protected override async Task OnInitializedAsync()
         {
-            // The code below helps to protect against XSRF attacks
-            var requestCookie = Request.Cookies[AntiXsrfTokenKey];
-            Guid requestCookieGuidValue;
-            if (requestCookie != null && Guid.TryParse(requestCookie.Value, out requestCookieGuidValue))
-            {
-                // Use the Anti-XSRF token from the cookie
-                _antiXsrfTokenValue = requestCookie.Value;
-                Page.ViewStateUserKey = _antiXsrfTokenValue;
-            }
-            else
-            {
-                // Generate a new Anti-XSRF token and save to the cookie
-                _antiXsrfTokenValue = Guid.NewGuid().ToString("N");
-                Page.ViewStateUserKey = _antiXsrfTokenValue;
+            using var db = DbFactory.CreateDbContext();
+            _categories = await db.Categories.OrderBy(c => c.CategoryID).ToListAsync();
 
-                var responseCookie = new HttpCookie(AntiXsrfTokenKey)
-                {
-                    HttpOnly = true,
-                    Value = _antiXsrfTokenValue
-                };
-                if (FormsAuthentication.RequireSSL && Request.IsSecureConnection)
-                {
-                    responseCookie.Secure = true;
-                }
-                Response.Cookies.Set(responseCookie);
+            var cartId = HttpContextAccessor.HttpContext?.Session.GetString("CartId") ?? "";
+            if (!string.IsNullOrEmpty(cartId))
+            {
+                _cartCount = db.ShoppingCartItems.Where(c => c.CartId == cartId).Sum(c => c.Quantity);
             }
 
-            Page.PreLoad += master_Page_PreLoad;
-        }
-
-        protected void master_Page_PreLoad(object sender, EventArgs e)
-        {
-            if (!IsPostBack)
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
             {
-                // Set Anti-XSRF token
-                ViewState[AntiXsrfTokenKey] = Page.ViewStateUserKey;
-                ViewState[AntiXsrfUserNameKey] = Context.User.Identity.Name ?? String.Empty;
+                _userName = authState.User.Identity.Name ?? "";
             }
-            else
-            {
-                // Validate the Anti-XSRF token
-                if ((string)ViewState[AntiXsrfTokenKey] != _antiXsrfTokenValue
-                    || (string)ViewState[AntiXsrfUserNameKey] != (Context.User.Identity.Name ?? String.Empty))
-                {
-                    throw new InvalidOperationException("Validation of Anti-XSRF token failed.");
-                }
-            }
-        }
-
-        protected void Page_Load(object sender, EventArgs e)
-        {
-          if (HttpContext.Current.User.IsInRole("canEdit"))
-          {
-            adminLink.Visible = true;
-          }
-        }
-
-        protected void Page_PreRender(object sender, EventArgs e)
-        {
-          using (ShoppingCartActions usersShoppingCart = new ShoppingCartActions())
-          {
-            string cartStr = string.Format("Cart ({0})", usersShoppingCart.GetCount());
-            cartCount.InnerText = cartStr;
-          }
-        }
-
-        public IQueryable<Category> GetCategories()
-        {
-          var _db = new WingtipToys.Models.ProductContext();
-          IQueryable<Category> query = _db.Categories;
-          return query;
-        }
-
-        protected void Unnamed_LoggingOut(object sender, LoginCancelEventArgs e)
-        {
-            Context.GetOwinContext().Authentication.SignOut();
         }
     }
-
 }

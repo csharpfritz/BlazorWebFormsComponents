@@ -1,62 +1,73 @@
-@page "/Login"
+@page "/Account/Login"
+@using Microsoft.AspNetCore.Identity
+
 <PageTitle>Log in</PageTitle>
-<h2>@(Title).</h2>
+<h2>Log in.</h2>
 
-    <div class="row">
-        <div class="col-md-8">
-            <section id="loginForm">
-                <div class="form-horizontal">
-                    <h4>Use a local account to log in.</h4>
-                    <hr />
-                    <PlaceHolder ID="ErrorMessage" Visible="false">
-                        <p class="text-danger">
-                            <Literal ID="FailureText" />
-                        </p>
-                    </PlaceHolder>
+<div class="row">
+    <div class="col-md-8">
+        <section id="loginForm">
+            <div class="form-horizontal">
+                <h4>Use a local account to log in.</h4>
+                <hr />
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <p class="text-danger">@_errorMessage</p>
+                }
+                <form method="post" @onsubmit="LogIn" @formname="login">
+                    <AntiforgeryToken />
                     <div class="form-group">
-                        <Label AssociatedControlID="Email" CssClass="col-md-2 control-label">Email</Label>
+                        <label class="col-md-2 control-label">Email</label>
                         <div class="col-md-10">
-                            <TextBox ID="Email" CssClass="form-control" TextMode="Email" />
-                            <RequiredFieldValidator ControlToValidate="Email"
-                                CssClass="text-danger" ErrorMessage="The email field is required." />
+                            <input type="email" class="form-control" name="Email" value="@Email" required />
                         </div>
                     </div>
                     <div class="form-group">
-                        <Label AssociatedControlID="Password" CssClass="col-md-2 control-label">Password</Label>
+                        <label class="col-md-2 control-label">Password</label>
                         <div class="col-md-10">
-                            <TextBox ID="Password" TextMode="Password" CssClass="form-control" />
-                            <RequiredFieldValidator ControlToValidate="Password" CssClass="text-danger" ErrorMessage="The password field is required." />
+                            <input type="password" class="form-control" name="Password" value="@Password" required />
                         </div>
                     </div>
                     <div class="form-group">
                         <div class="col-md-offset-2 col-md-10">
-                            <div class="checkbox">
-                                <CheckBox ID="RememberMe" />
-                                <Label AssociatedControlID="RememberMe">Remember me?</Label>
-                            </div>
+                            <button type="submit" class="btn btn-default">Log in</button>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <div class="col-md-offset-2 col-md-10">
-                            <Button OnClick="LogIn" Text="Log in" CssClass="btn btn-default" />
-                        </div>
-                    </div>
-                </div>
+                </form>
                 <p>
-                    <HyperLink ID="RegisterHyperLink">Register as a new user</HyperLink>
+                    <a href="/Account/Register">Register as a new user</a>
                 </p>
-                <p>
-                    @* Enable this once you have account confirmation enabled for password reset functionality
-                    <HyperLink ID="ForgotPasswordHyperLink">Forgot your password?</HyperLink>
-                    *@
-                </p>
-            </section>
-        </div>
-
-        <div class="col-md-4">
-            <section id="socialLoginForm">
-                <OpenAuthProviders ID="OpenAuthLogin" />
-            </section>
-        </div>
+            </div>
+        </section>
     </div>
+</div>
+
+@code {
+    [Inject] private SignInManager<IdentityUser> SignInManager { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+    [SupplyParameterFromForm] private string? Email { get; set; }
+    [SupplyParameterFromForm] private string? Password { get; set; }
+
+    private string _errorMessage = "";
+
+    private async Task LogIn()
+    {
+        if (string.IsNullOrEmpty(Email) || string.IsNullOrEmpty(Password))
+        {
+            _errorMessage = "Email and password are required.";
+            return;
+        }
+
+        var result = await SignInManager.PasswordSignInAsync(Email, Password, false, false);
+        if (result.Succeeded)
+        {
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        else
+        {
+            _errorMessage = "Invalid login attempt";
+        }
+    }
+}
 
