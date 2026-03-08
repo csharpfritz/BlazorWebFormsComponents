@@ -8,15 +8,18 @@ For the full control translation rules (attribute mappings, code examples, befor
 
 ## Coverage Summary
 
+<!-- Updated 2026-03-08: Cross-referenced against dev-docs/component-audit-2026-03-08-refresh.md -->
+
 | Metric | Value |
 |---|---|
-| Primary Web Forms controls | **58** |
+| Primary Web Forms controls | **58** (1 additional control — Xml — is deferred) |
 | Supporting components (field columns, styles, infrastructure, helpers) | **95** |
 | **Total Razor components shipped** | **153** |
 | Web Forms control categories covered | **9** (Editor, Data, Validation, Navigation, Login, AJAX, Infrastructure, Field Columns, Style Sub-Components) |
 | Enums | **54** |
 | Utility/infrastructure C# classes | **197** |
 | WingtipToys PoC coverage | **96.6%** (28 of 29 control types used) |
+| Migration pipeline status | **0 Layer 1 manual fixes** for 5 consecutive runs (12–16); 3 stable Layer 2 semantic gaps |
 | Controls with no BWFC equivalent | See [Not Supported](#controls-not-supported-by-bwfc) |
 
 ---
@@ -64,6 +67,7 @@ For the full control translation rules (attribute mappings, code examples, befor
 | **Table** | ✅ | Easy | Remove `asp:`, `runat` | Use with `<TableRow>` and `<TableCell>` children |
 | **TextBox** | ✅ | Easy | Remove `asp:`, `runat`; add `@bind-Text` | `TextMode` preserved — note `Multiline` (not `MultiLine`) |
 | **View** | ✅ | Trivial | Remove `asp:`, `runat` | Used inside `MultiView` |
+| **Xml** | ⏸️ Deferred | — | No practical Blazor equivalent | Load XML in a service; bind to component properties. See `docs/DeferredControls.md` |
 
 ---
 

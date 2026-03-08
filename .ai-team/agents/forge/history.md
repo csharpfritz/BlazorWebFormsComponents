@@ -110,3 +110,23 @@ Key changes since baseline audit:
 
 
  Team update (2026-03-09): Layer 2 script created (bwfc-migrate-layer2.ps1)  separate from Layer 1, 3 semantic transforms, idempotent via marker. Route generation fixed (). Layer 2 Pattern A not yet production-quality (known-good overlay still needed)  decided by Cyclops
+
+### Migration Toolkit Skill Validation (2026-03-09)
+
+**Task:** Validated all skills in `migration-toolkit/skills/` and `.ai-team/skills/` against Runs 14–16 findings.
+
+**Changes made:**
+
+1. **migration-standards (distributable + team):** Updated render mode from "Global Server Interactive" to "SSR with per-component InteractiveServer opt-in" — the InteractiveServer guidance was stale since Run 12. Updated run count from 5 to 9. Added 2-script pipeline section documenting `bwfc-migrate-layer2.ps1` and its three patterns (A: code-behinds, B: auth forms, C: Program.cs). Added `-TestMode` switch docs, RelPath route generation, and `[Parameter]` TODO fix. Bumped confidence from "medium" to "high" based on 5 consecutive 100% passes.
+
+2. **bwfc-migration:** Updated component count to show 9 categories and 153 total. Added SSR recommendation note. Updated render mode installation section. Added Layer 2 script reference to Migration Workflow. Added RelPath route generation and `[Parameter]` separate-line TODO note. Added deferred Xml control note.
+
+3. **bwfc-data-migration:** Added SSR context note before the InteractiveServer HttpContext warning — under SSR most session issues are avoided.
+
+4. **bwfc-identity-migration:** Added SSR context note before the cookie auth warning. Added `UseAntiforgery()` to middleware order.
+
+5. **CONTROL-COVERAGE.md:** Added Xml as deferred control in Editor Controls table. Updated Coverage Summary with migration pipeline status and run data. Cross-referenced against fresh audit (`dev-docs/component-audit-2026-03-08-refresh.md`) — no discrepancies.
+
+6. **CHECKLIST.md:** Added 2-script pipeline intro. Updated Layer 1 section with RelPath, `[Parameter]`, enhanced nav items. Updated Layer 2 section to reference `bwfc-migrate-layer2.ps1`.
+
+**Key finding:** The single biggest stale issue was render mode guidance — all skills still said "Global Server Interactive" while the team switched to SSR in Run 12 (6 runs ago). This would have caused new migration users to hit the HttpContext/cookie issues that SSR was specifically chosen to avoid.

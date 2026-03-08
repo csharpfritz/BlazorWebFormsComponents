@@ -28,6 +28,8 @@ Use this skill when you need to:
 
 ## ⚠️ Session State Under Interactive Server Mode
 
+> **Note:** If you follow the recommended SSR (Static Server Rendering) architecture (see `/migration-standards`), most session/HttpContext issues are avoided because every page load is a real HTTP request. The guidance below applies when using global `InteractiveServer` mode.
+
 > **CRITICAL:** When using `<Routes @rendermode="InteractiveServer" />` (global interactive server mode), `HttpContext.Session` is **NULL** during WebSocket rendering. Any code that accesses `HttpContext.Session` inside a Blazor component event handler or lifecycle method will throw a `NullReferenceException` or silently fail.
 
 **Why this happens:** After the initial HTTP request establishes the SignalR circuit, Blazor communicates over WebSocket. There is no HTTP request/response — and therefore no session middleware processing — during component interactions.

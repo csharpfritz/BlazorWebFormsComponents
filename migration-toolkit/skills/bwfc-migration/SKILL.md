@@ -17,10 +17,13 @@ BlazorWebFormsComponents is an open-source library that provides **drop-in Blazo
 
 - **NuGet Package:** <https://www.nuget.org/packages/Fritz.BlazorWebFormsComponents>
 - **GitHub Repository:** <https://github.com/FritzAndFriends/BlazorWebFormsComponents>
-- **58 components** across 6 categories
+- **58 components** across 9 categories (Editor, Data, Validation, Navigation, Login, AJAX, Infrastructure, Field Columns, Style Sub-Components)
+- **153 total Razor components** shipped (including style sub-components and infrastructure)
 - **Same HTML output** — existing CSS and JavaScript continue to work
 
 > **Core Principle:** Strip `asp:` and `runat="server"`, keep everything else, and it just works.
+
+> **Recommended architecture:** SSR (Static Server Rendering) with per-component `InteractiveServer` opt-in. See the `/migration-standards` skill for the full architecture rationale (established through 9 benchmark runs, 5 consecutive 100% results).
 
 ---
 
@@ -51,7 +54,9 @@ The `@inherits` line makes every page inherit from `WebFormsPageBase`, which pro
 
 ### Step 2b: Configure Render Mode in `App.razor`
 
-The `dotnet new blazor --interactivity Server` template generates `App.razor` with render mode already set. Verify it contains:
+> **Recommended:** Use SSR (Static Server Rendering) as the default — do NOT add `@rendermode` to `<Routes>` or `<HeadOutlet>`. This avoids HttpContext/cookie/session issues. Add `@rendermode="InteractiveServer"` only to specific components that need real-time updates.
+
+For global interactive mode (not recommended for migrations with auth/session), the template generates:
 
 ```razor
 <HeadOutlet @rendermode="InteractiveServer" />
@@ -59,7 +64,7 @@ The `dotnet new blazor --interactivity Server` template generates `App.razor` wi
 <Routes @rendermode="InteractiveServer" />
 ```
 
-This enables global server interactivity for all pages. See [ASP.NET Core Blazor render modes](https://learn.microsoft.com/aspnet/core/blazor/components/render-modes) for per-page alternatives.
+See the `/migration-standards` skill for the SSR vs. InteractiveServer rationale.
 
 ### Step 3: Register BWFC Services and Add Page Component to Layout
 
@@ -98,6 +103,8 @@ In `App.razor` or the host page `<head>`:
 
 ## Migration Workflow
 
+<!-- Updated 2026-03-08: Reflects 2-script pipeline from Runs 14-16 -->
+
 This skill covers **Layers 1 and 2** of the three-layer pipeline. Use the related skills for Layer 3.
 
 | Layer | What It Handles | Skill |
@@ -105,6 +112,12 @@ This skill covers **Layers 1 and 2** of the three-layer pipeline. Use the relate
 | **Layer 1: Mechanical** | Tag prefixes, `runat`, expressions, URLs, file renaming | ✅ This skill |
 | **Layer 2: Structural** | Data binding, code-behind lifecycle, templates, layouts | ✅ This skill |
 | **Layer 3: Architecture** | State management, data access, auth, middleware | `/bwfc-data-migration`, `/bwfc-identity-migration` |
+
+**Automated tooling:** The migration toolkit provides two scripts:
+- **`bwfc-migrate.ps1`** — Layer 1 automation (100% automated, 0 manual fixes for 5 consecutive runs)
+- **`bwfc-migrate-layer2.ps1`** — Layer 2 partial automation (Program.cs generation, code-behind scaffolding)
+
+Use the `-TestMode` switch with `bwfc-migrate.ps1` to generate `ProjectReference` to local BWFC source instead of NuGet `PackageReference` for development iteration.
 
 ### Layer 1 — Mechanical Transforms
 
@@ -465,6 +478,8 @@ public void GetProduct([RouteData] int productId) { ... }
 [Parameter] public int ProductId { get; set; }
 ```
 
+> **Note:** The migration script converts RouteData parameters to `[Parameter]` properties and generates correct `@page` routes using **RelPath** for subdirectory pages (e.g., `Account/Login.aspx` → `@page "/Account/Login"`). The TODO comment is placed on a **separate line** to avoid breaking C# syntax.
+
 ---
 
 ## Data Binding Migration
@@ -638,7 +653,9 @@ Include during migration to prevent errors, remove when stable.
 
 ## Component Coverage Summary
 
-**58 components** across 6 categories:
+<!-- Updated 2026-03-08: Reflects audit refresh — 58 primary + Xml deferred -->
+
+**58 components** across 6 primary categories + 3 supporting categories:
 
 | Category | Count | Components |
 |----------|-------|-----------|
@@ -648,6 +665,10 @@ Include during migration to prevent errors, remove when stable.
 | **Navigation** | 3 | Menu, SiteMapPath, TreeView |
 | **Login** | 7 | ChangePassword, CreateUserWizard, Login, LoginName, LoginStatus, LoginView, PasswordRecovery |
 | **AJAX** | 5 | ScriptManager, ScriptManagerProxy, Timer, UpdatePanel, UpdateProgress |
+
+**Supporting:** 7 Infrastructure, 4 Field Columns, 66 Style Sub-Components = **153 total Razor components**.
+
+> **Deferred:** Xml control is not implemented (no practical Blazor equivalent). See [CONTROL-COVERAGE.md](../../CONTROL-COVERAGE.md) for the full reference.
 
 ### Page Base Class
 

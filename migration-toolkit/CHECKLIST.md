@@ -1,8 +1,16 @@
 # Per-Page Migration Checklist
 
+<!-- Updated 2026-03-08: Reflects 2-script pipeline, -TestMode switch, SSR architecture -->
+
 **Copy this template for each page you migrate.** Use it as a GitHub issue body, a markdown checklist in your tracking doc, or paste it into your project management tool.
 
 The checklist is organized by the [three-layer pipeline](METHODOLOGY.md). Work top to bottom — each section assumes the previous one is complete.
+
+**Tooling:** The migration toolkit provides two scripts to automate Layers 1 and 2:
+- **`bwfc-migrate.ps1`** — Fully automates Layer 1 (0 manual fixes for 5 consecutive runs). Use `-TestMode` to generate `ProjectReference` for local BWFC development.
+- **`bwfc-migrate-layer2.ps1`** — Partially automates Layer 2 (Program.cs generation, code-behind scaffolding).
+
+See the [migration-standards skill](skills/migration-standards/SKILL.md) for the full architecture reference.
 
 ---
 
@@ -18,18 +26,24 @@ The checklist is organized by the [three-layer pipeline](METHODOLOGY.md). Work t
 
 ### Layer 1 — Automated (bwfc-migrate.ps1)
 
+> Run `pwsh -File bwfc-migrate.ps1 -Path <source> -Output <target>` (add `-TestMode` for local BWFC dev). All items below are automated by the script.
+
 - [ ] File renamed (.aspx → .razor, .ascx → .razor, .master → .razor)
 - [ ] `<%@ Page %>` / `<%@ Control %>` / `<%@ Master %>` directive removed
-- [ ] `@page "/route"` directive added
+- [ ] `@page "/route"` directive added (uses RelPath for subdirectory pages)
 - [ ] `asp:` prefixes removed from all controls
 - [ ] `runat="server"` removed from all elements
 - [ ] Expressions converted (`<%: %>` → `@()`, `<%# %>` → `@context.`)
 - [ ] URL references converted (`~/` → `/`)
 - [ ] `<asp:Content>` wrappers removed (page body unwrapped)
 - [ ] `ItemType` → `TItem` converted
+- [ ] RouteData → `[Parameter]` converted (TODO on separate line)
+- [ ] Enhanced navigation bypass added (`data-enhance-nav="false"` on API links)
 - [ ] Code-behind file copied (.aspx.cs → .razor.cs) with TODO annotations
 
-### Layer 2 — Copilot-Assisted (Structural Transforms)
+### Layer 2 — Copilot-Assisted / bwfc-migrate-layer2.ps1 (Structural Transforms)
+
+> Run `pwsh -File bwfc-migrate-layer2.ps1 -Path <blazor-output>` to automate Program.cs generation (Pattern C) and code-behind scaffolding (Pattern A). Auth form simplification (Pattern B) and remaining items below need manual/Copilot-assisted work.
 
 - [ ] `SelectMethod` → `Items` (or `DataItem`) binding wired
 - [ ] Data loading moved to `OnInitializedAsync`

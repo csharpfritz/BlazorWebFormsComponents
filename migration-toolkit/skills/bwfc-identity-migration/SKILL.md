@@ -27,6 +27,8 @@ Web Forms authentication typically uses one of three systems. The migration path
 
 ## ⚠️ Cookie Auth Under Interactive Server Mode
 
+> **Note:** If you follow the recommended SSR (Static Server Rendering) architecture (see `/migration-standards`), cookie auth works naturally because every page load is a real HTTP request with full `HttpContext`. The guidance below applies when using global `InteractiveServer` mode — but even under SSR, auth **form submissions** still need the minimal API endpoint pattern described here because `<form method="post">` posts require server-side handling.
+
 > **CRITICAL:** When using `<Routes @rendermode="InteractiveServer" />` (global interactive server mode), `HttpContext` is **NULL** during WebSocket circuits. This means cookie-based authentication operations — login, register, logout — **cannot** be performed via Blazor component event handlers (e.g., `@onclick`). They will silently fail: no exception is thrown, but no cookie is set.
 
 **Why this happens:** After the initial HTTP request, Blazor Server communicates over a WebSocket (SignalR circuit). There is no HTTP response to attach a `Set-Cookie` header to. `SignInAsync()` called inside a component event handler has no `HttpContext.Response` to write the cookie.
@@ -95,9 +97,10 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 // Required for Blazor Server
 builder.Services.AddCascadingAuthenticationState();
 
-// Middleware pipeline (ORDER MATTERS)
+// Middleware pipeline (ORDER MATTERS — established Run 12)
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAntiforgery();
 ```
 
 ## Step 3: Create ApplicationUser and DbContext
