@@ -1427,6 +1427,105 @@ function Convert-TemplatePlaceholders {
 }
 
 #endregion
+#region --- Nav Link ID Generation ---
+
+function Add-NavLinkIds {
+    <#
+    .SYNOPSIS
+        Adds id attributes to navigation links that don't already have them.
+    .DESCRIPTION
+        Navigation links in Web Forms master pages often have id attributes for testing and
+        JavaScript targeting. This function ensures all <a> links inside common navigation
+        containers (<nav>, <ul>, <div id="nav...">) have an id attribute.
+
+        The id is derived from the link text:
+        - Lowercased
+        - Spaces and special characters removed
+        - Only applied if the link doesn't already have an id attribute
+
+        Example:
+        Before: <a href="/Home">Home</a>
+        After:  <a href="/Home" id="home">Home</a>
+
+        Identified as needed in ContosoUniversity Run 02 — acceptance tests expect nav link IDs.
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    $replacementsMade = 0
+
+    # Regex to match <a ...>LinkText</a> tags
+    # Group 1: opening tag (up to but not including >)
+    # Group 2: closing > or />
+    # Group 3: link text (content between tags)
+    $anchorRegex = [regex]'(?si)(<a\s[^>]*)(>)([^<]*)</a>'
+    $anchorMatches = $anchorRegex.Matches($Content)
+
+    # Process in reverse order to preserve string positions during replacement
+    for ($i = $anchorMatches.Count - 1; $i -ge 0; $i--) {
+        $m = $anchorMatches[$i]
+        $openingTag = $m.Groups[1].Value
+        $closingBracket = $m.Groups[2].Value
+        $linkText = $m.Groups[3].Value.Trim()
+
+        # Skip if already has an id attribute
+        if ($openingTag -match '\bid\s*=\s*"') { continue }
+
+        # Skip if no meaningful link text
+        if ([string]::IsNullOrWhiteSpace($linkText)) { continue }
+
+        # Skip links with Razor expressions as text (e.g., @context.Name)
+        if ($linkText -match '@') { continue }
+
+        # Determine if this link is in a navigation context
+        # Check the surrounding content (up to 500 chars before the match)
+        $contextStart = [Math]::Max(0, $m.Index - 500)
+        $contextLength = $m.Index - $contextStart
+        $precedingContent = $Content.Substring($contextStart, $contextLength)
+
+        $isNavContext = $false
+        # Check for common navigation container patterns
+        if ($precedingContent -match '(?i)<nav\b' -and $precedingContent -notmatch '</nav>') {
+            $isNavContext = $true
+        }
+        elseif ($precedingContent -match '(?i)<ul[^>]*class\s*=\s*"[^"]*nav[^"]*"' -and $precedingContent -notmatch '</ul>') {
+            $isNavContext = $true
+        }
+        elseif ($precedingContent -match '(?i)<div[^>]*id\s*=\s*"[^"]*nav[^"]*"' -and $precedingContent -notmatch '</div>') {
+            $isNavContext = $true
+        }
+        elseif ($precedingContent -match '(?i)<div[^>]*class\s*=\s*"[^"]*nav[^"]*"' -and $precedingContent -notmatch '</div>') {
+            $isNavContext = $true
+        }
+        # Also match links inside <li> elements that are likely in a nav list
+        elseif ($precedingContent -match '(?i)<li>' -and $precedingContent -match '(?i)<ul') {
+            $isNavContext = $true
+        }
+
+        if (-not $isNavContext) { continue }
+
+        # Generate id from link text: lowercase, remove non-alphanumeric, collapse spaces
+        $generatedId = $linkText.ToLower() -replace '[^a-z0-9\s]', '' -replace '\s+', ''
+
+        # Skip if we couldn't generate a valid id
+        if ([string]::IsNullOrWhiteSpace($generatedId)) { continue }
+
+        # Build the new tag with id attribute
+        $newTag = "$openingTag id=`"$generatedId`"$closingBracket$linkText</a>"
+        $Content = $Content.Substring(0, $m.Index) + $newTag + $Content.Substring($m.Index + $m.Length)
+        $replacementsMade++
+    }
+
+    if ($replacementsMade -gt 0) {
+        Write-TransformLog -File $RelPath -Transform 'NavLinkIds' -Detail "Added id attribute to $replacementsMade navigation link(s)"
+    }
+
+    return $Content
+}
+
+#endregion
 
 #region --- SSR Fix 1: Enhanced Navigation Disable ---
 
@@ -1936,6 +2035,9 @@ function Convert-WebFormsFile {
 
     # SSR Fix 1: Add data-enhance-nav="false" to links targeting API endpoints
     $content = Add-EnhancedNavDisable -Content $content -RelPath $relativePath
+
+    # Nav Link IDs: Add id attributes to navigation links for test compatibility
+    $content = Add-NavLinkIds -Content $content -RelPath $relativePath
 
     # SSR Fix 3b: Convert logout <form>+<button> patterns to <a> links
     $content = Convert-LogoutFormToLink -Content $content -RelPath $relativePath
