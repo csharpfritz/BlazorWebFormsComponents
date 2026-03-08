@@ -84,3 +84,7 @@ WebFormsPageBase docs and Page System rewrite shipped (2026-03-05). Skills cross
 - **New elements documented:** `-TestMode` switch, 8-component `id` rendering fix, component audit (153 components, 96% coverage), automation ceiling concept (Layer 1 mechanical vs Layer 2 semantic).
 - **Format followed:** Matched Run 13 structure — metric table, executive blockquote, what's new, execution details, progression table, lessons learned. Added "Key Insight: The Automation Ceiling" section to capture the Layer 1/Layer 2 boundary discovery.
 - **mkdocs.yml updated:** Added Run 14 nav entry between Run 13 and Component Coverage.
+
+### Run 15 Migration Report (2026-03-08)
+
+- Run 15 report written to dev-docs/migration-tests/ (not docs/ — internal dev docs)
