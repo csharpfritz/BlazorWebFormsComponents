@@ -6830,3 +6830,43 @@ Long-term, we could add `[StreamRendering]` support to data-bound components for
 **What:** Fixed 2 bugs in `bwfc-migrate-layer2.ps1`: (1) `$listField` uninitialized in single-item code paths — caused `Set-StrictMode` terminating errors; fixed by initializing `$listField = '_items'` before branching. (2) `-TestMode` output redirect to `Layer2Output/` was inconsistent with Layer 1 — removed entirely (use `-WhatIf` instead). Capability assessment: Pattern A applies to 26 code-behinds but generates broken parameter declarations (100% had CS1585 errors); Pattern B detected 0 auth pages; Pattern C produced usable Program.cs. All generated code-behinds still required known-good overlay from `cef51da3`. 25/25 acceptance tests passed after overlay.
 **Why:** Layer 2 automation handles scaffolding structure but is not yet production-quality for compilable output. Pattern A parameter parsing and entity type detection need significant improvement. The script is useful as a starting template. Future work: improve Pattern A to distinguish data-bound pages from simple info pages, fix `public or private { get; set; }` parameter generation.
 
+
+# Decision: Layer 2 Documentation Must Use Three-State Model
+
+**By:** Beast
+**Date:** 2026-03-08
+**Context:** Run 16 migration report and toolkit documentation update
+
+## Decision
+
+When documenting Layer 2 automation, use a **three-state model** instead of binary (automated/manual):
+
+| State | Meaning | Example |
+|-------|---------|---------|
+| ✅ Fully automated | Script handles end-to-end, no manual work | Pattern C (Program.cs) |
+| ⚠️ Partially automated | Script creates correct structure, content needs overlay | Pattern A (code-behinds) |
+| ❌ Not yet automated | Script doesn't detect candidates, full manual overlay needed | Pattern B (auth forms) |
+
+## Why
+
+The Layer 2 script (`bwfc-migrate-layer2.ps1`) introduced in Run 16 creates a new documentation challenge. The pipeline is no longer "script does mechanical work, humans do semantic work." Now there's a middle ground where the script does *some* semantic work correctly (scaffolding) but not all of it (entity types, parameters). Documenting this as simply "automated" would set wrong expectations; documenting it as "manual" would undersell the progress.
+
+## Impact
+
+- All migration-toolkit docs (README, METHODOLOGY, QUICKSTART) updated to reflect this model
+- Future run reports should track each pattern's state independently
+- As patterns move from ❌ → ⚠️ → ✅, the documentation should be updated accordingly
+
+
+### 2026-03-09: Migration skills updated — SSR is canonical render mode
+
+**By:** Forge
+**What:** All migration-toolkit skills and team migration-standards updated to reflect SSR (Static Server Rendering) as the canonical render mode, replacing Global Server Interactive. Skills now document the 2-script pipeline (`bwfc-migrate.ps1` + `bwfc-migrate-layer2.ps1`), `-TestMode` switch, RelPath route generation, `[Parameter]` TODO separate-line format, and Layer 2 patterns (A/B/C). Confidence upgraded from "medium" to "high" based on 9 runs and 5 consecutive 100% results.
+**Why:** The render mode guidance was stale since Run 12 (6 runs ago). New migration users following the old "Global Server Interactive" advice would hit HttpContext/cookie/session failures that SSR was specifically chosen to eliminate. The 2-script pipeline from Run 16 and script fixes from Runs 14–15 were also not documented in any skill.
+
+### 2026-03-09: CONTROL-COVERAGE.md should list Xml as deferred
+
+**By:** Forge
+**What:** Added Xml control to CONTROL-COVERAGE.md Editor Controls table with "⏸️ Deferred" status. Previously Xml was only documented in `docs/DeferredControls.md` but not mentioned in the primary coverage reference.
+**Why:** Completeness — developers checking CONTROL-COVERAGE.md to assess migration feasibility should see all known controls, including deferred ones, in one place.
+
