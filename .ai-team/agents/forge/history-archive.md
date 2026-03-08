@@ -97,3 +97,32 @@ Team updates (2026-03-02): Unified release (PR #408), project reframed as migrat
 **Run 5 BWFC analysis:** 95+ EventCallbacks across 30+ components matching Web Forms names. 3 of 4 top manual rewrites unnecessary -- BWFC already had ListView, FormView, GridView. 40% estimated reduction if scripts preserve BWFC data controls. Gaps: Repeater has zero EventCallbacks, GridView missing OnRowDataBound/OnRowCreated. SelectMethod TODOs need `Items=@data` guidance. Deliverables: analysis-and-recommendations.md, migration-standards SKILL.md, forge-run5-standards decision.
 
 <!-- Summarized 2026-03-04 by Scribe — covers Run 6 analysis and benchmark execution -->
+
+## Archived 2026-03-08 (entries from 2026-02-28 through 2026-03-06)
+
+### Archived Session Pointers
+
+- M17-M18 Audit & Themes Roadmap Summary (2026-02-28 through 2026-03-01)
+- Build/Release & M22 Migration Summary (2026-03-02)
+- CSS Fidelity & WingtipToys Schedule Summary (2026-03-02 through 2026-03-03)
+- Migration Toolkit Design & Restructure Summary (2026-03-03)
+- Run 4-5 Review & BWFC Capabilities Analysis (2026-03-04 through 2026-03-05)
+- Run 5->6 Analysis & Run 6 Benchmark (2026-03-04 through 2026-03-05)
+- Page Base Class Architecture Analysis (2026-03-05)
+- Page Consolidation Analysis (2026-03-05)
+- Full Library Audit (2026-03-06)
+- Run 8 Post-Mortem & Run 9 Preparation (2026-03-06)
+- Run 9 CSS/Image Failure RCA (2026-03-06)
+- Fix 1a + Fix 1b Implementation  Run 9 RCA Remediation (2026-03-06)
+
+### Run 5->6 + Page Architecture Summary (2026-03-04 through 2026-03-05)
+
+Run 5->6: 8 enhancements identified, top 4 implemented (TFM net10.0, SelectMethod BWFC TODO, wwwroot copy, compilable stubs). Run 6: 32 files -> clean build in ~4.5 min (55% reduction). Bugs found: @rendermode in _Imports invalid, Test-UnconvertiblePage misses .aspx.cs. EF Core 10.0.3 mandated. @rendermode belongs in App.razor only.
+
+WebFormsPageBase: Option C chosen  `WebFormsPageBase : ComponentBase` with `Page => this` self-reference, Title/MetaDescription/MetaKeywords delegating to IPageService, `IsPostBack => false`. Eliminates 27 @inject lines, 12+ manual fixes for WingtipToys. Deliberately omits Request/Response/Session.
+
+Page Consolidation: Option B  merged Page.razor head rendering into WebFormsPage. `<PageTitle>`/`<HeadContent>` work anywhere in render tree. Min setup: `@inherits WebFormsPageBase` + `<WebFormsPage>@Body</WebFormsPage>`. WebFormsPageBase must NOT inherit NamingContainer (breaks tests, adds overhead). Page.razor remains standalone.
+
+### Summary (2026-03-06)
+
+Library audit: 153 Razor components + 197 C# classes (CONTROL-COVERAGE.md was listing 58  corrected). ContentPlaceHolder reclassified from 'Not Supported' to Infrastructure. Run 8 post-mortem: 22 fixes identified (3 P0, 11 P1, 8 P2); HTTP Session + Interactive Server is #1 blocker (HttpContext null during WebSocket). Run 9 CSS/image RCA: 3 root causes  (1) script doesn't extract webopt:bundlereference, (2) Layer 2 rewrote image paths without moving files, (3) tests don't verify visual output. Fix 1a: bundlereference extraction + CDN link preservation in ConvertFrom-MasterPage. Fix 1b: new Invoke-CssAutoDetection function scans wwwroot/Content/ for .css files and injects link tags into App.razor.

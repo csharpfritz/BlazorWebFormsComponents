@@ -5,33 +5,13 @@
 - **Stack:** C#, Blazor, .NET, ASP.NET Web Forms, bUnit, xUnit, MkDocs, Playwright
 - **Created:** 2026-02-10
 
+## Core Context
+
+<!-- Summarized 2026-03-08 by Scribe — originals in history-archive.md -->
+
+Documentation & migration reporting agent. M1–M16 docs shipped (all control categories). Doc structure: title → intro → Features → NOT Supported → syntax → HTML Output → Migration Notes → Examples. mkdocs.yml nav alphabetical within categories. Migration reports: standalone `{project-name}-runNN.md` format, zero-padded. Executive report pattern: blockquote bottom line → timeline → screenshots → before/after code. Skills files in `.ai-team/skills/` and `migration-toolkit/skills/` must be updated together. LoginView is native BWFC — never replace with AuthorizeView. Functional tests passing ≠ migration success — visual regression is ship-blocking. Run 9 RCA rules: Static Asset Path Preservation + CSS Reference Verification.
+
 ## Learnings
-
-<!-- ⚠ Summarized 2026-02-27 by Scribe — covers M1–M16 -->
-
-<!-- ⚠ Summarized 2026-03-06 by Scribe — older entries archived -->
-
-### Archived Sessions
-
-- Core Context (2026-02-10 through 2026-02-27)
-- Doc Work Summary (2026-02-27 through 2026-03-03)
-- Key Team Updates (2026-02-27 through 2026-03-03)
-- Migration Report Conventions (2026-03-04)
-- Run 5 Benchmark Report (2026-03-05)
-- Run 6 Benchmark Report (2026-03-04)
-- Render Mode Placement Correction (2026-03-05)
-
-<!-- ⚠ Summarized 2026-03-07 by Scribe — entries from 2026-03-05 through 2026-03-07 (pre-Run 11) archived -->
-
-- WebFormsPageBase & Page System Docs (2026-03-05)
-- Skills Cross-Reference Review — 7 files, 16+ fixes (2026-03-06)
-- Run 8 Report Enhancement — executive pattern established (2026-03-06)
-- Run 9 Skill Fixes — 6 RF items across 4 skill files (2026-03-07)
-- Run 9 RCA Documentation — path preservation + CSS verification rules (2026-03-07)
-
-### Summary (2026-03-05 through 2026-03-07 pre-Run 11)
-
-WebFormsPageBase docs and Page System rewrite shipped (2026-03-05). Skills cross-reference review found `.ai-team/skills/` drifting behind `migration-toolkit/skills/` — both must be updated together. LoginView is a native BWFC component, never replace with AuthorizeView. Executive report pattern established in Run 8: blockquote bottom line → timeline → screenshots → before/after code. Run 9 skill fixes: cookie auth under Interactive Server, minimal API endpoint templates, enhanced navigation guidance, DisableAntiforgery, ListView GroupItemCount. Run 9 RCA: added Static Asset Path Preservation and CSS Reference Verification rules to migration-standards. Key learning: functional tests passing ≠ migration success — visual regression is ship-blocking.
 
 ### Run 10 Failure Report (2026-03-07)
 
@@ -105,3 +85,14 @@ WebFormsPageBase docs and Page System rewrite shipped (2026-03-05). Skills cross
 
 
  Team update (2026-03-09): Run 16 complete  25/25 tests, Layer 2 script bugs fixed ( init, TestMode removed), known-good overlay still required. Audit consolidated with updated priorities  decided by Cyclops, Forge
+
+### Migration-Tests Reorganization for Multi-Project Testing (2026-03-09)
+
+- **Scope:** Rewrote `dev-docs/migration-tests/README.md` to support multiple test projects and include all 16 runs.
+- **What changed:** Added Test Projects table (WingtipToys + placeholder for next project), full 16-run history table with L1 time/L1 manual fixes/L2 fixes/score/render mode, Pipeline Evolution section with convergence summary and key milestones, updated Key Conclusions (5 consecutive 100%, Layer 2 automation frontier), "Adding a New Test Project" guidance section, and Report Archive cataloging all 12 old run folders.
+- **Naming convention established:** Standalone `{project-name}-runNN.md` is the canonical report format going forward. Old run folders preserved as historical archives.
+- **Data added:** Runs 5, 6, 14, 15, 16 were missing from the README — all now included with metrics extracted from their respective report files. Run 7 confirmed non-existent (skipped).
+- **Key learning:** The old run folders (runs 1–6, 8–13) contain valuable raw data (screenshots, build output, scan results) that the standalone reports don't capture. Worth keeping as archives but not worth migrating to standalone format.
+
+ Team update (2026-03-08): Three P0 HTML fidelity fixes identified  CheckBox needs span wrapper, BaseValidator needs id/class, FormView needs class on table. Audit scored 87%.  decided by Forge
+

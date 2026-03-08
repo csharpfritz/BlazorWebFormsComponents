@@ -96,3 +96,17 @@
 
 
  Team update (2026-03-04): EF Core must use 10.0.3 (latest .NET 10)  directed by Jeff
+
+## Archived 2026-03-08 (entries from 2026-03-05 through 2026-03-07)
+
+### Archived Session Pointers
+
+- WebFormsPageBase & Page System Docs (2026-03-05)
+- Skills Cross-Reference Review  7 files, 16+ fixes (2026-03-06)
+- Run 8 Report Enhancement  executive pattern established (2026-03-06)
+- Run 9 Skill Fixes  6 RF items across 4 skill files (2026-03-07)
+- Run 9 RCA Documentation  path preservation + CSS verification rules (2026-03-07)
+
+### Summary (2026-03-05 through 2026-03-07 pre-Run 11)
+
+WebFormsPageBase docs and Page System rewrite shipped (2026-03-05). Skills cross-reference review found `.ai-team/skills/` drifting behind `migration-toolkit/skills/`  both must be updated together. LoginView is a native BWFC component, never replace with AuthorizeView. Executive report pattern established in Run 8: blockquote bottom line -> timeline -> screenshots -> before/after code. Run 9 skill fixes: cookie auth under Interactive Server, minimal API endpoint templates, enhanced navigation guidance, DisableAntiforgery, ListView GroupItemCount. Run 9 RCA: added Static Asset Path Preservation and CSS Reference Verification rules to migration-standards. Key learning: functional tests passing != migration success  visual regression is ship-blocking.

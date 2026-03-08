@@ -103,3 +103,6 @@ The `-TestMode` switch redirected all output to a `Layer2Output/` subdirectory i
 
 
  Team update (2026-03-09): Audit consolidated  RouteData bug fixed (P1 resolved), ID rendering gap flagged for data controls, Layer 2 automation feasibility confirmed  decided by Forge
+
+ Team update (2026-03-08): Three P0 HTML fidelity fixes identified  CheckBox needs span wrapper, BaseValidator needs id/class, FormView needs class on table. Audit scored 87%.  decided by Forge
+
