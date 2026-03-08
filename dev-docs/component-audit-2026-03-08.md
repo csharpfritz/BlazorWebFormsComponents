@@ -12,7 +12,7 @@ The BlazorWebFormsComponents library contains **153 Razor components** and **54 
 
 The migration toolkit (Run 13) achieved **25/25 tests passing** with only **3 remaining manual fixes** — down from 8+ in Run 11. The SSR architecture decision was the single biggest improvement, eliminating HttpContext/cookie problems entirely.
 
-HTML fidelity remains the weakest area: **only 1 of 132 audit variants** achieves exact HTML match. However, most divergences are cosmetic (missing `id` attributes, different sample data) rather than structural. **5 controls have genuine structural divergences** that could break CSS/JS.
+HTML fidelity remains the weakest area: **only 1 of 132 audit variants** achieves exact HTML match. However, most divergences are cosmetic (missing `id` attributes, different sample data) rather than structural. **3 controls have genuine structural divergences** that could break CSS/JS. (BulletedList `<ol>` rendering and Panel `<fieldset>`/`<legend>` rendering were verified as already fixed.)
 
 ---
 
@@ -44,7 +44,7 @@ HTML fidelity remains the weakest area: **only 1 of 132 audit variants** achieve
 | 18 | Literal | ✅ Complete | ✅ | Raw text/HTML |
 | 19 | Localize | ✅ Complete | ✅ | Inherits Literal |
 | 20 | MultiView | ✅ Complete | ✅ | Container for Views |
-| 21 | Panel | ✅ Complete | ✅ | Renders `<div>` |
+| 21 | Panel | ✅ Complete | ✅ | Renders `<div>` or `<fieldset>`/`<legend>` (GroupingText) |
 | 22 | PlaceHolder | ✅ Complete | ✅ | No wrapper element |
 | 23 | RadioButton | ✅ Complete | ✅ | Radio input |
 | 24 | RadioButtonList | ✅ Complete | ✅ | Group of radio buttons |
@@ -172,9 +172,9 @@ While no control is officially "partial," several have known limitations vs Web 
 
 | Control | Gap | Impact |
 |---------|-----|--------|
-| BulletedList | `<ol>` rendering for numbered lists uses `<ul>` | CSS targeting numbered lists breaks |
+| BulletedList | ~~`<ol>` rendering for numbered lists uses `<ul>`~~ | ✅ Fixed — renders `<ol>` for numbered styles |
 | Calendar | Missing `id` attributes on outer table | JS targeting by ID fails |
-| Panel | No `<fieldset>`/`<legend>` for GroupingText mode | Semantic HTML differs |
+| Panel | ~~No `<fieldset>`/`<legend>` for GroupingText mode~~ | ✅ Fixed — renders `<fieldset>`/`<legend>` when GroupingText set |
 | ListView | Significantly different DOM structure | Layout CSS may break |
 | Menu | 9 of 10 audit variants missing from BWFC samples | Hard to compare fidelity |
 
@@ -235,14 +235,14 @@ Based on `audit-output/diff-report-post-fix.md` (generated 2026-02-26):
 | **Missing BWFC sample variants** | 68 entries | ⚪ N/A — sample gap, not component gap |
 | **Different sample data** | ~20 controls | ⚪ NONE — audit limitation, not real divergence |
 | **Missing inline styles** | ~10 controls | 🟡 MEDIUM — CSS may not match if styles were relied upon |
-| **Structural tag changes** | 5 controls | 🔴 HIGH — breaks CSS selectors and layout |
+| **Structural tag changes** | 3 controls | 🔴 HIGH — breaks CSS selectors and layout |
 
 ### Structural Divergences That Break CSS/JS
 
 | # | Control | Issue | Severity |
 |---|---------|-------|----------|
-| 1 | **BulletedList** | `<ol>` renders as `<ul>` for numbered lists | 🔴 Breaks `ol` CSS rules |
-| 2 | **Panel** | `<fieldset>/<legend>` omitted when GroupingText set | 🔴 Breaks semantic form CSS |
+| ~~1~~ | ~~**BulletedList**~~ | ~~`<ol>` renders as `<ul>` for numbered lists~~ | ✅ Fixed — renders `<ol>` with correct `list-style-type` |
+| ~~2~~ | ~~**Panel**~~ | ~~`<fieldset>/<legend>` omitted when GroupingText set~~ | ✅ Fixed — renders `<fieldset>`/`<legend>` when GroupingText set |
 | 3 | **ListView** | Completely different DOM structure (158-line diff) | 🔴 Breaks layout CSS |
 | 4 | **Calendar** | Missing table `id`, different date ranges shown | 🟡 Breaks ID-targeting JS |
 | 5 | **Label** | `<span>` vs `<label>` tag inconsistency | 🟡 Breaks `label` CSS selectors |
@@ -257,7 +257,7 @@ Based on `audit-output/diff-report-post-fix.md` (generated 2026-02-26):
 
 ### Net Assessment
 
-The **68 "Missing in BWFC"** entries are primarily missing sample variants, not missing component functionality. Most of the 63 divergent entries are due to: (a) the BWFC samples using different test data than the Web Forms captures, and (b) missing `id` attributes which is a known architectural decision in Blazor. The **5 genuine structural divergences** are the ones that warrant engineering attention.
+The **68 "Missing in BWFC"** entries are primarily missing sample variants, not missing component functionality. Most of the 63 divergent entries are due to: (a) the BWFC samples using different test data than the Web Forms captures, and (b) missing `id` attributes which is a known architectural decision in Blazor. The **3 remaining structural divergences** (ListView, Calendar, Label) are the ones that warrant engineering attention. BulletedList and Panel divergences were verified as already fixed.
 
 ---
 
@@ -341,10 +341,10 @@ Requires understanding which links are Blazor pages vs. API endpoints. Options:
 | # | Priority | Area | Rationale |
 |---|----------|------|-----------|
 | 1 | **Fix 3 migration script gaps** | Migration Toolkit | Run 14 = 0 manual fixes would be a milestone. readonly fix is trivial. Logout and data-enhance-nav are tractable. |
-| 2 | **Fix BulletedList `<ol>` rendering** | HTML Fidelity | Structural divergence — `<ol>` vs `<ul>` breaks CSS for numbered lists. Low effort, high impact. |
+| 2 | ~~**Fix BulletedList `<ol>` rendering**~~ | HTML Fidelity | ✅ Already fixed — renders `<ol>` for numbered styles with correct `list-style-type`. Verified with 13 bUnit tests. |
 | 3 | **Add `id` rendering to key controls** | HTML Fidelity | Calendar, Panel, BulletedList, Label, LinkButton all miss `id` attributes. This is the #1 divergence pattern. Blazor supports `@attributes` — render `id` when the `ID` parameter is set. |
 | 4 | **Document field columns** | Documentation | BoundField, ButtonField, HyperLinkField, TemplateField are used by every data control but have no standalone docs. |
-| 5 | **Fix Panel GroupingText rendering** | HTML Fidelity | Panel should render `<fieldset>/<legend>` when GroupingText is set, not bare `<div>`. This is a known Web Forms behavior. |
+| 5 | ~~**Fix Panel GroupingText rendering**~~ | HTML Fidelity | ✅ Already fixed — renders `<fieldset>`/`<legend>` when GroupingText is set. Verified with 3 bUnit tests. |
 
 ### Risk Assessment
 
