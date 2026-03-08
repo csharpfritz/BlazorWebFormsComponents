@@ -92,6 +92,7 @@ nav:
     - DataList: DataControls/DataList.md
     - DataPager: DataControls/DataPager.md
     - DetailsView: DataControls/DetailsView.md
+    - Field Columns: DataControls/FieldColumns.md
     - FormView: DataControls/FormView.md
     - GridView: DataControls/GridView.md
     - ListView: DataControls/ListView.md
