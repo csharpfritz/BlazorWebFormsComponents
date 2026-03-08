@@ -71,3 +71,19 @@ Library audit: 153 Razor components + 197 C# classes (CONTROL-COVERAGE.md was li
  Team update (2026-03-08): DbContext registration simplified  `AddDbContextFactory` only, no dual registration (supersedes Run 12 dual pattern)  decided by Cyclops
  Team update (2026-03-08): Middleware order: UseAuthentication  UseAuthorization  UseAntiforgery  decided by Cyclops
  Team update (2026-03-08): Logout must use `<a>` link not `<button>` in navbar  decided by Cyclops
+
+### Comprehensive Component Audit (2026-03-08)
+
+**Audit report:** `dev-docs/component-audit-2026-03-08.md`
+
+Key findings from post-Run 12/13 audit:
+
+1. **Library completeness:** 153 Razor components, 54 enums, 52 fully implemented Web Forms controls + 3 stubs + 2 deferred = 96% coverage of feasible controls. No new controls need to be built.
+
+2. **HTML fidelity gaps:** Only 1/132 audit variants achieves exact HTML match. The #1 pattern is missing `id` attributes (~30+ controls). 5 controls have structural divergences that break CSS/JS: BulletedList (`<ol>`→`<ul>`), Panel (missing `<fieldset>`), ListView (DOM restructuring), Calendar (missing IDs), Label (`<span>`/`<label>` inconsistency).
+
+3. **Migration script convergence:** Run 11 (8+ fixes) → Run 12 (6) → Run 13 (3). SSR architecture was transformative. Three remaining gaps: `data-enhance-nav="false"` for API links, `readonly` removal on cart inputs, logout form→link conversion. All tractable — Run 14 should hit 0.
+
+4. **Documentation is strong** at primary control level (59 mkdocs.yml pages) but weak for infrastructure: field columns (BoundField, etc.), 63 style sub-components, and infrastructure components (ContentPlaceHolder, NamingContainer) have no standalone docs.
+
+5. **Top 5 priorities:** (1) Fix 3 migration script gaps, (2) Fix BulletedList `<ol>` rendering, (3) Add `id` rendering to key controls, (4) Document field columns, (5) Fix Panel GroupingText `<fieldset>` rendering.

@@ -1,0 +1,5 @@
+### 2026-03-08: Component audit findings and priorities
+
+**By:** Forge  
+**What:** Comprehensive audit of BWFC library post-Run 12/13. Library is at 96% coverage (52/54 feasible controls). HTML fidelity is the weakest area — only 1/132 variants is an exact match. Missing `id` attributes is the #1 divergence pattern (~30+ controls). 5 controls have structural HTML divergences that break CSS/JS selectors: BulletedList, Panel, ListView, Calendar, Label. Migration script has converged to 3 remaining manual fixes. Top 5 sprint priorities: (1) fix 3 migration script gaps for zero-touch Run 14, (2) fix BulletedList `<ol>` rendering, (3) add `id` attribute rendering, (4) document field columns, (5) fix Panel `<fieldset>` rendering.  
+**Why:** Jeff requested a state-of-the-library assessment after Run 12/13 improvements. The library needs no new controls — the focus should shift to fidelity refinement and migration automation. The 3 remaining migration gaps are all tractable (estimated 5 hours total). The `id` attribute gap is the single most impactful HTML fidelity issue and affects the most controls.
