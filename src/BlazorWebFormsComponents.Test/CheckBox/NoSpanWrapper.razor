@@ -4,14 +4,14 @@
 @code {
 
 	[Fact]
-	public void CheckBox_WithText_NoSpanWrapper()
+	public void CheckBox_WithText_HasSpanWrapper()
 	{
-		// WebForms CheckBox renders <input> and <label> directly, no <span> wrapper
+		// WebForms CheckBox with text wraps <input> + <label> in a <span>
 		var cut = Render(@<CheckBox Text="Accept terms" />);
 
-		Should.Throw<Bunit.ElementNotFoundException>(() => cut.Find("span"));
-		cut.Find("input[type='checkbox']").ShouldNotBeNull();
-		cut.Find("label").ShouldNotBeNull();
+		cut.Find("span").ShouldNotBeNull();
+		cut.Find("span input[type='checkbox']").ShouldNotBeNull();
+		cut.Find("span label").ShouldNotBeNull();
 	}
 
 	[Fact]

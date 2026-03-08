@@ -15,7 +15,7 @@
 
 @if (RenderOuterTable)
 {
-<table id="@ClientID" cellspacing="0" style="border-collapse:collapse;" title="@ToolTip">
+<table id="@ClientID" class="@CssClass" cellspacing="0" style="border-collapse:collapse;" title="@ToolTip">
 	@if (!string.IsNullOrEmpty(Caption))
 	{
 		<caption style="@GetCaptionStyle()">@Caption</caption>

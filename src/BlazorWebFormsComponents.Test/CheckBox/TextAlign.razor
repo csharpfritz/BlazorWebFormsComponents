@@ -38,42 +38,44 @@
 		elements[1].TagName.ShouldBe("LABEL");
 	}
 
-	// --- Bug fix #382: Combined alignment + no-span-wrapper verification ---
+	// --- Span wrapper verification (matches Web Forms / RadioButton pattern) ---
 
 	[Fact]
-	public void CheckBox_TextAlignRight_RendersInputThenLabelWithNoSpanWrapper()
+	public void CheckBox_TextAlignRight_RendersInputThenLabelInSpanWrapper()
 	{
-		// Bug #382: TextAlign=Right must render <input> then <label> with NO wrapping <span>
+		// TextAlign=Right: <span> wraps <input> then <label>
 		var cut = Render(@<CheckBox Text="Right aligned" TextAlign="Enums.TextAlign.Right" />);
 
-		var elements = cut.FindAll("input, label");
-		elements.Count.ShouldBe(2);
+		var span = cut.Find("span");
+		span.ShouldNotBeNull();
+		var elements = span.QuerySelectorAll("input, label");
+		elements.Length.ShouldBe(2);
 		elements[0].TagName.ShouldBe("INPUT");
 		elements[1].TagName.ShouldBe("LABEL");
-		Should.Throw<Bunit.ElementNotFoundException>(() => cut.Find("span"));
 	}
 
 	[Fact]
-	public void CheckBox_TextAlignLeft_RendersLabelThenInputWithNoSpanWrapper()
+	public void CheckBox_TextAlignLeft_RendersLabelThenInputInSpanWrapper()
 	{
-		// Bug #382: TextAlign=Left must render <label> then <input> with NO wrapping <span>
+		// TextAlign=Left: <span> wraps <label> then <input>
 		var cut = Render(@<CheckBox Text="Left aligned" TextAlign="Enums.TextAlign.Left" />);
 
-		var elements = cut.FindAll("label, input");
-		elements.Count.ShouldBe(2);
+		var span = cut.Find("span");
+		span.ShouldNotBeNull();
+		var elements = span.QuerySelectorAll("label, input");
+		elements.Length.ShouldBe(2);
 		elements[0].TagName.ShouldBe("LABEL");
 		elements[1].TagName.ShouldBe("INPUT");
-		Should.Throw<Bunit.ElementNotFoundException>(() => cut.Find("span"));
 	}
 
 	[Fact]
-	public void CheckBox_WithText_TopLevelElementIsNotSpan()
+	public void CheckBox_WithText_TopLevelElementIsSpan()
 	{
-		// Bug #382: The top-level rendered element should NOT be a <span> wrapper
+		// Web Forms wraps CheckBox with text in a <span>
 		var cut = Render(@<CheckBox Text="Test" />);
 
 		var firstElement = cut.Nodes.OfType<IElement>().First();
-		firstElement.TagName.ShouldNotBe("SPAN");
+		firstElement.TagName.ShouldBe("SPAN");
 	}
 
 }
