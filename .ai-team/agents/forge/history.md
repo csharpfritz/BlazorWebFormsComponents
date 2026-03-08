@@ -123,3 +123,19 @@ Key learning: `Microsoft.AspNetCore.Rewrite` regex rules operate on path only, n
  Team update (2026-03-08): ContosoUniversity acceptance test patterns  partial ID selectors, cascading fallbacks, CONTOSO_BASE_URL env var  decided by Rogue
 
  Team update (2026-03-08): ContosoUniversity local setup  LocalDB connection strings, AjaxControlToolkit HintPath fix, NBGV block — decided by Colossus
+
+### ContosoUniversity Run 01 — Seven-Point Review (2026-03-09)
+
+Reviewed Jeff's 7 questions about the Run 01 results (31/40, 77.5%). Key findings from codebase investigation:
+
+1. **SelectMethod IS supported** — `DataBoundComponent<T>.SelectMethod` is a `SelectHandler<TItemType>` delegate. Layer 1 script erroneously strips it and inserts a TODO. Should be preserved.
+2. **Code-behind rewrites** — Layer 2 Pattern A entity detection is hardcoded for WingtipToys (Product/Category/Order) and cannot recognize ContosoUniversity entities. The "public or private" bug appears already fixed in current scripts. Fundamental System.Web.UI.Page → ComponentBase gap is inherent.
+3. **DB-First EF** — Jeff's `dotnet ef dbcontext scaffold` suggestion is sound. Current scripts just copy EF6 models verbatim.
+4. **WebMethods → Minimal APIs** — No script support today. Feasible to detect `[WebMethod]` and generate Minimal API endpoints.
+5. **ViewState utility works** — `BaseWebFormsComponent.ViewState` is `Dictionary<string, object>` on every component. Test proves it. Instructors sort-direction scenario would work.
+6. **GridView paging gap found** — GridView has AllowPaging/PageSize/PageIndex/PageIndexChanged but is MISSING `PageIndexChanging` (pre-change cancellable event). DetailsView and DataPager have it — GridView doesn't. Library bug.
+7. **CSS isolation is correct approach** — `.razor.css` files are cleaner than consolidating into wwwroot `<link>` tags.
+
+Decision inbox entry filed with Run 02 priorities.
+
+📌 Team update (2026-03-08): ContosoUniversity Run 01 review — 7 improvements confirmed valid. Run 02 priorities: Fix Pattern A entity detection (CRITICAL), preserve SelectMethod (HIGH), add dotnet ef scaffold (HIGH), add GridView PageIndexChanging (HIGH), WebMethod→Minimal API (MEDIUM), CSS isolation (MEDIUM), ViewState docs (MEDIUM) — decided by Forge, reviewed by Jeffrey T. Fritz

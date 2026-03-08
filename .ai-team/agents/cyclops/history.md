@@ -125,3 +125,5 @@ The `-TestMode` switch redirected all output to a `Layer2Output/` subdirectory i
  Team update (2026-03-08): ContosoUniversity acceptance test patterns  partial ID selectors, cascading fallbacks, CONTOSO_BASE_URL env var  decided by Rogue
 
  Team update (2026-03-08): ContosoUniversity local setup  LocalDB connection strings, AjaxControlToolkit HintPath fix, NBGV block — decided by Colossus
+
+📌 Team update (2026-03-08): ContosoUniversity Run 01 review — GridView missing PageIndexChanging event (library gap, HIGH priority), SelectMethod should be preserved by migration scripts, Pattern A entity detection hardcoded to WingtipToys (CRITICAL) — decided by Forge

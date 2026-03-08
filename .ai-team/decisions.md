@@ -6895,3 +6895,35 @@ The Layer 2 script (`bwfc-migrate-layer2.ps1`) introduced in Run 16 creates a ne
 **By:** Colossus
 **What:** Configured ContosoUniversity Web Forms sample for local development using IIS Express + LocalDB. Three source-level fixes: (1) connection strings changed from `.\SQLEXPRESS` to `(localdb)\MSSQLLocalDB` in Web.config, (2) AjaxControlToolkit HintPath updated to NuGet packages folder in .csproj, (3) empty `Directory.Build.props` at `samples/ContosoUniversity/` to block NBGV inheritance. All 5 pages verified with screenshots in `dev-docs/contoso-screenshots/`. Setup documented in `dev-docs/contoso-university-setup.md`.
 **Why:** Sample project ships with assumptions about original developer's environment. These fixes make it reproducible on any machine with LocalDB and compatible MSBuild.
+
+### Forge: ContosoUniversity Run 01 — Seven-Point Review
+
+**By:** Forge
+**Date:** 2026-03-09
+**Context:** Jeff's 7-point review of ContosoUniversity Run 01 (31/40, 77.5%)
+
+**Decisions:**
+
+1. **SelectMethod is supported and should be preserved by migration scripts.** Layer 1's `ConvertFrom-SelectMethod` currently strips it and inserts a TODO. It should instead preserve the attribute and Layer 2 should generate a matching `SelectHandler<T>` delegate in the code-behind. This is a missed opportunity — BWFC already supports the pattern.
+
+2. **Code-behind rewrites are partly script bugs, partly architectural.** The "public or private" bug appears to have been fixed in the current scripts, but Layer 2 Pattern A's entity detection is hardcoded for WingtipToys entities (Product/Category/Order) and fails on ContosoUniversity (Student/Course/Instructor/Enrollment/Department). Pattern A needs dynamic entity detection from actual source code.
+
+3. **DB-First EF migration should use `dotnet ef dbcontext scaffold`.** Jeff's suggestion accepted. For .edmx projects, Layer 2 should parse the .edmx for connection string info and either run the scaffold command or generate equivalent EF Core models. Current approach of copying EF6 models verbatim doesn't work.
+
+4. **WebMethod → Minimal API detection should be added to the migration pipeline.** Layer 1 should detect `[WebMethod]` static methods and flag them. Layer 2 should generate Minimal API endpoints in Program.cs. Priority: Medium (only affects AJAX-using apps).
+
+5. **ViewState utility works for the Instructors sort-direction scenario.** `BaseWebFormsComponent.ViewState` is a `Dictionary<string, object>` available on every component. Migration scripts should recognize ViewState patterns and preserve them instead of always converting to private fields.
+
+6. **GridView is missing `PageIndexChanging` event.** DetailsView and DataPager have it, GridView does not. This is a library gap that must be fixed. Web Forms `OnPageIndexChanging` fires before page change and supports cancellation — critical for manual paging scenarios like Courses page.
+
+7. **CSS isolation via `.razor.css` is the correct approach.** Instead of consolidating per-page CSS into wwwroot `<link>` tags, Layer 1 should create `.razor.css` files for page-scoped CSS. Only truly global CSS goes to wwwroot.
+
+**Run 02 Priorities:**
+- CRITICAL: Fix Pattern A entity detection (Point 2)
+- HIGH: Preserve SelectMethod in markup (Point 1)
+- HIGH: Add `dotnet ef dbcontext scaffold` support (Point 3)
+- HIGH: Add GridView `PageIndexChanging` to library (Point 6)
+- MEDIUM: WebMethod → Minimal API (Point 4)
+- MEDIUM: CSS isolation (Point 7)
+- MEDIUM: ViewState documentation (Point 5)
+
