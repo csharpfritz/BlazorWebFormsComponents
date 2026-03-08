@@ -105,3 +105,16 @@ Key learning: CheckBox and RadioButton should share the same wrapper pattern —
 
  Team update (2026-03-08): Migration-test reports use standalone `{project-name}-runNN.md` files (zero-padded). Old run folders are read-only archives.  decided by Beast
 
+### Research: Second Sample Project & ASPX URL Rewriting (2026-03-09)
+
+**Report:** `dev-docs/research-second-sample-and-url-rewriting.md`
+
+Two research items completed for Jeff:
+
+1. **Second sample project:** Evaluated 5 candidates for a Web Forms sample app that exercises controls WingtipToys doesn't (TreeView, Menu, Wizard, Calendar, DataList, Repeater, etc.). The open-source Web Forms sample landscape is barren — no suitable existing app was found. Recommended building a purpose-built "EventManager" Control Gallery (~12-15 pages, LocalDB, Event Management domain) at `samples/EventManager/`.
+
+2. **ASPX URL rewriting:** Evaluated 5 approaches for preserving `.aspx` URLs during migration (RewriteOptions, custom middleware, IRule, @page directive, catch-all route). Recommended `RewriteOptions.AddRedirect` with 301 status as a documented snippet in migration-toolkit, not as a NuGet package in BWFC. Query strings are automatically preserved. Default.aspx → / requires a special-case rule.
+
+Key learning: The Web Forms sample ecosystem is effectively dead — WingtipToys is the only maintained Microsoft sample. Any second sample will need to be purpose-built.
+Key learning: `Microsoft.AspNetCore.Rewrite` regex rules operate on path only, not query string — this means query string preservation is automatic and free.
+
