@@ -75,3 +75,12 @@ WebFormsPageBase docs and Page System rewrite shipped (2026-03-05). Skills cross
 - **component-coverage.md created:** Gap analysis of 52 components vs docs. Result: 100% coverage — no gaps found. Sub-components (View, RoleGroup, MenuItem, TreeNode, etc.) are documented within parent pages.
 - **Patterns followed:** Run summary pages use consistent table format (metric/value), root cause abbreviations where applicable, and link to full dev-docs report. Followed existing migration-tests page style from Runs 1-4.
 - **Key decisions documented:** SSR default render mode, package version pinning, `data-enhance-nav="false"` for non-Blazor endpoints.
+
+### Run 14 Migration Report (2026-03-08)
+
+- **Report location:** `docs/migration-tests/wingtiptoys-run14.md`
+- **Score:** ✅ 25/25 (third consecutive 100%)
+- **Key narrative:** Layer 1 (script) reached zero manual intervention — all 3 Run 13 fixes baked in. Layer 2 still has 3 semantic code-behind fixes that can't be regex-automated.
+- **New elements documented:** `-TestMode` switch, 8-component `id` rendering fix, component audit (153 components, 96% coverage), automation ceiling concept (Layer 1 mechanical vs Layer 2 semantic).
+- **Format followed:** Matched Run 13 structure — metric table, executive blockquote, what's new, execution details, progression table, lessons learned. Added "Key Insight: The Automation Ceiling" section to capture the Layer 1/Layer 2 boundary discovery.
+- **mkdocs.yml updated:** Added Run 14 nav entry between Run 13 and Component Coverage.
