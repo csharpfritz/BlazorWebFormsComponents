@@ -325,6 +325,42 @@ Data controls require additional changes for data binding:
 - `SelectMethod` → `DataItem` (single object, loaded in `OnInitializedAsync`)
 - `Items` for collection-bound controls, `DataItem` for single-record controls
 
+#### DetailsView
+
+```xml
+<!-- Web Forms -->
+<asp:DetailsView ID="dtlCourse" runat="server"
+    ItemType="ContosoUniversity.Models.Course"
+    SelectMethod="GetCourse"
+    AutoGenerateRows="false">
+    <Fields>
+        <asp:BoundField DataField="CourseID" HeaderText="Course ID" />
+        <asp:BoundField DataField="CourseName" HeaderText="Course Name" />
+        <asp:BoundField DataField="StudentsMax" HeaderText="Max Students" />
+    </Fields>
+</asp:DetailsView>
+```
+
+```razor
+<!-- Blazor with BWFC -->
+<DetailsView ID="dtlCourse"
+    DataItem="_selectedCourse"
+    ItemType="Course"
+    AutoGenerateRows="false">
+    <Fields>
+        <BoundField ItemType="Course" DataField="CourseID" HeaderText="Course ID" />
+        <BoundField ItemType="Course" DataField="CourseName" HeaderText="Course Name" />
+        <BoundField ItemType="Course" DataField="StudentsMax" HeaderText="Max Students" />
+    </Fields>
+</DetailsView>
+```
+
+**Key changes:**
+- `SelectMethod="GetCourse"` → `DataItem="_selectedCourse"` (bind to a field loaded in code)
+- `ItemType="Namespace.Class"` → `ItemType="Class"` (use short name, ensure `@using` directive exists)
+- BoundField needs `ItemType="Course"` attribute explicitly (required for column registration)
+- BoundField, TemplateField, and other column types work inside `<Fields>` just like Web Forms
+
 #### Repeater
 
 ```razor
@@ -388,6 +424,9 @@ protected override async Task OnInitializedAsync()
 
 ### Event Handlers
 
+> **⚠️ CRITICAL: Do NOT add `MouseEventArgs` to OnClick handlers.**  
+> BWFC Button, LinkButton, and ImageButton components internally translate `OnClick="MethodName"` to Blazor's `@onclick` event. The handler signature should be `void MethodName()` or `async Task MethodName()` — NOT `void MethodName(MouseEventArgs args)`. The BWFC component handles the Blazor-specific event plumbing internally.
+
 ```csharp
 // Web Forms
 protected void SubmitBtn_Click(object sender, EventArgs e)
@@ -396,12 +435,15 @@ protected void SubmitBtn_Click(object sender, EventArgs e)
     Response.Redirect("~/Confirmation");
 }
 
-// Blazor
+// Blazor — CORRECT (no MouseEventArgs parameter)
 private void SubmitBtn_Click()
 {
     // handle click
     NavigationManager.NavigateTo("/Confirmation");
 }
+
+// Blazor — WRONG (do NOT do this)
+// private void SubmitBtn_Click(MouseEventArgs args) { ... }
 ```
 
 ### Navigation

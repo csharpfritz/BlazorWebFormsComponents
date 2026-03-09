@@ -42,6 +42,35 @@ This skill covers creating new Blazor components that emulate ASP.NET Web Forms 
 | `ButtonBaseComponent` | Button-like components (Button, LinkButton, ImageButton) |
 | `DataBoundComponent<T>` | Components binding to collections (Repeater, GridView) |
 | `BaseValidator` | Validation controls |
+| `IColumnCollection<T>` | Data controls that host column components (GridView, DetailsView) |
+
+### Column Collection Architecture
+
+Data controls that support BoundField, TemplateField, and other column types must implement `IColumnCollection<ItemType>`. This interface enables column child components to register themselves with their parent.
+
+**How it works:**
+1. Parent component (GridView, DetailsView) implements `IColumnCollection<ItemType>`
+2. Parent provides cascading value: `<CascadingValue Value="this" Name="ColumnCollection">`
+3. Column components (BoundField, TemplateField) have `[CascadingParameter(Name = "ColumnCollection")]`
+4. On initialization, columns call `ParentColumnsCollection.AddColumn(this)` to register
+
+**Example:**
+```csharp
+// Parent component (DetailsView)
+public partial class DetailsView<ItemType> : IColumnCollection<ItemType>
+{
+    private List<IColumn<ItemType>> _columnList = new();
+    public IList<IColumn<ItemType>> ColumnList => _columnList;
+    
+    public void AddColumn(IColumn<ItemType> column) => _columnList.Add(column);
+    public void RemoveColumn(IColumn<ItemType> column) => _columnList.Remove(column);
+}
+
+// In .razor file:
+<CascadingValue Value="this" Name="ColumnCollection">
+    @Fields
+</CascadingValue>
+```
 
 ### Property Naming Convention
 
@@ -58,6 +87,8 @@ Prefix with `On`:
 - `OnCommand` for command events
 - `OnSelectedIndexChanged` for selection changes
 - `OnDataBinding` for data binding events
+
+> **⚠️ IMPORTANT:** BWFC OnClick handlers do NOT require `MouseEventArgs` parameters. The component internally translates `OnClick="MethodName"` to Blazor's `@onclick` — the consumer's method signature should be `void MethodName()` or `async Task MethodName()`, not `void MethodName(MouseEventArgs args)`.
 
 ### Integration Testing Requirements
 

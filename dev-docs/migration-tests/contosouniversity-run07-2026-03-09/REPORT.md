@@ -2,12 +2,14 @@
 
 **Date:** 2026-03-09
 **Branch:** `squad/audit-docs-perf`
-**Commit:** `f08c7a6f`
+**Commit:** `f08c7a6f` (initial), `2696b509` (BWFC fix)
 **Score:** **40/40 (100%)** ✅
 
 ## Executive Summary
 
-Run 07 of the ContosoUniversity migration achieved 100% acceptance test passage (40/40). The migration scripts (Layer 1 + Layer 2) completed in under 2 seconds total. Manual fixes required ~20 minutes, primarily addressing a BWFC DetailsView incompatibility and Blazor circuit timing issues in tests.
+Run 07 of the ContosoUniversity migration achieved 100% acceptance test passage (40/40). The migration scripts (Layer 1 + Layer 2) completed in under 2 seconds total. 
+
+**BWFC Library Enhancement:** This run identified that DetailsView needed to implement `IColumnCollection<ItemType>` to support BoundField columns — this was **fixed in the BWFC library** rather than working around it with HTML. The library now correctly supports BoundField, TemplateField, and other column types inside DetailsView `<Fields>`.
 
 ## Timing
 
@@ -32,45 +34,43 @@ Run 07 of the ContosoUniversity migration achieved 100% acceptance test passage 
 
 ## Issues Discovered & Fixed
 
-### 1. DetailsView BoundField Incompatibility (Critical)
+### 1. DetailsView BoundField Incompatibility (Critical) — **FIXED IN BWFC**
 
-**Problem:** BWFC `DetailsView` uses an internal field system (`DetailsViewField` subclasses) rather than the standard `BoundField` component used by `GridView`. Placing `BoundField` inside `<Fields>` causes:
+**Problem:** BWFC `DetailsView` originally provided a cascading value named `DetailsViewFieldCollection`, but `BoundField` and other column components expect `ColumnCollection`. This caused:
 ```
 NullReferenceException: Object reference not set to an instance of an object.
    at BlazorWebFormsComponents.BaseColumn`1.OnInitialized()
 ```
 
-**Root Cause:** `BoundField` looks for a `CascadingParameter(Name = "ColumnCollection")` but `DetailsView` provides `DetailsViewFieldCollection` instead.
+**Root Cause:** Name mismatch between cascading parameter provider (DetailsView) and consumer (BoundField).
 
-**Solution:** Replaced DetailsView with plain HTML table:
+**Solution:** Fixed in BWFC library — DetailsView now implements `IColumnCollection<ItemType>` and provides `Name="ColumnCollection"`:
 ```razor
-<!-- Before (broken) -->
-<DetailsView ID="dtlCourses" DataItem="_selectedCourse">
+<!-- Now works correctly -->
+<DetailsView ID="dtlCourses"
+    DataItem="_selectedCourse"
+    ItemType="Course"
+    AutoGenerateRows="false">
     <Fields>
-        <BoundField DataField="CourseID" HeaderText="Course ID" />
+        <BoundField ItemType="Course" DataField="CourseID" HeaderText="Course ID" />
+        <BoundField ItemType="Course" DataField="CourseName" HeaderText="Course Name" />
     </Fields>
 </DetailsView>
-
-<!-- After (working) -->
-<table id="dtlCourses" class="details">
-    <tr><td>Course ID</td><td>@_selectedCourse.CourseID</td></tr>
-</table>
 ```
 
-**Recommendation:** Document that DetailsView `<Fields>` parameter expects `DetailsViewAutoField` or custom implementations, NOT `BoundField`.
+> **Note:** BoundField inside DetailsView requires the `ItemType="T"` attribute to be specified explicitly.
 
-### 2. Button OnClick Handler Signature
+### 2. Button OnClick Handler Signature — **NO CHANGE REQUIRED**
 
-**Problem:** Button `OnClick` handlers in InteractiveServer mode need `MouseEventArgs` parameter:
+**Original Problem (incorrect):** We thought handlers needed `MouseEventArgs`.
+
+**Correct Behavior:** BWFC Button components handle the OnClick→@onclick translation internally. The handler signature should be:
 ```csharp
-// Wrong - causes EventCallback type mismatch
+// CORRECT - no MouseEventArgs needed
 private async Task SearchCourseByName() { }
-
-// Correct
-private async Task SearchCourseByName(MouseEventArgs args) { }
 ```
 
-**Solution:** Added `using Microsoft.AspNetCore.Components.Web` and `MouseEventArgs` to handler signatures.
+The BWFC Button component accepts `EventCallback` which Blazor automatically wraps parameterless methods. **Do NOT add MouseEventArgs** — the Web Forms convention is preserved.
 
 ### 3. Nullable String Properties
 
