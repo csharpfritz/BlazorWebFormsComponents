@@ -4,7 +4,7 @@
 @inject IHttpContextAccessor HttpContextAccessor
 
 <PageTitle>Shopping Cart</PageTitle>
-<h2>Shopping Cart</h2>
+<div id="ShoppingCartTitle" class="ContentHead"><h1>Shopping Cart</h1></div>
 
 @if (_cartItems == null || !_cartItems.Any())
 {
@@ -12,58 +12,52 @@
 }
 else
 {
-    <form method="post" action="/api/update-cart">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Product</th>
-                    <th>Price</th>
-                    <th>Quantity</th>
-                    <th>Subtotal</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in _cartItems)
-                {
-                    <tr>
-                        <td>@item.Product?.ProductName</td>
-                        <td>@($"{item.Product?.UnitPrice:c}")</td>
-                        <td>
-                            <input type="number" name="qty-@item.ItemId" value="@item.Quantity" min="1" style="width:60px" />
-                        </td>
-                        <td>@($"{(item.Product?.UnitPrice ?? 0) * item.Quantity:c}")</td>
-                        <td>
-                            <a href="/api/remove-item?itemId=@item.ItemId" data-enhance-nav="false">
-                                <button type="button" class="btn btn-danger btn-sm"
-                                        onclick="event.preventDefault(); document.getElementById('remove-@item.ItemId').submit();">
-                                    Remove
-                                </button>
-                            </a>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="3" style="text-align:right"><b>Total:</b></td>
-                    <td><b>@($"{_total:c}")</b></td>
-                    <td></td>
-                </tr>
-            </tfoot>
-        </table>
-        <button type="submit" class="btn btn-primary">Update</button>
-    </form>
+    <GridView ItemType="CartItem" Items="_cartItems" AutoGenerateColumns="false"
+              ShowFooter="true" GridLines="GridLines.Vertical" CellPadding="4"
+              CssClass="table table-striped table-bordered">
+        <Columns>
+            <BoundField ItemType="CartItem" DataField="ProductId" HeaderText="ID" />
+            <BoundField ItemType="CartItem" DataField="Product.ProductName" HeaderText="Name" />
+            <BoundField ItemType="CartItem" DataField="Product.UnitPrice" HeaderText="Price (each)" DataFormatString="{0:c}" />
+            <TemplateField ItemType="CartItem" HeaderText="Quantity">
+                <ItemTemplate Context="Item">
+                    <TextBox Width="40" Text="@Item.Quantity.ToString()" />
+                </ItemTemplate>
+            </TemplateField>
+            <TemplateField ItemType="CartItem" HeaderText="Item Total">
+                <ItemTemplate Context="Item">
+                    @($"{Item.Quantity * (Item.Product?.UnitPrice ?? 0):c}")
+                </ItemTemplate>
+            </TemplateField>
+            <TemplateField ItemType="CartItem" HeaderText="Remove Item">
+                <ItemTemplate Context="Item">
+                    <CheckBox />
+                </ItemTemplate>
+            </TemplateField>
+        </Columns>
+    </GridView>
 
-    @foreach (var item in _cartItems)
-    {
-        <form id="remove-@item.ItemId" method="post" action="/api/remove-from-cart" style="display:none">
-            <input type="hidden" name="itemId" value="@item.ItemId" />
-        </form>
-    }
-
-    <hr />
-    <a href="/Checkout/CheckoutStart" class="btn btn-success">Proceed to Checkout</a>
+    <div>
+        <p></p>
+        <strong>
+            <Label Text="Order Total: " />
+            <Label Text="@($"{_total:c}")" />
+        </strong>
+    </div>
+    <br />
+    <table>
+        <tr>
+            <td>
+                <Button Text="Update" OnClick="UpdateBtn_Click" />
+            </td>
+            <td>
+                <a href="/Checkout/CheckoutStart" onclick="window.location.href=this.href;return false;">
+                    <img src="https://www.paypal.com/en_US/i/btn/btn_xpressCheckout.gif"
+                         width="145" alt="Check out with PayPal" style="background-color:transparent;border:0;" />
+                </a>
+            </td>
+        </tr>
+    </table>
 }
 
 @code {
@@ -82,5 +76,10 @@ else
             .ToListAsync();
 
         _total = _cartItems.Sum(c => (c.Product?.UnitPrice ?? 0) * c.Quantity);
+    }
+
+    private void UpdateBtn_Click()
+    {
+        // TODO: Implement cart update logic
     }
 }
