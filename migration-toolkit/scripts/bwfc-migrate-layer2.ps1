@@ -20,8 +20,9 @@
     Dry-run mode — reports what would change without modifying files.
 
 .PARAMETER DbProvider
-    Database provider for Program.cs generation. Default: SQLite.
-    Options: SQLite, SqlServer, PostgreSQL, InMemory
+    Database provider for Program.cs generation. Auto-detected from source project if not specified.
+    Options: SqlServer, PostgreSQL, InMemory
+    NOTE: No default value — preserves source database technology per migration boundary rules.
 
 .PARAMETER DbContextName
     Name of the EF DbContext class. Auto-detected from Models/ if not specified.
@@ -42,8 +43,8 @@ param(
     [Parameter(Mandatory)]
     [string]$Path,
 
-    [ValidateSet('SQLite', 'SqlServer', 'PostgreSQL', 'InMemory')]
-    [string]$DbProvider = 'SQLite',
+    [ValidateSet('SqlServer', 'PostgreSQL', 'InMemory')]
+    [string]$DbProvider,
 
     [string]$DbContextName,
 
@@ -1147,14 +1148,12 @@ function Invoke-PatternC {
 
     # Build connection string based on provider
     $connString = switch ($Provider) {
-        'SQLite'     { "Data Source=$($Namespace.ToLower()).db" }
         'SqlServer'  { "Server=(localdb)\\mssqllocaldb;Database=$Namespace;Trusted_Connection=True" }
         'PostgreSQL' { "Host=localhost;Database=$($Namespace.ToLower());Username=postgres;Password=postgres" }
         'InMemory'   { $Namespace }
     }
 
     $providerMethod = switch ($Provider) {
-        'SQLite'     { 'UseSqlite' }
         'SqlServer'  { 'UseSqlServer' }
         'PostgreSQL' { 'UseNpgsql' }
         'InMemory'   { 'UseInMemoryDatabase' }
@@ -1304,9 +1303,37 @@ if ($WhatIfPreference) {
 # Auto-detect project settings
 $ns = Find-ProjectNamespace -ProjectRoot $Path
 $dbCtx = Find-DbContextName -ProjectRoot $Path
+
+# Auto-detect DbProvider from source if not specified (migration boundary rule: preserve original DB technology)
+if (-not $DbProvider) {
+    $detectedProvider = 'SqlServer'  # Safe default — most Web Forms apps use SQL Server
+    if ($SourcePath -and (Test-Path $SourcePath)) {
+        # Check Web.config for connection string hints
+        $webConfig = Join-Path $SourcePath 'Web.config'
+        if (Test-Path $webConfig) {
+            $configContent = Get-Content $webConfig -Raw -ErrorAction SilentlyContinue
+            if ($configContent -match 'LocalDB|SqlServer|SQLEXPRESS|\.mdf|Initial Catalog') {
+                $detectedProvider = 'SqlServer'
+            }
+            elseif ($configContent -match 'Npgsql|PostgreSQL') {
+                $detectedProvider = 'PostgreSQL'
+            }
+        }
+        # Check for .edmx files (implies SQL Server in most cases)
+        $edmxFiles = Get-ChildItem -Path $SourcePath -Filter '*.edmx' -Recurse -ErrorAction SilentlyContinue
+        if ($edmxFiles.Count -gt 0) {
+            $detectedProvider = 'SqlServer'
+        }
+    }
+    $DbProvider = $detectedProvider
+    Write-Host "  DbProvider: $DbProvider (auto-detected)" -ForegroundColor DarkGray
+}
+else {
+    Write-Host "  DbProvider: $DbProvider (specified)" -ForegroundColor DarkGray
+}
+
 Write-Host "  Namespace:  $ns" -ForegroundColor DarkGray
 Write-Host "  DbContext:  $(if ($dbCtx) { $dbCtx } else { '(none detected)' })" -ForegroundColor DarkGray
-Write-Host "  DbProvider: $DbProvider" -ForegroundColor DarkGray
 if ($SourcePath) {
     Write-Host "  SourcePath: $SourcePath" -ForegroundColor DarkGray
 }

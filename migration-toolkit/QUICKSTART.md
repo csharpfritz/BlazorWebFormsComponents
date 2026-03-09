@@ -90,7 +90,7 @@ The Layer 2 script handles semantic transforms that Layer 1 can't reach — Prog
 
 | Pattern | What It Generates |
 |---------|-------------------|
-| **Program.cs** (Pattern C) | Full .NET SSR bootstrap with SQLite, Identity, middleware pipeline, seed data |
+| **Program.cs** (Pattern C) | Full .NET SSR bootstrap with auto-detected database provider, Identity, middleware pipeline, seed data |
 | **Code-behinds** (Pattern A) | ComponentBase + `IDbContextFactory` + `SupplyParameterFromQuery` scaffolding |
 | **Auth forms** (Pattern B) | Detects Login/Register candidates for `[SupplyParameterFromForm]` simplification |
 

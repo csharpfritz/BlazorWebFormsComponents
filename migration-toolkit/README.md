@@ -110,7 +110,7 @@ The new script targets three patterns:
 
 | Pattern | Target | Run 16 Status |
 |---------|--------|---------------|
-| **Pattern C** — Program.cs | Full .NET SSR bootstrap (SQLite, Identity, seed data) | ✅ Fully automated |
+| **Pattern C** — Program.cs | Full .NET SSR bootstrap (preserves source DB, Identity, seed data) | ✅ Fully automated |
 | **Pattern A** — Code-behinds | Page → ComponentBase + DI rewrite | ⚠️ Scaffolding correct, entity types need overlay |
 | **Pattern B** — Auth forms | Login/Register form simplification | ❌ Detection needs refinement |
 

@@ -173,7 +173,8 @@ function New-ProjectScaffold {
     # RF-06: Build conditional package references
     $additionalPackages = ''
     if ($hasModels) {
-        $additionalPackages += "`n    <PackageReference Include=`"Microsoft.EntityFrameworkCore.Sqlite`" Version=`"10.0.0`" />"
+        # Use SqlServer by default — preserves typical Web Forms database technology
+        $additionalPackages += "`n    <PackageReference Include=`"Microsoft.EntityFrameworkCore.SqlServer`" Version=`"10.0.0`" />"
         $additionalPackages += "`n    <PackageReference Include=`"Microsoft.EntityFrameworkCore.Tools`" Version=`"10.0.0`" />"
     }
     if ($hasIdentity) {
@@ -256,7 +257,7 @@ app.Run();
 
 // TODO: Replace YourDbContext with your actual DbContext class name
 // TODO: Configure database connection (use AddDbContextFactory — do NOT also register AddDbContext to avoid DI conflicts)
-// builder.Services.AddDbContextFactory<YourDbContext>(options => options.UseSqlite("Data Source=app.db"));
+// builder.Services.AddDbContextFactory<YourDbContext>(options => options.UseSqlServer("connection-string-here"));
 
 // TODO: Configure Identity
 // builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = false)

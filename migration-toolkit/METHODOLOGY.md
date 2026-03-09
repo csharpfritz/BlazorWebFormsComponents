@@ -134,7 +134,7 @@ The `bwfc-migrate-layer2.ps1` script targets three semantic patterns:
 
 | Pattern | What It Does | Current Status |
 |---------|-------------|----------------|
-| **Pattern C** — Program.cs | Generates full .NET SSR bootstrap with SQLite, Identity, seed data | ✅ Fully automated |
+| **Pattern C** — Program.cs | Generates full .NET SSR bootstrap with auto-detected DB provider, Identity, seed data | ✅ Fully automated |
 | **Pattern A** — Code-behinds | Scaffolds ComponentBase + DI code-behind files from page analysis | ⚠️ Structure correct, entity types need manual overlay |
 | **Pattern B** — Auth forms | Detects Login/Register forms and simplifies `[SupplyParameterFromForm]` | ❌ Detection needs refinement — manual overlay still required |
 
