@@ -1723,12 +1723,20 @@ function Copy-CodeBehind {
 function Test-UnconvertiblePage {
     param([string]$Content)
 
+    # Patterns that indicate the page contains complex Identity/Auth/Payment logic
+    # that requires manual migration (not just UI references)
+    # NOTE: These patterns should match code/API patterns, NOT just text content
+    # (e.g., "PayPal" in alt text should not trigger stubbing)
     $unconvertiblePatterns = @(
         'SignInManager',
         'UserManager',
         'FormsAuthentication',
-        'Session\[',
-        '(PayPal|Stripe|Braintree|Square|Adyen)\b',
+        # Payment SDK/API patterns (actual code, not UI text)
+        # Match: PayPalService, PayPal.Api, StripeClient, etc.
+        # Don't match: "Check out with PayPal" (UI text)
+        '(PayPal|Stripe|Braintree|Square|Adyen)\.(Api|Client|Service|SDK|Gateway|Payment)',
+        '(PayPal|Stripe|Braintree|Square|Adyen)(Service|Client|Gateway|Handler|Api)\b',
+        'new\s+(PayPal|Stripe|Braintree|Square|Adyen)',
         '(ProcessPayment|ChargeCard|CreateCharge|CapturePayment|PaymentGateway|IPayment)'
     )
     foreach ($pat in $unconvertiblePatterns) {
