@@ -1533,14 +1533,14 @@ function Remove-WebFormsAttributes {
 function ConvertFrom-ButtonOnClick {
     <#
     .SYNOPSIS
-        Converts Web Forms OnClick="HandlerName" to Blazor @onclick="HandlerName" on Button elements.
+        Preserves Web Forms OnClick="HandlerName" on BWFC Button elements.
     .DESCRIPTION
         In Web Forms, <asp:Button OnClick="btnSubmit_Click"> wires the button to a server-side handler.
-        In Blazor, this becomes <Button @onclick="btnSubmit_Click">.
+        BWFC Button components use OnClick as an EventCallback parameter, so the attribute is preserved
+        as-is (no conversion to @onclick needed).
         
-        This function finds OnClick attributes on Button/LinkButton/ImageButton elements and converts 
-        them to @onclick. A manual item is logged reminding the developer to add the handler stub
-        in the code-behind if it doesn't already exist.
+        This function logs OnClick handlers found on Button/LinkButton/ImageButton elements and reminds
+        the developer to verify the handler signature in the code-behind.
     #>
     param(
         [string]$Content,
@@ -1548,7 +1548,7 @@ function ConvertFrom-ButtonOnClick {
     )
 
     # Match OnClick="HandlerName" within Button, LinkButton, or ImageButton tags (after asp: prefix removal)
-    # This regex captures the handler name and replaces OnClick with @onclick
+    # BWFC uses OnClick as an EventCallback parameter, so we keep it as-is
     $onClickRegex = [regex]'(<(?:Button|LinkButton|ImageButton)\s+[^>]*?)OnClick="([^"]+)"'
     $onClickMatches = $onClickRegex.Matches($Content)
     
@@ -1558,13 +1558,13 @@ function ConvertFrom-ButtonOnClick {
             $handlers += $m.Groups[2].Value
         }
         
-        $Content = $onClickRegex.Replace($Content, '$1@onclick="$2"')
-        Write-TransformLog -File $RelPath -Transform 'ButtonHandler' -Detail "Converted $($onClickMatches.Count) OnClick to @onclick"
+        # No replacement needed - BWFC Button uses OnClick as EventCallback parameter
+        Write-TransformLog -File $RelPath -Transform 'ButtonHandler' -Detail "Found $($onClickMatches.Count) OnClick handler(s) — preserved for BWFC EventCallback"
         
         # Log unique handlers as manual items for verification
         $uniqueHandlers = $handlers | Select-Object -Unique
         foreach ($h in $uniqueHandlers) {
-            Write-ManualItem -File $RelPath -Category 'ButtonHandler' -Detail "Converted OnClick=""$h"" → @onclick=""$h"". Verify handler exists in code-behind as: private void $h() { }"
+            Write-ManualItem -File $RelPath -Category 'ButtonHandler' -Detail "OnClick=""$h"" preserved. Verify handler exists in code-behind as: private void $h(MouseEventArgs e) { }"
         }
     }
 

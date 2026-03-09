@@ -52,12 +52,12 @@ The Layer 1 script's `Add-NavLinkIds` function handles this automatically.
 
 ```razor
 @* WRONG — direct child causes build error *@
-<GridView DataSource="@data">
+<GridView Items="@data">
     <BoundField DataField="Name" HeaderText="Name" />
 </GridView>
 
 @* RIGHT — wrapped in Columns *@
-<GridView DataSource="@data">
+<GridView Items="@data">
     <Columns>
         <BoundField DataField="Name" HeaderText="Name" />
     </Columns>
@@ -440,11 +440,19 @@ The migration pipeline uses **two scripts** plus targeted manual overlay:
 - ReadOnly attribute warnings
 - Logout form → link conversion
 
-**`-TestMode` switch:** Generates `ProjectReference` to local BWFC source instead of NuGet `PackageReference`, enabling rapid iteration during development runs:
+**`-TestMode` switch:** Generates `ProjectReference` to local BWFC source instead of NuGet `PackageReference`, enabling rapid iteration during development runs.
+
+**`-BwfcProjectPath` parameter:** When using `-TestMode`, always specify the path to the local BWFC source:
 
 ```powershell
+# WRONG — TestMode without BwfcProjectPath may fail to locate BWFC source
 pwsh -File bwfc-migrate.ps1 -Path <source> -Output <target> -TestMode
+
+# RIGHT — always specify BwfcProjectPath when testing in-repo samples
+pwsh -File bwfc-migrate.ps1 -Path <source> -Output <target> -TestMode -BwfcProjectPath "D:\BlazorWebFormsComponents\src\BlazorWebFormsComponents"
 ```
+
+**Database provider preference:** Maintain the original database provider from the source project unless explicitly directed otherwise. If the source uses SQL Server LocalDB, keep LocalDB in the migrated project. Only switch providers (e.g., to SQLite) when specifically requested.
 
 #### Layer 2 — `bwfc-migrate-layer2.ps1`
 

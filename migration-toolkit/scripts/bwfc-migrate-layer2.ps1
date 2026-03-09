@@ -1174,6 +1174,7 @@ function Invoke-PatternC {
     [void]$sb.AppendLine('')
     [void]$sb.AppendLine('builder.Services.AddRazorComponents();')
     [void]$sb.AppendLine('')
+    [void]$sb.AppendLine('builder.Services.AddHttpContextAccessor();  // Required for BWFC GridView/DetailsView')
     [void]$sb.AppendLine('builder.Services.AddBlazorWebFormsComponents();')
     [void]$sb.AppendLine('')
 

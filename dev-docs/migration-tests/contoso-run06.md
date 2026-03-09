@@ -116,6 +116,50 @@ Run 05 documentation updated with Blazor implementation screenshots:
 - `dev-docs/migration-tests/contoso-run05-screenshots/` — 5 Blazor screenshots
 - This report
 
+## Unsupported Controls Encountered
+
+The following Web Forms controls are used in ContosoUniversity but are **not supported** by BlazorWebFormsComponents. These should be prioritized for potential library additions or documented as requiring manual migration.
+
+### `<ajaxToolkit:AutoCompleteExtender>`
+
+| Attribute | Value |
+|-----------|-------|
+| **Used In** | Students.aspx, Courses.aspx |
+| **Purpose** | Provides typeahead/autocomplete functionality for TextBox controls. Calls a server-side `ServiceMethod` to fetch suggestions as the user types. |
+| **Configuration** | `MinimumPrefixLength="1"`, `CompletionInterval="100"`, `EnableCaching="true"`, `CompletionSetCount="20"` |
+| **Blazor Alternative** | Use a custom autocomplete component with `@oninput` event, debouncing, and async data fetching. Consider third-party libraries like MudBlazor `<MudAutocomplete>` or Radzen `<RadzenAutoComplete>`. |
+
+### `<asp:ScriptManager>`
+
+| Attribute | Value |
+|-----------|-------|
+| **Used In** | Students.aspx, Courses.aspx, Instructors.aspx |
+| **Purpose** | Required by ASP.NET AJAX to manage client script libraries, partial page rendering, and client proxy generation for web services. |
+| **Blazor Alternative** | **Not needed.** Blazor handles all JavaScript interop and component updates natively. Simply remove this control during migration. |
+
+### `<asp:UpdatePanel>`
+
+| Attribute | Value |
+|-----------|-------|
+| **Used In** | Students.aspx, Courses.aspx, Instructors.aspx |
+| **Purpose** | Enables partial page updates without full postbacks. Content inside `<ContentTemplate>` is updated asynchronously via AJAX. |
+| **Blazor Alternative** | **Not needed.** Blazor's component model handles partial updates automatically. Any state change triggers a re-render of only the affected components. Remove the UpdatePanel wrapper and migrate the inner content directly. |
+
+### Summary Table
+
+| Control | Pages | Priority | Recommendation |
+|---------|-------|----------|----------------|
+| `AutoCompleteExtender` | Students.aspx, Courses.aspx | **P2** | Consider BWFC implementation or document 3rd-party alternatives |
+| `ScriptManager` | Students.aspx, Courses.aspx, Instructors.aspx | **N/A** | Remove — not needed in Blazor |
+| `UpdatePanel` | Students.aspx, Courses.aspx, Instructors.aspx | **N/A** | Remove — Blazor handles this natively |
+
+### Migration Script Recommendation
+
+The Layer 1 migration script should:
+1. **Remove** `<asp:ScriptManager>` tags completely
+2. **Remove** `<asp:UpdatePanel>` wrappers (preserve `<ContentTemplate>` children)
+3. **Comment out** `<ajaxToolkit:*>` controls with a `<!-- BWFC: Unsupported control, manual migration required -->` warning
+
 ## Next Steps
 
 1. **P0:** Fix Layer 1 script @onclick → OnClick transform
