@@ -7,6 +7,7 @@ source: "earned"
 ---
 
 <!-- Updated 2026-03-09: Added ASPX URL rewriting standard (ContosoUniversity Run 04) -->
+<!-- Updated 2026-03-09: Added required DI services (ContosoUniversity Run 05) -->
 
 ## Context
 
@@ -77,6 +78,40 @@ The Layer 1 script's `Wrap-GridViewColumns` function handles this automatically.
 | DetailsView | `ItemType` | `<DetailsView ItemType="Student" ...>` |
 | ListView | `ItemType` | `<ListView ItemType="Product" ...>` |
 | FormView | `ItemType` | `<FormView ItemType="Order" ...>` |
+
+### Required DI Services
+
+**The following services MUST be registered for BWFC components to work correctly:**
+
+```csharp
+// Program.cs — required service registrations
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Required for BWFC components (GridView, DetailsView, etc.)
+builder.Services.AddHttpContextAccessor();
+
+// BWFC services — call AFTER AddHttpContextAccessor
+builder.Services.AddBlazorWebFormsComponents();
+
+// Entity Framework — initialize schema at startup
+var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<YourDbContext>();
+    db.Database.EnsureCreated();
+}
+```
+
+**Why `AddHttpContextAccessor()` is required:**
+- BWFC's GridView, DetailsView, and other components inject `IHttpContextAccessor`
+- Without this registration, pages using BWFC data controls fail with HTTP 500
+- Error: "Cannot provide a value for property 'HttpContextAccessor' on type 'GridView'"
+
+**Why `EnsureCreated()` at startup:**
+- Creates database schema from EF Core model if it doesn't exist
+- Without this, database queries fail on empty/non-existent database
+- For production, consider EF Core migrations instead
 
 **Derive the type from:**
 1. The `ItemType` attribute in Web Forms markup (if present)
