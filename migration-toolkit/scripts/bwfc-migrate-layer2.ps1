@@ -63,7 +63,7 @@ $ErrorActionPreference = 'Stop'
 
 $script:TransformLog = @()
 $script:ManualItems = [System.Collections.Generic.List[PSCustomObject]]::new()
-$script:Summary = @{ PatternA = 0; PatternB = 0; PatternC = 0; EdmxScaffold = 0; WebMethod = 0; Skipped = 0 }
+$script:Summary = @{ PatternA = 0; PatternB = 0; PatternC = 0; PatternD = 0; EdmxScaffold = 0; WebMethod = 0; Skipped = 0 }
 $script:Layer2Marker = '// Layer2-transformed'
 
 function Write-Layer2Log {
@@ -74,6 +74,7 @@ function Write-Layer2Log {
         'PatternA' { 'Cyan' }
         'PatternB' { 'Green' }
         'PatternC' { 'Yellow' }
+        'PatternD' { 'Blue' }
         default     { 'White' }
     }
     Write-Host "  [$Pattern] $File — $Detail" -ForegroundColor $color
@@ -1279,6 +1280,154 @@ function Invoke-PatternC {
 }
 
 # ============================================================================
+# Pattern D: ItemType injection for data-bound components
+# ============================================================================
+#
+# Blazor's generic type inference cannot determine ItemType from the Items binding.
+# This pattern scans .razor files for data-bound components (GridView, DetailsView,
+# FormView, ListView, DataList, Repeater) that are missing ItemType and injects
+# the detected entity type based on:
+#   1. Original Web Forms ItemType attribute (preserved by Layer 1)
+#   2. SelectMethod return type from code-behind
+#   3. IQueryable<T>/List<T> type from code-behind
+#   4. DbSet<T> references
+#   5. Model class name heuristics
+#   6. Fallback to 'object' to allow compilation
+
+function Test-PatternD {
+    param([string]$RazorPath)
+
+    if (-not (Test-Path $RazorPath)) { return $false }
+    $content = Get-Content -Path $RazorPath -Raw -Encoding UTF8
+
+    # Check if file contains data-bound components WITHOUT ItemType
+    # Components that need ItemType: GridView, DetailsView, FormView, ListView, DataList, Repeater
+    $dataBoundComponents = @('GridView', 'DetailsView', 'FormView', 'ListView', 'DataList', 'Repeater')
+    
+    foreach ($comp in $dataBoundComponents) {
+        # Match component opening tag
+        if ($content -match "<$comp\b") {
+            # Check if ItemType is already present
+            $tagPattern = "(?si)<$comp\b[^>]*>"
+            $tagMatches = [regex]::Matches($content, $tagPattern)
+            foreach ($m in $tagMatches) {
+                $tag = $m.Value
+                if ($tag -notmatch '\bItemType\s*=') {
+                    return $true  # Found a component without ItemType
+                }
+            }
+        }
+    }
+
+    return $false
+}
+
+function Invoke-PatternD {
+    param(
+        [string]$RazorPath,
+        [string]$Namespace,
+        [string]$ProjectRoot
+    )
+
+    $content = Get-Content -Path $RazorPath -Raw -Encoding UTF8
+    $modified = $false
+    $injectionCount = 0
+
+    # Find the companion code-behind to detect entity type
+    $codeBehindPath = "$RazorPath.cs"
+    $cbContent = ''
+    if (Test-Path $codeBehindPath) {
+        $cbContent = Get-Content -Path $codeBehindPath -Raw -Encoding UTF8
+    }
+
+    # Also check for @code block in the .razor file
+    $razorCodeBlock = ''
+    if ($content -match '@code\s*\{') {
+        $razorCodeBlock = $content
+    }
+
+    # Combine all code sources for entity detection
+    $allCode = $cbContent + "`n" + $razorCodeBlock
+
+    # Detect entity type from the code
+    $entityType = $null
+
+    # Check for IQueryable<T>, List<T>, IEnumerable<T> patterns
+    if ($allCode -match 'IQueryable<(\w+)>') { $entityType = $Matches[1] }
+    elseif ($allCode -match 'List<(\w+)>\s+\w+\s*=') { $entityType = $Matches[1] }
+    elseif ($allCode -match 'IEnumerable<(\w+)>') { $entityType = $Matches[1] }
+    elseif ($allCode -match 'private\s+(?:List|IList|IEnumerable)<(\w+)>') { $entityType = $Matches[1] }
+
+    # If still not found, check DbSet references in Models folder
+    if (-not $entityType -and $ProjectRoot) {
+        $modelsDir = Join-Path $ProjectRoot 'Models'
+        if (Test-Path $modelsDir) {
+            $modelClasses = @()
+            foreach ($f in (Get-ChildItem -Path $modelsDir -Filter '*.cs' -Recurse)) {
+                $mc = Get-Content -Path $f.FullName -Raw -Encoding UTF8
+                $classMatches = [regex]::Matches($mc, 'public\s+class\s+(\w+)')
+                foreach ($cm in $classMatches) {
+                    $cn = $cm.Groups[1].Value
+                    if ($cn -notmatch 'Context$|Initializer$|Seeder$|Configuration$|Migration') {
+                        $modelClasses += $cn
+                    }
+                }
+            }
+            # Match any model class mentioned in the code
+            foreach ($mc in $modelClasses) {
+                if ($allCode -match "\b$mc\b") {
+                    $entityType = $mc
+                    break
+                }
+            }
+        }
+    }
+
+    # Fallback to 'object' if no entity type detected
+    if (-not $entityType) {
+        $entityType = 'object'
+    }
+
+    # Inject ItemType into data-bound components that lack it
+    $dataBoundComponents = @('GridView', 'DetailsView', 'FormView', 'ListView', 'DataList', 'Repeater')
+
+    foreach ($comp in $dataBoundComponents) {
+        # Match component opening tags WITHOUT ItemType
+        # Pattern: <GridView followed by attributes, NOT containing ItemType, ending with >
+        $pattern = "(?si)(<$comp\b)([^>]*?)(>)"
+        
+        $content = [regex]::Replace($content, $pattern, {
+            param($m)
+            $openTag = $m.Groups[1].Value
+            $attrs = $m.Groups[2].Value
+            $closeAngle = $m.Groups[3].Value
+
+            # Check if ItemType already present
+            if ($attrs -match '\bItemType\s*=') {
+                return $m.Value  # Already has ItemType, no change
+            }
+
+            # Inject ItemType after the first space or at the end
+            $script:modified = $true
+            $script:injectionCount++
+            
+            # Add ItemType as first attribute
+            return "$openTag ItemType=`"$entityType`"$attrs$closeAngle"
+        })
+    }
+
+    if ($injectionCount -gt 0) {
+        $outputPath = Get-OutputPath -OriginalPath $RazorPath
+        if ($PSCmdlet.ShouldProcess($outputPath, "Pattern D: Inject ItemType into data-bound components")) {
+            Set-Content -Path $outputPath -Value $content -Encoding UTF8
+            $relPath = $RazorPath.Replace($ProjectRoot, '').TrimStart('\', '/')
+            Write-Layer2Log -File $relPath -Pattern 'PatternD' -Detail "Injected ItemType=`"$entityType`" into $injectionCount component(s)"
+            $script:Summary.PatternD++
+        }
+    }
+}
+
+# ============================================================================
 # Entry Point
 # ============================================================================
 
@@ -1381,6 +1530,22 @@ if (Test-PatternC -ProjectRoot $Path) {
     Write-Host '  No Pattern C candidates detected (or already transformed).' -ForegroundColor DarkGray
 }
 
+# ── Pattern D: ItemType Injection ──
+Write-Host ''
+Write-Host '── Pattern D: ItemType Injection for Data-Bound Components ──' -ForegroundColor Blue
+$razorFilesD = Get-ChildItem -Path $Path -Filter '*.razor' -Recurse -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notmatch '\.razor\.cs$' }
+$patternDCount = 0
+foreach ($rf in $razorFilesD) {
+    if (Test-PatternD -RazorPath $rf.FullName) {
+        Invoke-PatternD -RazorPath $rf.FullName -Namespace $ns -ProjectRoot $Path
+        $patternDCount++
+    }
+}
+if ($patternDCount -eq 0) {
+    Write-Host '  No Pattern D candidates detected (all components have ItemType).' -ForegroundColor DarkGray
+}
+
 # ── EDMX Scaffold: Detect DB-first .edmx files ──
 # (Runs after Pattern C so Program.cs exists and won't be overwritten)
 Write-Host ''
@@ -1413,6 +1578,7 @@ Write-Host "║  WebMethod → Minimal API:             $($script:Summary.WebMet
 Write-Host "║  Pattern A (FormView→ComponentBase):  $($script:Summary.PatternA) file(s)         ║" -ForegroundColor Cyan
 Write-Host "║  Pattern B (Auth Simplification):     $($script:Summary.PatternB) file(s)         ║" -ForegroundColor Green
 Write-Host "║  Pattern C (Program.cs Bootstrap):    $($script:Summary.PatternC) file(s)         ║" -ForegroundColor Yellow
+Write-Host "║  Pattern D (ItemType Injection):      $($script:Summary.PatternD) file(s)         ║" -ForegroundColor Blue
 Write-Host "║  Skipped (already transformed):       $($script:Summary.Skipped) file(s)         ║" -ForegroundColor DarkGray
 Write-Host '╚══════════════════════════════════════════════════════════╝' -ForegroundColor Cyan
 Write-Host ''

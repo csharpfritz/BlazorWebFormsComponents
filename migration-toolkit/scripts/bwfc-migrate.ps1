@@ -1520,12 +1520,14 @@ function Remove-WebFormsAttributes {
         }
     }
 
-    # ItemType="Namespace.Class" → TItem="Class"
+    # ItemType="Namespace.Class" → ItemType="Class" (strip namespace only, keep attribute name)
+    # BWFC components (GridView, DetailsView, FormView, ListView, etc.) use ItemType, not TItem
+    # Only list controls (DropDownList, BulletedList, CheckBoxList, ListBox, RadioButtonList) use TItem
     $itemTypeRegex = [regex]'ItemType="(?:[^"]*\.)?([^"]+)"'
     $itemTypeMatches = $itemTypeRegex.Matches($Content)
     if ($itemTypeMatches.Count -gt 0) {
-        $Content = $itemTypeRegex.Replace($Content, 'TItem="$1"')
-        Write-TransformLog -File $RelPath -Transform 'Attribute' -Detail "Converted $($itemTypeMatches.Count) ItemType to TItem"
+        $Content = $itemTypeRegex.Replace($Content, 'ItemType="$1"')
+        Write-TransformLog -File $RelPath -Transform 'Attribute' -Detail "Simplified $($itemTypeMatches.Count) ItemType attribute(s) (stripped namespace)"
     }
 
     return $Content
