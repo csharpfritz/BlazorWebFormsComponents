@@ -1320,7 +1320,7 @@ if (-not $DbProvider) {
             }
         }
         # Check for .edmx files (implies SQL Server in most cases)
-        $edmxFiles = Get-ChildItem -Path $SourcePath -Filter '*.edmx' -Recurse -ErrorAction SilentlyContinue
+        $edmxFiles = @(Get-ChildItem -Path $SourcePath -Filter '*.edmx' -Recurse -ErrorAction SilentlyContinue)
         if ($edmxFiles.Count -gt 0) {
             $detectedProvider = 'SqlServer'
         }
