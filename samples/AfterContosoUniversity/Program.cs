@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddBlazorWebFormsComponents();
 
 // Add Entity Framework DbContext with SQLite
@@ -17,6 +18,13 @@ builder.Services.AddDbContext<SchoolContext>(options =>
         ?? "Data Source=ContosoUniversity.db"));
 
 var app = builder.Build();
+
+// Ensure database is created with schema
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SchoolContext>();
+    db.Database.EnsureCreated();
+}
 
 if (!app.Environment.IsDevelopment())
 {
