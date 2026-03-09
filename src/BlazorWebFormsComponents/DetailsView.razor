@@ -1,6 +1,7 @@
 @using BlazorWebFormsComponents.DataBinding
 @inherits DataBoundComponent<ItemType>
 @typeparam ItemType
+@attribute [CascadingTypeParameter(nameof(ItemType))]
 
 <CascadingValue Name="ParentDetailsView" Value="this" IsFixed="true">
 	@RowStyleContent

@@ -50,13 +50,25 @@ Data controls that support BoundField, TemplateField, and other column types mus
 
 **How it works:**
 1. Parent component (GridView, DetailsView) implements `IColumnCollection<ItemType>`
-2. Parent provides cascading value: `<CascadingValue Value="this" Name="ColumnCollection">`
-3. Column components (BoundField, TemplateField) have `[CascadingParameter(Name = "ColumnCollection")]`
-4. On initialization, columns call `ParentColumnsCollection.AddColumn(this)` to register
+2. Parent uses `@attribute [CascadingTypeParameter(nameof(ItemType))]` to cascade the type to children
+3. Parent provides cascading value: `<CascadingValue Value="this" Name="ColumnCollection">`
+4. Column components (BoundField, TemplateField) have `[CascadingParameter(Name = "ColumnCollection")]`
+5. On initialization, columns call `ParentColumnsCollection.AddColumn(this)` to register
+6. Child components automatically receive the `ItemType` via Blazor's cascading type parameter — no need to specify `ItemType` on each child
 
 **Example:**
+```razor
+@* Parent component (.razor file) *@
+@typeparam ItemType
+@attribute [CascadingTypeParameter(nameof(ItemType))]
+
+<CascadingValue Value="this" Name="ColumnCollection">
+    @Fields
+</CascadingValue>
+```
+
 ```csharp
-// Parent component (DetailsView)
+// Parent component (.razor.cs file)
 public partial class DetailsView<ItemType> : IColumnCollection<ItemType>
 {
     private List<IColumn<ItemType>> _columnList = new();
@@ -65,11 +77,6 @@ public partial class DetailsView<ItemType> : IColumnCollection<ItemType>
     public void AddColumn(IColumn<ItemType> column) => _columnList.Add(column);
     public void RemoveColumn(IColumn<ItemType> column) => _columnList.Remove(column);
 }
-
-// In .razor file:
-<CascadingValue Value="this" Name="ColumnCollection">
-    @Fields
-</CascadingValue>
 ```
 
 ### Property Naming Convention

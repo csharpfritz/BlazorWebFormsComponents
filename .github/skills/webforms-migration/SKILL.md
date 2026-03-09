@@ -348,9 +348,9 @@ Data controls require additional changes for data binding:
     ItemType="Course"
     AutoGenerateRows="false">
     <Fields>
-        <BoundField ItemType="Course" DataField="CourseID" HeaderText="Course ID" />
-        <BoundField ItemType="Course" DataField="CourseName" HeaderText="Course Name" />
-        <BoundField ItemType="Course" DataField="StudentsMax" HeaderText="Max Students" />
+        <BoundField DataField="CourseID" HeaderText="Course ID" />
+        <BoundField DataField="CourseName" HeaderText="Course Name" />
+        <BoundField DataField="StudentsMax" HeaderText="Max Students" />
     </Fields>
 </DetailsView>
 ```
@@ -358,8 +358,8 @@ Data controls require additional changes for data binding:
 **Key changes:**
 - `SelectMethod="GetCourse"` → `DataItem="_selectedCourse"` (bind to a field loaded in code)
 - `ItemType="Namespace.Class"` → `ItemType="Class"` (use short name, ensure `@using` directive exists)
-- BoundField needs `ItemType="Course"` attribute explicitly (required for column registration)
 - BoundField, TemplateField, and other column types work inside `<Fields>` just like Web Forms
+- Child components (BoundField, TemplateField) **inherit the type parameter** via Blazor's `[CascadingTypeParameter]` — no `ItemType` needed on each child
 
 #### Repeater
 
