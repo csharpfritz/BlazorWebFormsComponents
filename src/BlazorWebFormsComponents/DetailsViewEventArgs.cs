@@ -88,6 +88,11 @@ namespace BlazorWebFormsComponents
 		public object CommandArgument { get; }
 
 		/// <summary>
+		/// Gets or sets the item to be inserted. Used with Model Binding (InsertMethod parameter).
+		/// </summary>
+		public object Item { get; set; }
+
+		/// <summary>
 		/// Gets or sets a value indicating whether the event should be canceled.
 		/// </summary>
 		public bool Cancel { get; set; }

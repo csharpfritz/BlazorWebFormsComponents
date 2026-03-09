@@ -2,6 +2,7 @@
 using BlazorWebFormsComponents.Enums;
 using Microsoft.AspNetCore.Components;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace BlazorWebFormsComponents
@@ -321,7 +322,16 @@ namespace BlazorWebFormsComponents
 			Exception caughtException = null;
 			try
 			{
-				// The actual deletion is expected to be handled by the consumer in ItemDeleting
+				// If DeleteMethod is set (Model Binding pattern), call it with the item
+				if (DeleteMethod != null && Items != null)
+				{
+					var itemsList = Items.ToList();
+					if (itemIndex >= 0 && itemIndex < itemsList.Count)
+					{
+						DeleteMethod(itemsList[itemIndex]);
+					}
+				}
+				// Otherwise, the deletion is handled by the consumer in ItemDeleting event
 			}
 			catch (Exception ex)
 			{
@@ -341,7 +351,12 @@ namespace BlazorWebFormsComponents
 			Exception caughtException = null;
 			try
 			{
-				// The actual insertion is expected to be handled by the consumer in ItemInserting
+				// If InsertMethod is set (Model Binding pattern), call it with the item from the event args
+				if (InsertMethod != null && insertingArgs.Item is ItemType item)
+				{
+					InsertMethod(item);
+				}
+				// Otherwise, the insertion is handled by the consumer in ItemInserting event
 			}
 			catch (Exception ex)
 			{
@@ -361,7 +376,16 @@ namespace BlazorWebFormsComponents
 			Exception caughtException = null;
 			try
 			{
-				// The actual update is expected to be handled by the consumer in ItemUpdating
+				// If UpdateMethod is set (Model Binding pattern), call it with the item
+				if (UpdateMethod != null && Items != null)
+				{
+					var itemsList = Items.ToList();
+					if (itemIndex >= 0 && itemIndex < itemsList.Count)
+					{
+						UpdateMethod(itemsList[itemIndex]);
+					}
+				}
+				// Otherwise, the update is handled by the consumer in ItemUpdating event
 			}
 			catch (Exception ex)
 			{

@@ -380,25 +380,89 @@ The script should preserve the attribute and annotate the signature change neede
 | `<asp:DetailsView>` | `<DetailsView Items="@data">` with fields | Manual field rendering |
 | `<asp:DataList>` | `<DataList Items="@data">` with `ItemTemplate` | `@foreach` + grid HTML |
 
-**SelectMethod Migration (The Real Issue):** Web Forms `SelectMethod` attribute provides automatic method binding that Blazor doesn't support. Both `DataSource` and `Items` work identically in BWFC (they're aliases to the same backing store), so the migration challenge is *not* a property rename — it's the data loading pattern:
+**SelectMethod — BWFC Native Support:** BWFC **natively supports** the `SelectMethod` attribute. The attribute is preserved in markup and developers only need to adapt their existing method signature to match the `SelectHandler<T>` delegate:
+
+```csharp
+// SelectHandler<T> delegate signature (defined in BWFC):
+public delegate IQueryable<T> SelectHandler<T>(
+    int maxRows, 
+    int startRowIndex, 
+    string sortByExpression, 
+    out int totalRowCount);
+```
+
+**Migration pattern:**
 
 ```razor
-@* Both of these work identically in BWFC: *@
-<GridView DataSource="@Products" ItemType="Product" />
-<GridView Items="@Products" ItemType="Product" />
+@* SelectMethod is preserved — BWFC calls it automatically in OnAfterRender *@
+<GridView TItem="Product" SelectMethod="GetProducts">
+    <Columns>
+        <BoundField DataField="Name" HeaderText="Name" />
+    </Columns>
+</GridView>
 
 @code {
-    private List<Product> Products = new();
-    
-    protected override async Task OnInitializedAsync()
+    // Adapt your existing method to match SelectHandler<T> signature
+    public IQueryable<Product> GetProducts(int maxRows, int startRowIndex, 
+        string sortByExpression, out int totalRowCount)
     {
-        // Data loading moved from SelectMethod to lifecycle
-        Products = await productService.GetProductsAsync();
+        totalRowCount = db.Products.Count();
+        return db.Products.AsQueryable();
     }
 }
 ```
 
-The Layer 1 script adds TODO comments for `SelectMethod` attributes — this marks where manual data loading code must be written in `OnInitializedAsync`.
+**InsertMethod, UpdateMethod, DeleteMethod — BWFC Native Support:** These are also natively supported via `InsertHandler<T>`, `UpdateHandler<T>`, and `DeleteHandler<T>` delegates. The methods are called automatically when the component's edit/insert/delete commands are triggered.
+
+```csharp
+// Handler delegate signatures (defined in BWFC):
+public delegate void InsertHandler<T>(T item);
+public delegate void UpdateHandler<T>(T item);
+public delegate void DeleteHandler<T>(T item);
+```
+
+**CRUD migration pattern:**
+
+```razor
+<ListView TItem="Product" 
+    SelectMethod="GetProducts"
+    InsertMethod="InsertProduct"
+    UpdateMethod="UpdateProduct"
+    DeleteMethod="DeleteProduct">
+    <ItemTemplate>...</ItemTemplate>
+    <EditItemTemplate>...</EditItemTemplate>
+    <InsertItemTemplate>...</InsertItemTemplate>
+</ListView>
+
+@code {
+    public IQueryable<Product> GetProducts(int maxRows, int startRowIndex, 
+        string sortByExpression, out int totalRowCount)
+    {
+        totalRowCount = db.Products.Count();
+        return db.Products.AsQueryable();
+    }
+    
+    public void InsertProduct(Product item)
+    {
+        db.Products.Add(item);
+        db.SaveChanges();
+    }
+    
+    public void UpdateProduct(Product item)
+    {
+        db.Products.Update(item);
+        db.SaveChanges();
+    }
+    
+    public void DeleteProduct(Product item)
+    {
+        db.Products.Remove(item);
+        db.SaveChanges();
+    }
+}
+```
+
+Both `DataSource` and `Items` also work identically in BWFC (they're aliases to the same backing store) for cases where you prefer explicit data binding over `SelectMethod`.
 
 ### Session State → Scoped Services
 

@@ -134,7 +134,8 @@ These are 100% mechanical — apply to every file:
 
 ### Layer 2 — Structural Transforms
 
-- Convert `SelectMethod="GetX"` binding → load data in `OnInitializedAsync` and bind via `Items="@x"` or `DataSource="@x"` (both work identically)
+- Adapt `SelectMethod` signatures to match `SelectHandler<T>` delegate (add 4 parameters: `maxRows`, `startRowIndex`, `sortByExpression`, `out totalRowCount`) — or alternatively convert to `Items="@x"` with `OnInitializedAsync` data loading
+- Adapt `InsertMethod`, `UpdateMethod`, `DeleteMethod` signatures to match their respective handler delegates (`InsertHandler<T>`, `UpdateHandler<T>`, `DeleteHandler<T>`) — each takes the item as a parameter
 - Convert `ItemType="Namespace.Type"` → `TItem="Type"`
 - Add `Context="Item"` to `<ItemTemplate>` elements
 - Migrate code-behind: `Page_Load` → `OnInitializedAsync`
@@ -271,7 +272,31 @@ These are 100% mechanical — apply to every file:
 ```
 
 ```razor
-<!-- Blazor with BWFC -->
+<!-- Blazor with BWFC — Option 1: Keep SelectMethod (recommended) -->
+<GridView SelectMethod="GetItems" TItem="YourEntity"
+    AutoGenerateColumns="false"
+    AllowPaging="true" PageSize="10">
+    <Columns>
+        <BoundField DataField="Name" HeaderText="Name" />
+        <TemplateField HeaderText="Price">
+            <ItemTemplate Context="Item">@Item.UnitPrice.ToString("C")</ItemTemplate>
+        </TemplateField>
+    </Columns>
+</GridView>
+
+@code {
+    // Adapt method signature to SelectHandler<T> delegate
+    public IQueryable<YourEntity> GetItems(int maxRows, int startRowIndex, 
+        string sortByExpression, out int totalRowCount)
+    {
+        totalRowCount = db.Entities.Count();
+        return db.Entities.AsQueryable();
+    }
+}
+```
+
+```razor
+<!-- Blazor with BWFC — Option 2: Explicit Items binding -->
 <GridView Items="items" TItem="YourEntity"
     AutoGenerateColumns="false"
     AllowPaging="true" PageSize="10">
@@ -282,9 +307,18 @@ These are 100% mechanical — apply to every file:
         </TemplateField>
     </Columns>
 </GridView>
+
+@code {
+    private List<YourEntity> items = new();
+    
+    protected override async Task OnInitializedAsync()
+    {
+        items = await entityService.GetItemsAsync();
+    }
+}
 ```
 
-**Key changes:** `ItemType` → `TItem`, `SelectMethod` → `Items`, add `Context="Item"` to templates.
+**Key changes:** `ItemType` → `TItem`, add `Context="Item"` to templates. **`SelectMethod` IS supported natively** — adapt your method signature to match `SelectHandler<T>` delegate (see Data Binding section below). Alternatively, convert to `Items` binding with lifecycle data loading.
 
 #### ListView
 
@@ -303,7 +337,29 @@ These are 100% mechanical — apply to every file:
 ```
 
 ```razor
-<!-- Blazor with BWFC -->
+<!-- Blazor with BWFC — Option 1: Keep SelectMethod (recommended) -->
+<ListView SelectMethod="GetItems" TItem="YourEntity">
+    <ItemTemplate Context="Item">
+        <div class="item">
+            <h3>@Item.Name</h3>
+            <Image ImageUrl="@Item.ImagePath" />
+            <p>@Item.UnitPrice.ToString("C")</p>
+        </div>
+    </ItemTemplate>
+</ListView>
+
+@code {
+    public IQueryable<YourEntity> GetItems(int maxRows, int startRowIndex, 
+        string sortByExpression, out int totalRowCount)
+    {
+        totalRowCount = db.Entities.Count();
+        return db.Entities.AsQueryable();
+    }
+}
+```
+
+```razor
+<!-- Blazor with BWFC — Option 2: Explicit Items binding -->
 <ListView Items="items" TItem="YourEntity">
     <ItemTemplate Context="Item">
         <div class="item">
@@ -343,7 +399,33 @@ Web Forms `ListView` supports `GroupItemCount` for grid-style layouts (e.g., 4 p
 ```
 
 ```razor
-@* Blazor — BWFC ListView preserves GroupItemCount and templates *@
+@* Blazor — BWFC ListView preserves GroupItemCount and templates (Option 1: SelectMethod) *@
+<ListView SelectMethod="GetProducts" TItem="Product" GroupItemCount="4">
+    <LayoutTemplate>@context</LayoutTemplate>
+    <GroupTemplate>@context</GroupTemplate>
+    <ItemTemplate>
+        <td>
+            <a href="@($"/Products/{context.ProductID}")">
+                <img src="@context.ImagePath" alt="@context.ProductName" />
+            </a>
+            <span>@context.ProductName</span>
+            <span>@context.UnitPrice.ToString("C")</span>
+        </td>
+    </ItemTemplate>
+</ListView>
+
+@code {
+    public IQueryable<Product> GetProducts(int maxRows, int startRowIndex, 
+        string sortByExpression, out int totalRowCount)
+    {
+        totalRowCount = db.Products.Count();
+        return db.Products.AsQueryable();
+    }
+}
+```
+
+```razor
+@* Blazor — BWFC ListView with Items binding (Option 2) *@
 <ListView Items="products" TItem="Product" GroupItemCount="4">
     <LayoutTemplate>@context</LayoutTemplate>
     <GroupTemplate>@context</GroupTemplate>
@@ -359,12 +441,32 @@ Web Forms `ListView` supports `GroupItemCount` for grid-style layouts (e.g., 4 p
 </ListView>
 ```
 
-**Key changes:** `GroupItemCount` preserved as-is. `LayoutTemplate` and `GroupTemplate` use `@context` as the placeholder (BWFC renders the table/tr structure). `ItemTemplate` uses `@context.Property` instead of `<%#: Item.Property %>`.
+**Key changes:** `GroupItemCount` preserved as-is. `LayoutTemplate` and `GroupTemplate` use `@context` as the placeholder (BWFC renders the table/tr structure). `ItemTemplate` uses `@context.Property` instead of `<%#: Item.Property %>`. **`SelectMethod` IS supported natively** — adapt the method signature or use `Items` binding.
 
 #### FormView
 
 ```razor
-<!-- Blazor with BWFC -->
+<!-- Blazor with BWFC — Option 1: Keep SelectMethod (recommended) -->
+<FormView SelectMethod="GetProduct" TItem="Product" RenderOuterTable="false">
+    <ItemTemplate Context="Item">
+        <h2>@Item.ProductName</h2>
+        <p>@Item.Description</p>
+        <p>Price: @Item.UnitPrice.ToString("C")</p>
+    </ItemTemplate>
+</FormView>
+
+@code {
+    public IQueryable<Product> GetProduct(int maxRows, int startRowIndex, 
+        string sortByExpression, out int totalRowCount)
+    {
+        totalRowCount = 1;
+        return db.Products.Where(p => p.ProductID == productId).AsQueryable();
+    }
+}
+```
+
+```razor
+<!-- Blazor with BWFC — Option 2: Explicit DataItem binding -->
 <FormView DataItem="product" TItem="Product" RenderOuterTable="false">
     <ItemTemplate Context="Item">
         <h2>@Item.ProductName</h2>
@@ -374,7 +476,7 @@ Web Forms `ListView` supports `GroupItemCount` for grid-style layouts (e.g., 4 p
 </FormView>
 ```
 
-**Key changes:** `SelectMethod` → `DataItem` for single records, `Items` for collections.
+**Key changes:** **`SelectMethod` IS supported natively** — adapt your method signature to match `SelectHandler<T>` delegate. For single records use `DataItem`, for collections use `Items` if you prefer explicit binding.
 
 ### Navigation Controls
 
@@ -490,12 +592,64 @@ For GridView, ListView, Repeater, DataList, DataGrid:
 
 | Web Forms Pattern | BWFC Pattern | Notes |
 |-------------------|-------------|-------|
-| `SelectMethod="GetProducts"` | `Items="@products"` or `DataSource="@products"` | Load data in `OnInitializedAsync`; both properties are equivalent |
+| `SelectMethod="GetProducts"` | `SelectMethod="GetProducts"` (keep!) | **Supported natively!** Adapt method signature to `SelectHandler<T>` delegate (see below) |
+| `InsertMethod="AddProduct"` | `InsertMethod="AddProduct"` (keep!) | **Supported natively!** Adapt method signature to `InsertHandler<T>` delegate |
+| `UpdateMethod="SaveProduct"` | `UpdateMethod="SaveProduct"` (keep!) | **Supported natively!** Adapt method signature to `UpdateHandler<T>` delegate |
+| `DeleteMethod="RemoveProduct"` | `DeleteMethod="RemoveProduct"` (keep!) | **Supported natively!** Adapt method signature to `DeleteHandler<T>` delegate |
 | `ItemType="Namespace.Product"` | `TItem="Product"` | |
 | `DataSource=<%# GetItems() %>` + `DataBind()` | `DataSource="@items"` or `Items="@items"` | Same data, loaded via lifecycle instead of binding expression |
 | `DataKeyNames="ProductID"` | `DataKeyNames="ProductID"` | Preserved unchanged |
 
-> **Note:** BWFC supports both `DataSource` and `Items` as aliases — they point to the same internal backing store. Use whichever name you prefer; no conversion is required.
+**SelectMethod signature adaptation:**
+
+```csharp
+// BWFC SelectHandler<T> delegate (defined in BlazorWebFormsComponents.DataBinding):
+public delegate IQueryable<T> SelectHandler<T>(
+    int maxRows, 
+    int startRowIndex, 
+    string sortByExpression, 
+    out int totalRowCount);
+
+// Adapt your existing Web Forms SelectMethod to this signature:
+public IQueryable<Product> GetProducts(int maxRows, int startRowIndex, 
+    string sortByExpression, out int totalRowCount)
+{
+    totalRowCount = db.Products.Count();
+    return db.Products.AsQueryable();
+}
+```
+
+**InsertMethod, UpdateMethod, DeleteMethod signature adaptation:**
+
+```csharp
+// BWFC handler delegates (defined in BlazorWebFormsComponents.DataBinding):
+public delegate void InsertHandler<T>(T item);
+public delegate void UpdateHandler<T>(T item);
+public delegate void DeleteHandler<T>(T item);
+
+// Adapt your existing Web Forms methods to these signatures:
+public void AddProduct(Product item)
+{
+    db.Products.Add(item);
+    db.SaveChanges();
+}
+
+public void SaveProduct(Product item)
+{
+    db.Products.Update(item);
+    db.SaveChanges();
+}
+
+public void RemoveProduct(Product item)
+{
+    db.Products.Remove(item);
+    db.SaveChanges();
+}
+```
+
+BWFC automatically calls your `SelectMethod` in `OnAfterRender(firstRender: true)`. The CRUD methods are called when the component's insert/update/delete commands are triggered.
+
+> **Note:** BWFC supports both `DataSource` and `Items` as aliases — they point to the same internal backing store. Use whichever name you prefer if you want explicit binding instead of `SelectMethod`.
 
 ### Single-Record Controls
 
@@ -503,7 +657,10 @@ For FormView, DetailsView:
 
 | Web Forms Pattern | BWFC Pattern |
 |-------------------|-------------|
-| `SelectMethod="GetProduct"` | `DataItem="product"` (load in `OnInitializedAsync`) |
+| `SelectMethod="GetProduct"` | `SelectMethod="GetProduct"` (keep!) — adapt signature to `SelectHandler<T>`, or use `DataItem="product"` with lifecycle loading |
+| `InsertMethod="AddProduct"` | `InsertMethod="AddProduct"` (keep!) — adapt signature to `InsertHandler<T>` |
+| `UpdateMethod="SaveProduct"` | `UpdateMethod="SaveProduct"` (keep!) — adapt signature to `UpdateHandler<T>` |
+| `DeleteMethod="RemoveProduct"` | `DeleteMethod="RemoveProduct"` (keep!) — adapt signature to `DeleteHandler<T>` |
 | `ItemType="Namespace.Product"` | `TItem="Product"` |
 
 ### Template Binding

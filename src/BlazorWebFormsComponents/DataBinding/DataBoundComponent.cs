@@ -15,6 +15,27 @@ namespace BlazorWebFormsComponents.DataBinding
 		[Parameter]
 		public SelectHandler<TItemType> SelectMethod { get; set; }
 
+		/// <summary>
+		/// Gets or sets the method to call when inserting a new item.
+		/// This follows the ASP.NET Web Forms model binding pattern.
+		/// </summary>
+		[Parameter]
+		public InsertHandler<TItemType> InsertMethod { get; set; }
+
+		/// <summary>
+		/// Gets or sets the method to call when updating an existing item.
+		/// This follows the ASP.NET Web Forms model binding pattern.
+		/// </summary>
+		[Parameter]
+		public UpdateHandler<TItemType> UpdateMethod { get; set; }
+
+		/// <summary>
+		/// Gets or sets the method to call when deleting an item.
+		/// This follows the ASP.NET Web Forms model binding pattern.
+		/// </summary>
+		[Parameter]
+		public DeleteHandler<TItemType> DeleteMethod { get; set; }
+
 		[Parameter]
 		public IEnumerable<TItemType> Items
 		{

@@ -80,7 +80,8 @@ Layer 1 handles every transform that can be expressed as a regex find-and-replac
 
 ### What Layer 1 Does NOT Do
 
-- Wire `SelectMethod` data loading (script adds TODOs; manual work is writing `OnInitializedAsync` code to load data)
+- Adapt `SelectMethod` signatures (script adds TODOs; developers must add 4 parameters to match the `SelectHandler<T>` delegate — see Layer 2)
+- Wire `InsertMethod`, `UpdateMethod`, `DeleteMethod` (not yet supported in BWFC — requires manual conversion)
 - Convert code-behind lifecycle methods (requires semantic understanding)
 - Replace DataSource controls (requires architecture decisions)
 - Wire authentication (requires knowing your auth strategy)
@@ -148,7 +149,7 @@ For transforms not yet handled by the Layer 2 script, use Copilot with the migra
 
 | Transform | Before | After |
 |---|---|---|
-| Data binding | `SelectMethod="GetProducts"` | `Items="products"` + `OnInitializedAsync` |
+| Data binding | `SelectMethod="GetProducts"` | Keep `SelectMethod="GetProducts"` — adapt method signature to `SelectHandler<T>` delegate (see below) |
 | Template context | `<%#: Item.Name %>` | `@Item.Name` with `Context="Item"` |
 | Lifecycle methods | `Page_Load` with `IsPostBack` check | `OnInitializedAsync` |
 | Event handlers | `void Btn_Click(object sender, EventArgs e)` | `void Btn_Click()` |

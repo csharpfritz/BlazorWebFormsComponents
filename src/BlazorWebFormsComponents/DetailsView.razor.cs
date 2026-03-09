@@ -529,6 +529,16 @@ namespace BlazorWebFormsComponents
 
 			if (deleteArgs.Cancel) return;
 
+			// If DeleteMethod is set (Model Binding pattern), call it with the current item
+			if (DeleteMethod != null && Items != null)
+			{
+				var itemsList = Items.ToList();
+				if (PageIndex >= 0 && PageIndex < itemsList.Count)
+				{
+					DeleteMethod(itemsList[PageIndex]);
+				}
+			}
+
 			await ItemDeleted.InvokeAsync(new DetailsViewDeletedEventArgs(1, null));
 			CurrentMode = DefaultMode;
 			StateHasChanged();
@@ -540,6 +550,16 @@ namespace BlazorWebFormsComponents
 			await ItemUpdating.InvokeAsync(updateArgs);
 
 			if (updateArgs.Cancel) return;
+
+			// If UpdateMethod is set (Model Binding pattern), call it with the current item
+			if (UpdateMethod != null && Items != null)
+			{
+				var itemsList = Items.ToList();
+				if (PageIndex >= 0 && PageIndex < itemsList.Count)
+				{
+					UpdateMethod(itemsList[PageIndex]);
+				}
+			}
 
 			await ItemUpdated.InvokeAsync(new DetailsViewUpdatedEventArgs(1, null));
 
@@ -556,6 +576,14 @@ namespace BlazorWebFormsComponents
 			await ItemInserting.InvokeAsync(insertArgs);
 
 			if (insertArgs.Cancel) return;
+
+			// If InsertMethod is set (Model Binding pattern), call it
+			// Note: For inserts, the consumer should populate the item before the event fires
+			// or use the InsertMethod parameter with a form-bound item
+			if (InsertMethod != null && insertArgs.Item is ItemType item)
+			{
+				InsertMethod(item);
+			}
 
 			await ItemInserted.InvokeAsync(new DetailsViewInsertedEventArgs(1, null));
 
