@@ -8,6 +8,67 @@ source: "earned"
 
 <!-- Updated 2026-03-09: Added ASPX URL rewriting standard (ContosoUniversity Run 04) -->
 <!-- Updated 2026-03-09: Added required DI services (ContosoUniversity Run 05) -->
+<!-- Updated 2026-03-09: Strengthened database preservation rules (ContosoUniversity Run 08) -->
+
+## ⛔ MIGRATION BOUNDARIES — NEVER Violate These
+
+These rules are ABSOLUTE. Violating them causes migration rejection:
+
+### 1. NEVER Change Database Technology
+
+The migration script migrates **ASP.NET code only**. Database technology is out of scope:
+
+| Source | Target | Correct |
+|--------|--------|---------|
+| SQL Server LocalDB | SQL Server LocalDB | ✅ |
+| SQL Server LocalDB | SQLite | ❌ FORBIDDEN |
+| SQL Server Express | SQL Server Express | ✅ |
+| Oracle | Oracle | ✅ |
+
+**If the source uses Entity Framework 6 with SQL Server LocalDB, the target uses Entity Framework Core with SQL Server LocalDB.** Change the EF API (`.edmx` → code-first DbContext), NOT the database provider.
+
+### 2. NEVER Replace asp: Controls with Raw HTML
+
+BWFC provides Blazor equivalents for ALL migrated controls. If a component exists in BWFC, use it:
+
+| Source | Target | Correct |
+|--------|--------|---------|
+| `<asp:DetailsView>` | `<DetailsView>` | ✅ |
+| `<asp:DetailsView>` | `<table>` with manual rendering | ❌ FORBIDDEN |
+| `<asp:GridView>` | `<GridView>` | ✅ |
+| `<asp:GridView>` | `@foreach` with `<table>` | ❌ FORBIDDEN |
+
+### 3. NEVER Use Blazor's `<PageTitle>` — Use BWFC Page.Title
+
+BWFC provides `WebFormsPageBase` with `Page.Title` that works identically to Web Forms:
+
+| Source | Target | Correct |
+|--------|--------|---------|
+| `Page.Title = "Students"` | `Page.Title = "Students"` | ✅ |
+| `Page.Title = "Students"` | `<PageTitle>Students</PageTitle>` | ❌ FORBIDDEN |
+
+The `<BlazorWebFormsComponents.Page />` component in the layout renders the title. Do NOT use Blazor's native `<PageTitle>` component.
+
+### 4. NEVER Rewrite OnClick to @onclick
+
+BWFC components expose `OnClick` as an `EventCallback` parameter. Preserve the attribute name:
+
+| Source | Target | Correct |
+|--------|--------|---------|
+| `OnClick="Save_Click"` | `OnClick="Save_Click"` | ✅ |
+| `OnClick="Save_Click"` | `@onclick="Save_Click"` | ❌ FORBIDDEN |
+
+### 5. NEVER Add URL Prefixes
+
+Routes should match the original URL structure. Do NOT add application name prefixes:
+
+| Source | Target | Correct |
+|--------|--------|---------|
+| `/Home` | `/Home` | ✅ |
+| `/Home` | `/ContosoUniversity/Home` | ❌ FORBIDDEN |
+| `/Account/Login` | `/Account/Login` | ✅ |
+
+---
 
 ## Context
 
@@ -246,13 +307,19 @@ The migration script should inject the `RewriteOptions` snippet into Program.cs 
 @page "/Students"
 @rendermode InteractiveServer  @* Required for BWFC form interactivity *@
 
-<PageTitle>Students</PageTitle>
+@* Page.Title is set in OnInitializedAsync — uses BWFC WebFormsPageBase, NOT <PageTitle> *@
 
 <TextBox @bind-Text="FirstName" />
 <Button Text="Submit" OnClick="Submit_Click" />
 
 @code {
     private string? FirstName { get; set; }
+    
+    protected override void OnInitialized()
+    {
+        Page.Title = "Students";  // ✅ BWFC pattern — NOT <PageTitle>
+    }
+    
     private void Submit_Click() { /* ... */ }
 }
 ```
@@ -331,7 +398,8 @@ The migration script should inject the `RewriteOptions` snippet into Program.cs 
 
 - **Always** migrate EF6 → EF Core using the **latest .NET 10 packages** (currently **10.0.3**)
 - Required packages: `Microsoft.EntityFrameworkCore` (10.0.3), `.SqlServer` / `.Sqlite`, `.Tools`, `.Design`
-- Prefer SQLite for local dev / demos; SQL Server for production
+- **⛔ NEVER change the database provider** — see "Migration Boundaries" above
+- If source uses LocalDB → target uses LocalDB. If source uses SQL Server → target uses SQL Server.
 - Replace `DropCreateDatabaseIfModelChanges` with `EnsureCreated` + idempotent seed
 - Use `IDbContextFactory<T>` or scoped `DbContext` injection
 - Models: nullable reference types, file-scoped namespaces, modern init patterns

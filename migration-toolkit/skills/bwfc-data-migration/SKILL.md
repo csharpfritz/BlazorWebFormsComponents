@@ -104,10 +104,12 @@ public class StatePersistenceService(IDbContextFactory<AppDbContext> factory)
 
 ## 1. Entity Framework 6 → EF Core
 
+> **⛔ CRITICAL: NEVER change the database provider!** If the source uses SQL Server LocalDB, the target uses SQL Server LocalDB. If the source uses SQL Server, the target uses SQL Server. Only migrate the EF API (EF6 → EF Core), NOT the underlying database technology.
+
 **Web Forms:** EF6 with `DbContext` instantiated directly in code-behind or via `SelectMethod`.
 **Blazor:** EF Core **10.0.3** (latest .NET 10) with `IDbContextFactory` registered in DI.
 
-> **Always use the latest .NET 10 EF Core packages** (currently 10.0.3): `Microsoft.EntityFrameworkCore`, `.SqlServer` / `.Sqlite`, `.Tools`, `.Design`.
+> **Always use the latest .NET 10 EF Core packages** (currently 10.0.3): `Microsoft.EntityFrameworkCore`, `.SqlServer` (if source used SQL Server), `.Tools`, `.Design`.
 
 ```csharp
 // Web Forms — direct DbContext in code-behind
@@ -119,9 +121,12 @@ public IQueryable<YourEntity> GetItems()
 ```
 
 ```csharp
-// Blazor — Program.cs
+// Blazor — Program.cs (KEEP the same database provider!)
+// Source used LocalDB → Target uses LocalDB
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// ✅ UseSqlServer → UseSqlServer (CORRECT)
+// ❌ UseSqlServer → UseSqlite (FORBIDDEN - don't change provider!)
 ```
 
 ```csharp

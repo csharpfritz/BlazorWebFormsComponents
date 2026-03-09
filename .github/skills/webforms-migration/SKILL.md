@@ -7,6 +7,14 @@ description: "Migrate ASP.NET Web Forms applications (.aspx/.ascx/.master) to Bl
 
 This skill provides complete transformation rules for migrating ASP.NET Web Forms applications to Blazor Server using the **BlazorWebFormsComponents** (BWFC) NuGet package. The BWFC library provides Blazor components with identical names, attributes, and HTML output to ASP.NET Web Forms controls — enabling migration with minimal markup changes.
 
+## ⛔ MIGRATION BOUNDARIES — NEVER Violate These
+
+1. **NEVER change database technology** — SQL Server LocalDB → LocalDB, not SQLite
+2. **NEVER replace asp: controls with raw HTML** — Use BWFC components
+3. **NEVER use Blazor's `<PageTitle>`** — Use BWFC's `Page.Title` pattern
+4. **NEVER rewrite `OnClick` to `@onclick`** — Preserve the attribute name (BWFC maps it)
+5. **NEVER add URL prefixes** — Routes match original URLs (no `/AppName/` prefix)
+
 ## Core Principle
 
 > **Strip `asp:` and `runat="server"`, keep everything else, and it just works.**

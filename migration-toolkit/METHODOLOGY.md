@@ -37,6 +37,16 @@ Each layer handles a different *kind* of work, not just a different *amount*. Th
 
 Before migrating anything, scan your project to understand what you're working with.
 
+### ⛔ MIGRATION BOUNDARIES — NEVER Violate
+
+These rules apply across ALL layers. Violating them causes migration rejection:
+
+1. **NEVER change database technology** — SQL Server LocalDB → LocalDB (NOT SQLite). Migrate the EF API, not the provider.
+2. **NEVER replace asp: controls with raw HTML** — BWFC provides Blazor equivalents for all controls.
+3. **NEVER use Blazor's `<PageTitle>`** — Use BWFC's `Page.Title` pattern (WebFormsPageBase + `<BlazorWebFormsComponents.Page />` in layout).
+4. **NEVER rewrite `OnClick` to `@onclick`** — Preserve the attribute name exactly (BWFC components expose matching EventCallback parameters).
+5. **NEVER add URL prefixes** — Routes match original URLs exactly (no `/AppName/` prefix).
+
 **Tool:** [`scripts/bwfc-scan.ps1`](../scripts/bwfc-scan.ps1)
 
 **Input:** Your Web Forms project directory

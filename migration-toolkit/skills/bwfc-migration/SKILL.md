@@ -10,6 +10,23 @@ This skill provides transformation rules for migrating ASP.NET Web Forms markup 
 **Related skills:**
 - `/bwfc-identity-migration` — ASP.NET Identity/Membership → Blazor Identity
 - `/bwfc-data-migration` — EF6 → EF Core, DataSource → services, architecture decisions
+- `/migration-standards` — Canonical rules and NEVER-violate boundaries
+
+---
+
+## ⛔ MIGRATION BOUNDARIES (from /migration-standards)
+
+Before migrating, understand these **absolute rules** that cannot be violated:
+
+1. **NEVER change database technology** — If source uses SQL Server LocalDB, target uses LocalDB
+2. **NEVER replace asp: controls with raw HTML** — Use BWFC components (they exist for all controls)
+3. **NEVER use Blazor's `<PageTitle>`** — Use BWFC's `Page.Title` pattern
+4. **NEVER rewrite `OnClick` to `@onclick`** — Preserve the attribute name (BWFC maps it)
+5. **NEVER add URL prefixes** — Routes match original URLs (no `/AppName/` prefix)
+
+See `/migration-standards` for the full details and rationale.
+
+---
 
 ## What Is BWFC?
 

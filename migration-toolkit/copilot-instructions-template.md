@@ -37,6 +37,14 @@
 
 When migrating Web Forms markup to Blazor using BWFC, apply these rules in order:
 
+### ⛔ MIGRATION BOUNDARIES — NEVER Violate
+
+1. **NEVER change database technology** — If source uses SQL Server LocalDB, target uses LocalDB (NOT SQLite)
+2. **NEVER replace asp: controls with raw HTML** — Use BWFC components (they exist for all controls)
+3. **NEVER use Blazor's `<PageTitle>`** — Use BWFC's `Page.Title` pattern
+4. **NEVER rewrite `OnClick` to `@onclick`** — Preserve the attribute name exactly (BWFC maps it)
+5. **NEVER add URL prefixes** — Routes match original URLs (no `/AppName/` prefix)
+
 ### 1. Remove Web Forms Boilerplate
 
 - Remove all `runat="server"` attributes
