@@ -1,6 +1,7 @@
 // TODO: Review and adjust this generated Program.cs for your application needs.
 using AfterContosoUniversity.Data;
 using BlazorWebFormsComponents;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +25,13 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// ASPX URL backward compatibility — 301 redirects for SEO
+var rewriteOptions = new RewriteOptions()
+    .AddRedirect(@"^Default\.aspx$", "/", statusCode: 301)
+    .AddRedirect(@"^(.+)\.aspx$", "$1", statusCode: 301);
+app.UseRewriter(rewriteOptions);
+
 app.MapStaticAssets();
 app.UseAntiforgery();
 

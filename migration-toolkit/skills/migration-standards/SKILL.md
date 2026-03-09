@@ -6,7 +6,7 @@ confidence: "high"
 source: "earned"
 ---
 
-<!-- Updated 2026-03-08: Validated against WingtipToys Runs 14-16 + ContosoUniversity Runs 01-03 -->
+<!-- Updated 2026-03-09: Added ASPX URL rewriting standard (ContosoUniversity Run 04) -->
 
 ## Context
 
@@ -134,6 +134,38 @@ public partial class About : ComponentBase { }
     }
 }
 ```
+
+### ASPX URL Backward Compatibility
+
+**Use URL Rewriting middleware instead of duplicate `@page` directives.** When users have bookmarked or linked to `.aspx` URLs, preserve them using `RewriteOptions.AddRedirect` in Program.cs — NOT by adding multiple `@page` directives to Razor files.
+
+**Add to Program.cs (before `app.UseRouting()`):**
+
+```csharp
+using Microsoft.AspNetCore.Rewrite;
+
+// ASPX URL backward compatibility — redirect .aspx URLs to Blazor routes
+var rewriteOptions = new RewriteOptions()
+    .AddRedirect(@"^Default\.aspx$", "/", statusCode: 301)
+    .AddRedirect(@"^(.+)\.aspx$", "$1", statusCode: 301);
+app.UseRewriter(rewriteOptions);
+```
+
+**Why 301 redirects over `@page` directives:**
+- **SEO-friendly** — 301 tells search engines the URL has permanently moved
+- **Single source of truth** — one rule handles all pages, not scattered across Razor files
+- **Query strings preserved** — `AddRedirect` automatically preserves query strings
+- **Case-insensitive** — both `/Products.ASPX` and `/products.aspx` are handled
+- **Removable** — easy to delete when all legacy URLs have been updated
+
+**Do NOT do this:**
+```razor
+@* WRONG — duplicate @page directives clutter every file *@
+@page "/About"
+@page "/About.aspx"
+```
+
+The migration script should inject the `RewriteOptions` snippet into Program.cs when ASPX backward compatibility is needed.
 
 ## Patterns
 
