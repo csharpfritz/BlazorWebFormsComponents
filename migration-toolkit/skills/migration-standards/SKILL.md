@@ -238,6 +238,53 @@ The migration script should inject the `RewriteOptions` snippet into Program.cs 
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
 ```
 
+### Interactive Pages with Forms
+
+**Pages that use BWFC form controls (Button, TextBox with binding) MUST use `@rendermode InteractiveServer`.** Without this, form buttons are non-functional in SSR mode.
+
+```razor
+@page "/Students"
+@rendermode InteractiveServer  @* Required for BWFC form interactivity *@
+
+<PageTitle>Students</PageTitle>
+
+<TextBox @bind-Text="FirstName" />
+<Button Text="Submit" OnClick="Submit_Click" />
+
+@code {
+    private string? FirstName { get; set; }
+    private void Submit_Click() { /* ... */ }
+}
+```
+
+**Key indicators a page needs InteractiveServer:**
+- Uses BWFC Button with `OnClick` event handlers
+- Uses BWFC TextBox with `@bind-Text` data binding
+- Uses DropDownList with `@bind-SelectedValue`
+- Uses any BWFC component that requires user interaction beyond navigation
+
+### BWFC Button Event Binding Syntax
+
+**BWFC Button uses `OnClick` (EventCallback), NOT `@onclick` (native HTML event).** This is a common migration error.
+
+```razor
+@* WRONG — @onclick is native HTML, doesn't work with BWFC Button *@
+<Button Text="Save" @onclick="Save_Click" />
+
+@* RIGHT — OnClick is BWFC's EventCallback parameter *@
+<Button Text="Save" OnClick="Save_Click" />
+```
+
+**Method signature flexibility:**
+- `void Save_Click()` — no parameters (EventCallback auto-adapts)
+- `Task Save_Click()` — async handler
+- `void Save_Click(MouseEventArgs e)` — with event args
+
+**Why this matters:**
+- The BWFC Button component exposes `OnClick` as an `EventCallback<MouseEventArgs>` parameter
+- Using `@onclick` instead creates a native HTML event binding that bypasses BWFC's Click handler
+- The button appears to work (renders correctly) but clicking does nothing
+
 > **Do NOT place `@rendermode InteractiveServer` as a standalone line in `_Imports.razor`** — `@rendermode` is a directive attribute, not a standalone directive. It will cause build errors (RZ10003, CS0103, RZ10024).
 
 > **Why SSR over global InteractiveServer:** Under global InteractiveServer, `HttpContext` is NULL during WebSocket circuits. This breaks cookie auth, session state, and any middleware-dependent operations. SSR preserves a real HTTP request/response for every page load, making auth endpoints, session cookies, and middleware work correctly. Add `InteractiveServer` only to specific components that need real-time updates.
