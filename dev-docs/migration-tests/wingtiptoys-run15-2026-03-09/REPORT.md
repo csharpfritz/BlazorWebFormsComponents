@@ -7,7 +7,13 @@
 
 ## Executive Summary
 
-WingtipToys Run 15 achieves **100% acceptance test pass rate** (25/25 tests). This is a validation run using the existing known-good migrated app to confirm the validation infrastructure works correctly.
+WingtipToys Run 15 achieves **100% acceptance test pass rate** (25/25 tests). This run includes a **manual fix** to convert ShoppingCart from an HTML table to BWFC GridView, which the migration scripts incorrectly handled.
+
+## Fixes Applied This Run
+
+1. **ShoppingCart.razor** - Converted from HTML `<table>` with `@foreach` to BWFC `<GridView>` with BoundField and TemplateField columns, matching the original asp:GridView structure.
+
+2. **_Imports.razor** - Added `@using BlazorWebFormsComponents.Enums` for GridLines enum access.
 
 ## Timing
 

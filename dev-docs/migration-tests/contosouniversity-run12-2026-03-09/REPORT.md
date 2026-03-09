@@ -2,12 +2,24 @@
 
 **Date:** 2026-03-09  
 **Branch:** squad/audit-docs-perf  
-**Score:** 40/40 (100%)  
+**Score:** 32/40 (80%)  
 **Render Mode:** SSR with InteractiveServer for data pages
 
 ## Executive Summary
 
-ContosoUniversity Run 12 achieves **100% acceptance test pass rate** (40/40 tests). All functional pages work correctly - Students, Courses, Instructors, About. However, **CSS layout is broken** despite styles loading. The original Web Forms app used specific HTML structure that the Blazor migration doesn't replicate exactly.
+ContosoUniversity Run 12 achieves **32/40 (80%)** acceptance test pass rate after CSS fix. The remaining 8 failures are on the About page due to StreamRendering timing - the data loads asynchronously and the tests check before data arrives.
+
+## Fixes Applied This Run
+
+1. **CSS Fix** - Moved Master_CSS.css from MainLayout.razor to App.razor
+   - Root cause: Blazor's `<HeadOutlet>` receives `<HeadContent>` from routed **pages**, not layouts
+   - When MainLayout had `<HeadContent>` with Master_CSS.css, it was never injected into `<HeadOutlet>`
+   - Each page's `<HeadContent>` (like Home_CSS.css) went to HeadOutlet, but Master_CSS.css was lost
+   - Fix: Put Master_CSS.css in App.razor directly (before `<HeadOutlet>`)
+
+## CSS is Now Loading Correctly
+
+The fix ensures Master_CSS.css loads on ALL pages, and page-specific CSS (Home_CSS.css, Students_CSS.css, etc.) loads after via HeadOutlet.
 
 ## Timing
 
