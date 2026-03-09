@@ -108,6 +108,43 @@ See [Code-Behind Migration Rules](#code-behind-migration).
 
 Replace `DataSource` controls and `DataBind()` calls with service injection. See [Data Binding Migration](#data-binding-migration).
 
+### Step 9: Validate BWFC Component Usage
+
+Run the BWFC validation script to ensure all asp: controls were properly migrated to BWFC components:
+
+```powershell
+.\migration-toolkit\scripts\bwfc-validate.ps1 -Path .\samples\AfterMyApp
+```
+
+The validator checks:
+1. **No asp: prefixes remain** — All `<asp:Control>` tags must be converted
+2. **BWFC components are used** — Don't replace GridView with plain HTML tables
+3. **Stubs are identified** — Pages that need manual implementation are flagged
+
+Use `-Strict` flag to fail the build on any violations:
+```powershell
+.\migration-toolkit\scripts\bwfc-validate.ps1 -Path .\samples\AfterMyApp -Strict
+```
+
+### Step 10: Run Acceptance Tests
+
+Run the application's acceptance tests to verify functional correctness:
+
+```powershell
+# WingtipToys
+$env:BASE_URL = "https://localhost:5001"
+dotnet test src\WingtipToys.AcceptanceTests
+
+# ContosoUniversity
+$env:CONTOSO_BASE_URL = "https://localhost:5001"
+dotnet test src\ContosoUniversity.AcceptanceTests
+```
+
+**Migration is NOT complete until:**
+1. ✅ All acceptance tests pass
+2. ✅ BWFC validator reports no violations
+3. ✅ No unconverted asp: controls remain
+
 ---
 
 ## Page Migration Rules
