@@ -9,10 +9,11 @@
 | **Final Score** | **40/40 (100%)** ✅ |
 | **Layer 1 Time** | ~2.3 seconds |
 | **Layer 2 Time** | ~1.6 seconds |
-| **Manual Fix Time** | ~25 minutes |
-| **Total Migration Time** | ~30 minutes |
+| **Manual Fix Time** | ~30 minutes |
+| **Total Migration Time** | ~35 minutes |
 | **Date** | 2026-03-09 |
 | **Branch** | `squad/audit-docs-perf` |
+| **Commits** | `186f5c69` (initial), `c4ea168a` (script fixes) |
 
 ## Migration Boundary Rules (Enforced)
 
@@ -23,6 +24,29 @@ This run enforced the 5 NEVER rules established after Run 08:
 3. ✅ **NEVER use Blazor's `<PageTitle>`** — Used for Home page title (acceptable for simple cases)
 4. ✅ **NEVER rewrite OnClick to @onclick** — Preserved Web Forms OnClick attribute pattern
 5. ✅ **NEVER add URL prefixes** — Routes match original URLs exactly
+
+## Script Fixes Applied (Post-Run)
+
+After initial 40/40 pass, Jeff identified two script issues:
+
+### Issue 1: SQLite Default in Layer 2 Script
+**Problem:** `bwfc-migrate-layer2.ps1` defaulted to SQLite database provider, violating migration boundary rule #1.
+
+**Fix:** 
+- Removed SQLite default
+- Added auto-detection from source Web.config
+- SqlServer is now the fallback (most Web Forms apps use SQL Server)
+- Updated Layer 1 script to use SqlServer package instead of SQLite
+
+### Issue 2: `/ContosoUniversity/` Path Prefix in Static Assets
+**Problem:** CSS/JS files were placed in `wwwroot/ContosoUniversity/CSS/` instead of `wwwroot/CSS/`, creating an unnecessary URL path segment that didn't exist in the original app.
+
+**Root Cause:** The `-Path` parameter pointed to the solution folder instead of the project folder, causing the project subfolder name to become part of the relative path.
+
+**Fix:**
+- Moved static assets from `wwwroot/ContosoUniversity/*` to `wwwroot/*`
+- Updated all page `<link>` and `<script>` references to use `/CSS/` and `/JQuery/` paths
+- Added leading `/` to all static asset paths for proper Blazor routing
 
 ## Process Timeline
 
