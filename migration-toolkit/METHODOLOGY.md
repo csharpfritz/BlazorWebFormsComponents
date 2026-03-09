@@ -80,7 +80,7 @@ Layer 1 handles every transform that can be expressed as a regex find-and-replac
 
 ### What Layer 1 Does NOT Do
 
-- Convert `SelectMethod` to `Items` binding (requires understanding the data flow)
+- Wire `SelectMethod` data loading (script adds TODOs; manual work is writing `OnInitializedAsync` code to load data)
 - Convert code-behind lifecycle methods (requires semantic understanding)
 - Replace DataSource controls (requires architecture decisions)
 - Wire authentication (requires knowing your auth strategy)

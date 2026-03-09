@@ -134,7 +134,7 @@ These are 100% mechanical — apply to every file:
 
 ### Layer 2 — Structural Transforms
 
-- Convert `SelectMethod="GetX"` → `Items="x"` (load in `OnInitializedAsync`)
+- Convert `SelectMethod="GetX"` binding → load data in `OnInitializedAsync` and bind via `Items="@x"` or `DataSource="@x"` (both work identically)
 - Convert `ItemType="Namespace.Type"` → `TItem="Type"`
 - Add `Context="Item"` to `<ItemTemplate>` elements
 - Migrate code-behind: `Page_Load` → `OnInitializedAsync`
@@ -488,12 +488,14 @@ public void GetProduct([RouteData] int productId) { ... }
 
 For GridView, ListView, Repeater, DataList, DataGrid:
 
-| Web Forms Pattern | BWFC Pattern |
-|-------------------|-------------|
-| `SelectMethod="GetProducts"` | `Items="products"` (load in `OnInitializedAsync`) |
-| `ItemType="Namespace.Product"` | `TItem="Product"` |
-| `DataSource=<%# GetItems() %>` + `DataBind()` | `Items="items"` |
-| `DataKeyNames="ProductID"` | `DataKeyNames="ProductID"` (preserved) |
+| Web Forms Pattern | BWFC Pattern | Notes |
+|-------------------|-------------|-------|
+| `SelectMethod="GetProducts"` | `Items="@products"` or `DataSource="@products"` | Load data in `OnInitializedAsync`; both properties are equivalent |
+| `ItemType="Namespace.Product"` | `TItem="Product"` | |
+| `DataSource=<%# GetItems() %>` + `DataBind()` | `DataSource="@items"` or `Items="@items"` | Same data, loaded via lifecycle instead of binding expression |
+| `DataKeyNames="ProductID"` | `DataKeyNames="ProductID"` | Preserved unchanged |
+
+> **Note:** BWFC supports both `DataSource` and `Items` as aliases — they point to the same internal backing store. Use whichever name you prefer; no conversion is required.
 
 ### Single-Record Controls
 

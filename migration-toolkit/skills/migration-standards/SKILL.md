@@ -380,7 +380,25 @@ The script should preserve the attribute and annotate the signature change neede
 | `<asp:DetailsView>` | `<DetailsView Items="@data">` with fields | Manual field rendering |
 | `<asp:DataList>` | `<DataList Items="@data">` with `ItemTemplate` | `@foreach` + grid HTML |
 
-**SelectMethod → Items:** Replace `SelectMethod="GetMethodName"` with `Items="@_items"` where `_items` is populated in `OnInitializedAsync` via an injected service or DbContext.
+**SelectMethod Migration (The Real Issue):** Web Forms `SelectMethod` attribute provides automatic method binding that Blazor doesn't support. Both `DataSource` and `Items` work identically in BWFC (they're aliases to the same backing store), so the migration challenge is *not* a property rename — it's the data loading pattern:
+
+```razor
+@* Both of these work identically in BWFC: *@
+<GridView DataSource="@Products" ItemType="Product" />
+<GridView Items="@Products" ItemType="Product" />
+
+@code {
+    private List<Product> Products = new();
+    
+    protected override async Task OnInitializedAsync()
+    {
+        // Data loading moved from SelectMethod to lifecycle
+        Products = await productService.GetProductsAsync();
+    }
+}
+```
+
+The Layer 1 script adds TODO comments for `SelectMethod` attributes — this marks where manual data loading code must be written in `OnInitializedAsync`.
 
 ### Session State → Scoped Services
 
