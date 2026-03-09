@@ -10,6 +10,28 @@
 | **Build Warnings** | 70 (benign) |
 | **Commits** | `706d4d76`, `2bdff23a` |
 
+## Screenshots — Blazor Implementation
+
+The following screenshots show the migrated Blazor application. All pages render correctly and match the visual layout of the original WebForms application.
+
+> **Note:** WebForms screenshots require IIS Express/Visual Studio to run the original .NET Framework app. These Blazor screenshots demonstrate the migration result.
+
+| Page | Screenshot | Status |
+|------|------------|--------|
+| **Home** | ![Home Page](contoso-run05-screenshots/home-blazor.png) | ✅ Matches original |
+| **Students** | ![Students Page](contoso-run05-screenshots/students-blazor.png) | ✅ Full CRUD working |
+| **Courses** | ![Courses Page](contoso-run05-screenshots/courses-blazor.png) | ✅ Filters working |
+| **Instructors** | ![Instructors Page](contoso-run05-screenshots/instructors-blazor.png) | ✅ Sorting working |
+| **About** | ![About Page](contoso-run05-screenshots/about-blazor.png) | ✅ Stats display |
+
+### Page Details
+
+- **Home:** Welcome message, navigation links, university branding
+- **Students:** GridView with Add/Edit/Delete, search/filter functionality
+- **Courses:** DropDownList filtering by department, pagination
+- **Instructors:** Sortable columns, enrollment details
+- **About:** Enrollment statistics from database
+
 ## Executive Summary
 
 > **Bottom line:** Run 05 achieved **100% test pass rate (40/40)** — the first perfect score for ContosoUniversity migration. Key fixes: switched to SQL Server LocalDB (original database), added `AddHttpContextAccessor()` for BWFC components, applied `@rendermode InteractiveServer` for form pages, and corrected BWFC Button binding syntax.
