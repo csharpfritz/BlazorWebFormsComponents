@@ -1,6 +1,5 @@
 // Layer2-transformed
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using ContosoUniversity.Models;
 
@@ -22,7 +21,7 @@ public partial class Courses : ComponentBase
         _departments = await db.Departments.OrderBy(d => d.DepartmentName).ToListAsync();
     }
 
-    private async Task SearchCourses(MouseEventArgs args)
+    private async Task SearchCourses()
     {
         if (int.TryParse(_selectedDepartmentId, out var deptId))
         {
@@ -34,7 +33,7 @@ public partial class Courses : ComponentBase
         }
     }
 
-    private async Task SearchCourseByName(MouseEventArgs args)
+    private async Task SearchCourseByName()
     {
         if (!string.IsNullOrWhiteSpace(_searchCourse))
         {

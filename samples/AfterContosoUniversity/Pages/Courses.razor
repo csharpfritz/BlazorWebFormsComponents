@@ -38,11 +38,17 @@
     
     @if (_selectedCourse != null)
     {
-        <table id="dtlCourses" class="details">
-            <tr><td>Course ID</td><td>@_selectedCourse.CourseID</td></tr>
-            <tr><td>Course Name</td><td>@_selectedCourse.CourseName</td></tr>
-            <tr><td>Max Students</td><td>@_selectedCourse.StudentsMax</td></tr>
-        </table>
+        <DetailsView ID="dtlCourses"
+            DataItem="_selectedCourse"
+            ItemType="Course"
+            CssClass="details"
+            AutoGenerateRows="false">
+            <Fields>
+                <BoundField ItemType="Course" DataField="CourseID" HeaderText="Course ID" />
+                <BoundField ItemType="Course" DataField="CourseName" HeaderText="Course Name" />
+                <BoundField ItemType="Course" DataField="StudentsMax" HeaderText="Max Students" />
+            </Fields>
+        </DetailsView>
     }
 </div>
 

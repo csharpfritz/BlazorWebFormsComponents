@@ -171,10 +171,10 @@
 	</table>
 }
 
-@* Field definitions via child content *@
+@* Field definitions via child content — uses ColumnCollection to support BoundField etc. *@
 @if (Fields != null)
 {
-	<CascadingValue Value="this" Name="DetailsViewFieldCollection">
+	<CascadingValue Value="this" Name="ColumnCollection">
 		@Fields
 	</CascadingValue>
 }

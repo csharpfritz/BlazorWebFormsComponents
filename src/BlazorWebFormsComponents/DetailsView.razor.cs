@@ -15,7 +15,7 @@ namespace BlazorWebFormsComponents
 	/// Displays a single record from a data source in a table layout with one row per field.
 	/// </summary>
 	/// <typeparam name="ItemType">The type of the data items.</typeparam>
-	public partial class DetailsView<ItemType> : DataBoundComponent<ItemType>, IDetailsViewStyleContainer, IPagerSettingsContainer
+	public partial class DetailsView<ItemType> : DataBoundComponent<ItemType>, IDetailsViewStyleContainer, IPagerSettingsContainer, IColumnCollection<ItemType>
 	{
 		#region Properties
 
@@ -349,6 +349,33 @@ namespace BlazorWebFormsComponents
 
 		#endregion
 
+		#region IColumnCollection Implementation
+
+		/// <summary>
+		/// Gets or sets the list of columns registered via BoundField and other column components.
+		/// </summary>
+		public List<IColumn<ItemType>> ColumnList { get; set; } = new();
+
+		/// <summary>
+		/// Adds a column to the DetailsView (implements IColumnCollection).
+		/// </summary>
+		public void AddColumn(IColumn<ItemType> column)
+		{
+			ColumnList.Add(column);
+			StateHasChanged();
+		}
+
+		/// <summary>
+		/// Removes a column from the DetailsView (implements IColumnCollection).
+		/// </summary>
+		public void RemoveColumn(IColumn<ItemType> column)
+		{
+			ColumnList.Remove(column);
+			StateHasChanged();
+		}
+
+		#endregion
+
 		#region Computed Properties
 
 		/// <summary>
@@ -461,11 +488,18 @@ namespace BlazorWebFormsComponents
 		#region Field Generation
 
 		/// <summary>
-		/// Gets the list of fields to display. Uses defined fields if available,
-		/// otherwise auto-generates from the item type's properties.
+		/// Gets the list of fields to display. Uses columns from IColumnCollection if available,
+		/// then defined fields, otherwise auto-generates from the item type's properties.
 		/// </summary>
 		internal List<DetailsViewField> GetFields()
 		{
+			// First priority: columns registered via BoundField etc. (IColumnCollection)
+			if (ColumnList.Any())
+			{
+				return ColumnList.Select(col => new DetailsViewColumnAdapter<ItemType>(col)).Cast<DetailsViewField>().ToList();
+			}
+
+			// Second priority: legacy field definitions
 			if (_fieldDefinitions.Any())
 			{
 				return _fieldDefinitions;
@@ -673,6 +707,34 @@ namespace BlazorWebFormsComponents
 				},
 				_ => builder => builder.AddContent(0, displayValue),
 			};
+		}
+	}
+
+	/// <summary>
+	/// Adapter that wraps an IColumn as a DetailsViewField, enabling BoundField and other
+	/// column components to work seamlessly with DetailsView.
+	/// </summary>
+	internal class DetailsViewColumnAdapter<ItemType> : DetailsViewField
+	{
+		private readonly IColumn<ItemType> _column;
+
+		public DetailsViewColumnAdapter(IColumn<ItemType> column)
+		{
+			_column = column;
+			HeaderText = column.HeaderText;
+		}
+
+		public override RenderFragment GetValue(object dataItem, DetailsViewMode mode)
+		{
+			if (dataItem is ItemType typedItem)
+			{
+				return mode switch
+				{
+					DetailsViewMode.Edit => _column.RenderEdit(typedItem),
+					_ => _column.Render(typedItem)
+				};
+			}
+			return builder => builder.AddContent(0, string.Empty);
 		}
 	}
 }
