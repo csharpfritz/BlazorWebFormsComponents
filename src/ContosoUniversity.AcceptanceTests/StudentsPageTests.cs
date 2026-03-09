@@ -76,6 +76,7 @@ public class StudentsPageTests
         var page = await _fixture.NewPageAsync();
         await page.GotoAsync($"{TestConfiguration.BaseUrl}/Students.aspx");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitForBlazorCircuit(page); // Wait for Blazor SignalR to connect
 
         // Search textbox and button — Web Forms generates IDs with ContentPlaceHolder prefix
         var searchBox = page.Locator("input[id*='txtSearch']");
@@ -85,7 +86,7 @@ public class StudentsPageTests
         {
             // Fallback: locate by section container
             searchBox = page.Locator("#ajax input[type='text']").First;
-            searchButton = page.Locator("#ajax input[type='submit'], #ajax button").First;
+            searchButton = page.Locator("#ajax input[type='button'], #ajax button").First;
         }
 
         Assert.True(await searchBox.CountAsync() > 0, "Search textbox not found on Students page");
@@ -95,11 +96,12 @@ public class StudentsPageTests
         await searchBox.FillAsync("a");
         await searchButton.ClickAsync();
 
-        // UpdatePanel AJAX — wait for network idle
+        // Wait for Blazor to process and re-render
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await page.WaitForTimeoutAsync(500); // Allow Blazor UI to re-render
 
         // After search, DetailsView (ID: studentData) should appear with results
-        var detailsView = page.Locator("table[id*='studentData'], .details, #ajax table");
+        var detailsView = page.Locator("table[id*='studentData'], .detailsView, #ajax table");
         // Or the GridView may update — either is acceptable
         var pageContent = await page.ContentAsync();
         var hasResults = await detailsView.CountAsync() > 0 ||
@@ -126,10 +128,10 @@ public class StudentsPageTests
             await searchBox.FillAsync("a");
             await searchButton.ClickAsync();
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-            await page.WaitForTimeoutAsync(500); // Allow Blazor UI to re-render
+            await page.WaitForTimeoutAsync(1000); // Allow Blazor UI to re-render
 
-            // DetailsView should display student fields
-            var detailsView = page.Locator("table[id*='studentData']");
+            // DetailsView should display student fields - try multiple selectors
+            var detailsView = page.Locator("table[id*='studentData'], .detailsView, table.detailsView").First;
             if (await detailsView.CountAsync() > 0)
             {
                 var detailContent = await detailsView.InnerTextAsync();

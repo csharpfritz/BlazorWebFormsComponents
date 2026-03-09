@@ -1,28 +1,23 @@
 @page "/ContosoUniversity/About"
 @page "/About"
 @rendermode InteractiveServer
-
-<PageTitle>About - Contoso University</PageTitle>
-
 <HeadContent>
-    <link href="css/CSS_About.css" rel="stylesheet" />
+     <link href="CSS/CSS_About.css" rel="stylesheet" />
 </HeadContent>
-
 <div id="header">
     <h1>Students Body Statistics</h1>
 </div>
-
 <div id="grv">
-    <GridView CssClass="grid" 
-        ID="EnrollmentsStat"
-        Items="_enrollmentStats"
+    <GridView 
         ItemType="EnrollmentStat"
-        AutoGenerateColumns="false"
-        CellPadding="4"
-        EmptyDataText="No enrollment statistics available">
+        Items="_stats"
+        CssClass="grid" 
+        AutoGenerateColumns="false" 
+        EmptyDataText="There are no records to display"
+        CellPadding="4">
         <Columns>
-            <BoundField ItemType="EnrollmentStat" DataField="EnrollmentDate" HeaderText="Enrollment Date" ReadOnly="true" />
-            <BoundField ItemType="EnrollmentStat" DataField="StudentCount" HeaderText="Students" ReadOnly="true" />
+            <BoundField DataField="EnrollmentDate" HeaderText="Enrollment Date" />
+            <BoundField DataField="StudentCount" HeaderText="Students" />
         </Columns>
     </GridView>
 </div>

@@ -1,27 +1,20 @@
-// Layer2-transformed
 using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
-using ContosoUniversity.Models;
+using ContosoUniversity.Data;
 
 namespace ContosoUniversity.Pages;
-
-public class EnrollmentStat
-{
-    public string EnrollmentDate { get; set; } = "";
-    public int StudentCount { get; set; }
-}
 
 public partial class About : ComponentBase
 {
     [Inject] private IDbContextFactory<ContosoUniversityContext> DbFactory { get; set; } = default!;
 
-    private List<EnrollmentStat> _enrollmentStats = new();
+    private List<EnrollmentStat> _stats = new();
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
+        await using var context = await DbFactory.CreateDbContextAsync();
         
-        var stats = await db.Enrollments
+        _stats = await context.Enrollments
             .GroupBy(e => e.Date.Date)
             .Select(g => new EnrollmentStat
             {
@@ -29,8 +22,12 @@ public partial class About : ComponentBase
                 StudentCount = g.Count()
             })
             .ToListAsync();
-        
-        _enrollmentStats = stats;
+    }
+
+    public class EnrollmentStat
+    {
+        public string EnrollmentDate { get; set; } = string.Empty;
+        public int StudentCount { get; set; }
     }
 }
 

@@ -1,22 +1,40 @@
-// Layer2-transformed
 using BlazorWebFormsComponents;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
-using ContosoUniversity.Models;
+using ContosoUniversity.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddHttpContextAccessor();  // Required for BWFC GridView/DetailsView
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddBlazorWebFormsComponents();
 
-// Database - SQL Server LocalDB (same as original WebForms)
-var dbPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "ContosoUniversity", "ContosoUniversity.mdf"));
+// Database - SQLite for portability
+var connectionString = builder.Configuration.GetConnectionString("ContosoUniversity") 
+    ?? "Data Source=ContosoUniversity.db";
 builder.Services.AddDbContextFactory<ContosoUniversityContext>(options =>
-    options.UseSqlServer($@"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename={dbPath};Integrated Security=True"));
+    options.UseSqlite(connectionString));
+
+// Session (for cart-like functionality if needed)
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
 
 var app = builder.Build();
+
+// Ensure database is created with seed data
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ContosoUniversityContext>();
+    context.Database.EnsureCreated();
+    await ContosoUniversity.Data.DbInitializer.InitializeAsync(context);
+}
 
 if (!app.Environment.IsDevelopment())
 {
@@ -24,22 +42,19 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// URL rewriting for legacy .aspx URLs
+var rewriteOptions = new RewriteOptions()
+    .AddRedirect("^Home.aspx$", "/ContosoUniversity/Home", 301)
+    .AddRedirect("^About.aspx$", "/ContosoUniversity/About", 301)
+    .AddRedirect("^Students.aspx$", "/ContosoUniversity/Students", 301)
+    .AddRedirect("^Courses.aspx$", "/ContosoUniversity/Courses", 301)
+    .AddRedirect("^Instructors.aspx$", "/ContosoUniversity/Instructors", 301);
+app.UseRewriter(rewriteOptions);
+
 app.UseHttpsRedirection();
 app.MapStaticAssets();
+app.UseSession();
 app.UseAntiforgery();
-
-// Legacy URL redirects
-app.Use(async (context, next) =>
-{
-    var path = context.Request.Path.Value;
-    if (path != null && path.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase))
-    {
-        var newPath = path.Replace(".aspx", "", StringComparison.OrdinalIgnoreCase);
-        context.Response.Redirect(newPath, permanent: true);
-        return;
-    }
-    await next();
-});
 
 app.MapRazorComponents<ContosoUniversity.Components.App>()
     .AddInteractiveServerRenderMode();

@@ -1,6 +1,6 @@
-// Layer2-transformed
 using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
+using ContosoUniversity.Data;
 using ContosoUniversity.Models;
 
 namespace ContosoUniversity.Pages;
@@ -9,38 +9,41 @@ public partial class Courses : ComponentBase
 {
     [Inject] private IDbContextFactory<ContosoUniversityContext> DbFactory { get; set; } = default!;
 
-    private List<Department> _departments = new();
     private List<Course> _courses = new();
+    private List<string> _departments = new();
+    private string _selectedDepartment = string.Empty;
+    private string _searchText = string.Empty;
     private Course? _selectedCourse;
-    private string _selectedDepartmentId = "";
-    private string _searchCourse = "";
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        _departments = await db.Departments.OrderBy(d => d.DepartmentName).ToListAsync();
+        await using var context = await DbFactory.CreateDbContextAsync();
+        _departments = await context.Departments.Select(d => d.DepartmentName).ToListAsync();
+        if (_departments.Any())
+            _selectedDepartment = _departments.First();
     }
 
-    private async Task SearchCourses()
+    private async Task btnSearchCourse_Click()
     {
-        if (int.TryParse(_selectedDepartmentId, out var deptId))
+        await using var context = await DbFactory.CreateDbContextAsync();
+        var dept = await context.Departments.FirstOrDefaultAsync(d => d.DepartmentName == _selectedDepartment);
+        if (dept != null)
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            _courses = await db.Courses
-                .Where(c => c.DepartmentID == deptId)
-                .OrderBy(c => c.CourseName)
-                .ToListAsync();
+            _courses = await context.Courses.Where(c => c.DepartmentID == dept.DepartmentID).ToListAsync();
         }
     }
 
-    private async Task SearchCourseByName()
+    private async Task search_Click()
     {
-        if (!string.IsNullOrWhiteSpace(_searchCourse))
+        if (string.IsNullOrWhiteSpace(_searchText))
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            _selectedCourse = await db.Courses
-                .FirstOrDefaultAsync(c => c.CourseName != null && c.CourseName.Contains(_searchCourse));
+            _selectedCourse = null;
+            return;
         }
+
+        await using var context = await DbFactory.CreateDbContextAsync();
+        _selectedCourse = await context.Courses
+            .FirstOrDefaultAsync(c => c.CourseName.Contains(_searchText));
     }
 }
 

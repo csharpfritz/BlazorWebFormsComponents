@@ -1,28 +1,30 @@
 @page "/ContosoUniversity/Instructors"
 @page "/Instructors"
 @rendermode InteractiveServer
-
-<PageTitle>Instructors - Contoso University</PageTitle>
-
 <HeadContent>
-    <link href="css/Instructors_CSS.css" rel="stylesheet" />
+    <link href="CSS/Instructors_CSS.css" rel="stylesheet" />
 </HeadContent>
-
-<div id="grv">
-    <h1 id="hdr">Our Instructors</h1>
-    <GridView ID="grvInstructors" 
-        Items="_instructors"
-        ItemType="Instructor"
-        AutoGenerateColumns="false"
-        CssClass="grv"
-        AllowSorting="true" OnSorting="HandleSorting"
-        EmptyDataText="There are no records to display">
-        <Columns>
-            <BoundField ItemType="Instructor" DataField="InstructorID" HeaderText="Instructor ID" SortExpression="InstructorID" />
-            <BoundField ItemType="Instructor" DataField="FirstName" HeaderText="First Name" SortExpression="FirstName" />
-            <BoundField ItemType="Instructor" DataField="LastName" HeaderText="Last Name" SortExpression="LastName" />
-            <BoundField ItemType="Instructor" DataField="Email" HeaderText="Email" />
-        </Columns>
-    </GridView>
-</div>
+<ScriptManager></ScriptManager>
+<UpdatePanel>
+    <ContentTemplate>
+        <div id="grv">
+            <h1 id="hdr">Our Instructors</h1>
+            <GridView 
+                ItemType="Instructor"
+                Items="_instructors"
+                AutoGenerateColumns="false"
+                AllowSorting="true"
+                CssClass="grv" 
+                ID="grvInstructors"
+                EmptyDataText="There are no records to display">
+                <Columns>
+                    <BoundField DataField="InstructorID" HeaderText="Instructor ID" />
+                    <BoundField DataField="FirstName" HeaderText="First Name" />
+                    <BoundField DataField="LastName" HeaderText="Last Name" />
+                    <BoundField DataField="Email" HeaderText="Email" />
+                </Columns>
+            </GridView>
+        </div>
+    </ContentTemplate>
+</UpdatePanel>
 
