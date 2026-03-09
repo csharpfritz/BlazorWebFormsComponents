@@ -32,7 +32,7 @@ public partial class SchoolContext : DbContext
         // This fallback is only used for design-time tools (e.g., migrations)
         if (!optionsBuilder.IsConfigured)
         {
-            optionsBuilder.UseSqlite("Data Source=ContosoUniversity.db");
+            optionsBuilder.UseSqlServer("Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=ContosoUniversity;Integrated Security=True");
         }
     }
 

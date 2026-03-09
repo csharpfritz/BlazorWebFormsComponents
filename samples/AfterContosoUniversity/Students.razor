@@ -1,4 +1,8 @@
 @page "/Students"
+@rendermode InteractiveServer
+
+<PageTitle>Contoso University - Students</PageTitle>
+
 <HeadContent>
     <link href="CSS/Students_CSS.css" rel="stylesheet" />
     <script src="JQuery/JQuery_Students.js"></script>
@@ -60,8 +64,8 @@
         <TableRow>
             <TableCell></TableCell>
             <TableCell>
-                <Button CssClass="insert" ID="btnInsert" Text="New Enrollment" @onclick="btnInsert_Click" />
-                <Button ID="btnClear" Text="Clear" @onclick="btnClear_Click" />
+                <Button CssClass="insert" ID="btnInsert" Text="New Enrollment" OnClick="btnInsert_Click" />
+                <Button ID="btnClear" Text="Clear" OnClick="btnClear_Click" />
             </TableCell>
         </TableRow>
     </Table>
@@ -69,7 +73,7 @@
 <div id="ajax">
     <h1 id="searchStud">Search Student</h1>
     <TextBox CssClass="txtSearch" ID="txtSearch" placeholder="Type Student Name..." @bind-Text="SearchText" />
-    <Button ID="btnSearch" Text="Show Student Info" @onclick="btnSearch_Click" CssClass="btnInfo" />
+    <Button ID="btnSearch" Text="Show Student Info" OnClick="btnSearch_Click" CssClass="btnInfo" />
     <DetailsView ItemType="Student"
         ID="studentData"
         AutoGenerateRows="true"

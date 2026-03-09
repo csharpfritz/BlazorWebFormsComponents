@@ -12,10 +12,10 @@ builder.Services.AddRazorComponents()
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddBlazorWebFormsComponents();
 
-// Add Entity Framework DbContext with SQLite
+// Add Entity Framework DbContext with SQL Server LocalDB (same as original Web Forms app)
 builder.Services.AddDbContext<SchoolContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") 
-        ?? "Data Source=ContosoUniversity.db"));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection") 
+        ?? "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=ContosoUniversity;Integrated Security=True"));
 
 var app = builder.Build();
 

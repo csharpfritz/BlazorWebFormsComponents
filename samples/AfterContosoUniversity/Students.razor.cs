@@ -161,6 +161,7 @@ public partial class Students : ComponentBase
         BirthDateText = string.Empty;
         Email = string.Empty;
         SelectedCourse = null;
+        StateHasChanged();
     }
 
     /// <summary>

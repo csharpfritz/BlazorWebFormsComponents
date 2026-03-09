@@ -29,15 +29,15 @@ public class NavigationTests
     }
 
     [Theory]
-    [InlineData("Home.aspx", "home")]
-    [InlineData("About.aspx", "about")]
-    [InlineData("Students.aspx", "students")]
-    [InlineData("Courses.aspx", "courses")]
-    [InlineData("Instructors.aspx", "instructors")]
+    [InlineData("Home", "home")]
+    [InlineData("About", "about")]
+    [InlineData("Students", "students")]
+    [InlineData("Courses", "courses")]
+    [InlineData("Instructors", "instructors")]
     public async Task NavLink_NavigatesToCorrectPage(string expectedPage, string linkId)
     {
         var page = await _fixture.NewPageAsync();
-        await page.GotoAsync($"{TestConfiguration.BaseUrl}/Home.aspx");
+        await page.GotoAsync($"{TestConfiguration.BaseUrl}/");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Navigation links use IDs: #home, #about, #students, #courses, #instructors
@@ -54,15 +54,16 @@ public class NavigationTests
         await link.ClickAsync();
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
+        // After 301 redirect, URL should contain the page name (without .aspx)
         Assert.Contains(expectedPage, page.Url, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
-    [InlineData("/Home.aspx")]
-    [InlineData("/About.aspx")]
-    [InlineData("/Students.aspx")]
-    [InlineData("/Courses.aspx")]
-    [InlineData("/Instructors.aspx")]
+    [InlineData("/Home")]
+    [InlineData("/About")]
+    [InlineData("/Students")]
+    [InlineData("/Courses")]
+    [InlineData("/Instructors")]
     public async Task AllPages_ReturnHttp200(string path)
     {
         var page = await _fixture.NewPageAsync();

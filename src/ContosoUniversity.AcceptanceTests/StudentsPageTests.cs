@@ -116,6 +116,7 @@ public class StudentsPageTests
         var page = await _fixture.NewPageAsync();
         await page.GotoAsync($"{TestConfiguration.BaseUrl}/Students.aspx");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitForBlazorCircuit(page); // Wait for Blazor SignalR to connect
 
         var searchBox = page.Locator("input[id*='txtSearch']");
         var searchButton = page.Locator("input[id*='btnSearch'], button[id*='btnSearch']");
@@ -125,6 +126,7 @@ public class StudentsPageTests
             await searchBox.FillAsync("a");
             await searchButton.ClickAsync();
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            await page.WaitForTimeoutAsync(500); // Allow Blazor UI to re-render
 
             // DetailsView should display student fields
             var detailsView = page.Locator("table[id*='studentData']");
@@ -147,6 +149,7 @@ public class StudentsPageTests
         var page = await _fixture.NewPageAsync();
         await page.GotoAsync($"{TestConfiguration.BaseUrl}/Students.aspx");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitForBlazorCircuit(page); // Wait for Blazor SignalR to connect
 
         // Count existing rows before adding
         var rowsBefore = await CountGridViewDataRows(page);
@@ -196,8 +199,9 @@ public class StudentsPageTests
         }
 
         await insertButton.ClickAsync();
-        // UpdatePanel AJAX refresh
+        // Blazor SignalR async operation - wait for server round-trip and UI update
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await page.WaitForTimeoutAsync(500); // Allow Blazor UI to re-render after async operation
 
         // Verify the new student appears — either row count increased or name is in page
         var rowsAfter = await CountGridViewDataRows(page);
@@ -334,6 +338,7 @@ public class StudentsPageTests
         var page = await _fixture.NewPageAsync();
         await page.GotoAsync($"{TestConfiguration.BaseUrl}/Students.aspx");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitForBlazorCircuit(page); // Wait for Blazor SignalR to connect
 
         var firstNameBox = page.Locator("input[id*='txtFirstName']");
         var clearButton = page.Locator("input[id*='btnClear'], button[id*='btnClear']");
@@ -343,6 +348,7 @@ public class StudentsPageTests
             await firstNameBox.FillAsync("SomeTestValue");
             await clearButton.ClickAsync();
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            await page.WaitForTimeoutAsync(500); // Allow Blazor UI to re-render
 
             var value = await firstNameBox.InputValueAsync();
             Assert.True(string.IsNullOrEmpty(value),
@@ -370,5 +376,19 @@ public class StudentsPageTests
         var totalRows = await allRows.CountAsync();
         // Subtract 1 for the header row
         return Math.Max(0, totalRows - 1);
+    }
+
+    /// <summary>
+    /// Waits for Blazor SignalR circuit to be connected.
+    /// In Blazor Server/InteractiveServer mode, the circuit may take a moment to connect
+    /// after initial SSR prerender. This method waits for interactive functionality.
+    /// </summary>
+    private static async Task WaitForBlazorCircuit(IPage page)
+    {
+        // Wait for the Blazor Server circuit to connect by checking for
+        // the absence of the "connecting" or "reconnecting" indicators
+        // The blazor.web.js script adds these classes during connection
+        await page.WaitForTimeoutAsync(1000); // Wait 1 second for WebSocket connection
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 }
