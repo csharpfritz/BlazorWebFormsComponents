@@ -68,6 +68,40 @@ Routes should match the original URL structure. Do NOT add application name pref
 | `/Home` | `/ContosoUniversity/Home` | ❌ FORBIDDEN |
 | `/Account/Login` | `/Account/Login` | ✅ |
 
+### 6. NEVER Nest Static Assets Under Project Name
+
+Static assets go directly under `wwwroot/`, preserving original folder structure:
+
+| Source | Target | Correct |
+|--------|--------|---------|
+| `Content/Site.css` | `wwwroot/CSS/Site.css` | ✅ |
+| `Content/Site.css` | `wwwroot/ContosoUniversity/CSS/Site.css` | ❌ FORBIDDEN |
+| `Images/logo.png` | `wwwroot/Images/logo.png` | ✅ |
+
+CSS links should use flat paths: `href="/CSS/Site.css"` NOT `href="/ContosoUniversity/CSS/Site.css"`.
+
+---
+
+## Color Attributes (Razor-Safe Syntax)
+
+Web Forms inline color attributes like `BackColor="White"` or `ForeColor="#333333"` cause Razor build errors:
+- Named colors are interpreted as C# identifiers: `White` → "undefined variable"
+- Hex colors trigger preprocessor directives: `#333333` → CS1024 error
+
+**Always wrap color values with `@("value")` syntax:**
+
+```razor
+<!-- Web Forms -->
+<GridView BackColor="White" ForeColor="#333333">
+
+<!-- Blazor (Razor-safe) -->
+<GridView BackColor=@("White") ForeColor=@("#333333")>
+```
+
+**Affected attributes:** `BackColor`, `ForeColor`, `BorderColor`
+
+The Layer 1 script's `ConvertFrom-ColorAttributes` function handles this automatically.
+
 ---
 
 ## Context

@@ -653,6 +653,24 @@ Web Forms supports nested Master Pages. In Blazor, use nested layouts:
 </div>
 ```
 
+### Color Attributes (BackColor, ForeColor, BorderColor)
+Web Forms uses inline color attributes like `BackColor="White"` or `ForeColor="#333333"`. In Razor, these cause build errors:
+- `BackColor="White"` → Razor interprets `White` as a C# variable
+- `ForeColor="#333333"` → `#` triggers preprocessor directive error (CS1024)
+
+**Fix:** Wrap color values with `@("value")` syntax:
+```razor
+<!-- Web Forms -->
+<GridView BackColor="White" ForeColor="#333333">
+
+<!-- Blazor (Razor-safe) -->
+<GridView BackColor=@("White") ForeColor=@("#333333")>
+```
+
+The BWFC `WebColor` type accepts strings (named colors like `White`, `Red` or hex codes like `#FF0000`). The `@("value")` wrapper tells Razor to pass the literal string to the component.
+
+> **Note:** The migration script (`bwfc-migrate.ps1`) handles this automatically. For manual migrations, always use `@("value")` for color attributes.
+
 ---
 
 ## Attributes Removed During Migration

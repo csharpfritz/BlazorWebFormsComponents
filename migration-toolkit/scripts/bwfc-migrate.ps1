@@ -1602,6 +1602,55 @@ function ConvertFrom-UrlReferences {
     return $Content
 }
 
+function ConvertFrom-ColorAttributes {
+    <#
+    .SYNOPSIS
+        Converts Web Forms color attributes to Razor-safe @("value") syntax.
+    .DESCRIPTION
+        In Razor, an attribute like BackColor="White" is interpreted as the C# variable White,
+        and ForeColor="#333333" triggers a preprocessor directive error because # is a C# token.
+        
+        This function converts color attribute values to explicit Razor strings using @("value")
+        syntax, which the BWFC WebColor type can then parse (it has implicit string conversion).
+        
+        Handled attributes: BackColor, ForeColor, BorderColor, HeaderBackColor, HeaderForeColor,
+        RowBackColor, RowForeColor, AlternatingRowBackColor, AlternatingRowForeColor
+    #>
+    param(
+        [string]$Content,
+        [string]$RelPath
+    )
+
+    # Color attribute names used in Web Forms GridView, DetailsView, FormView, etc.
+    $colorAttributes = @(
+        'BackColor',
+        'ForeColor',
+        'BorderColor'
+    )
+
+    $totalConverted = 0
+
+    foreach ($attr in $colorAttributes) {
+        # Match AttributeName="value" where value is not already a Razor expression
+        # Captures: $1 = attribute name, $2 = value (without @)
+        $pattern = "(?<attr>$attr)\s*=\s*`"(?<val>[^`"@][^`"]*)`""
+        $regex = [regex]$pattern
+
+        $matches = $regex.Matches($Content)
+        if ($matches.Count -gt 0) {
+            # Replace with AttributeName=@("value") format
+            $Content = $regex.Replace($Content, '${attr}=@("${val}")')
+            $totalConverted += $matches.Count
+        }
+    }
+
+    if ($totalConverted -gt 0) {
+        Write-TransformLog -File $RelPath -Transform 'ColorAttr' -Detail "Converted $totalConverted color attribute(s) to Razor-safe @(`"value`") syntax"
+    }
+
+    return $Content
+}
+
 #endregion
 
 #region --- Code-Behind Handling ---
@@ -2395,6 +2444,9 @@ function Convert-WebFormsFile {
     $content = Add-ReadOnlyWarning -Content $content -RelPath $relativePath
 
     $content = ConvertFrom-UrlReferences -Content $content -RelPath $relativePath
+
+    # Color Attributes: Convert Web Forms color values to Razor-safe @("value") syntax
+    $content = ConvertFrom-ColorAttributes -Content $content -RelPath $relativePath
 
     # Fix 2: Convert placeholder elements inside *Template blocks to @context
     $content = Convert-TemplatePlaceholders -Content $content -RelPath $relativePath
