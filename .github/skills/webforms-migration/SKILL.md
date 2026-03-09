@@ -14,6 +14,7 @@ This skill provides complete transformation rules for migrating ASP.NET Web Form
 3. **NEVER use Blazor's `<PageTitle>`** — Use BWFC's `Page.Title` pattern
 4. **NEVER rewrite `OnClick` to `@onclick`** — Preserve the attribute name (BWFC maps it)
 5. **NEVER add URL prefixes** — Routes match original URLs (no `/AppName/` prefix)
+6. **NEVER nest static assets under project name** — `wwwroot/CSS/` NOT `wwwroot/AppName/CSS/`
 
 ## Core Principle
 

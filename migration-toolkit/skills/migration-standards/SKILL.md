@@ -545,7 +545,23 @@ When linking to minimal API endpoints from Blazor pages, use `<form method="post
 
 ### Static Asset Relocation
 
-- All static files → `wwwroot/`
+**CRITICAL — Flat wwwroot structure:**
+- All static files → `wwwroot/` root level (NOT `wwwroot/{ProjectName}/`)
+- Source `CSS/` folder → `wwwroot/CSS/` (no intermediate folder)
+- Source `Scripts/` folder → `wwwroot/Scripts/`
+- Source `Images/` folder → `wwwroot/Images/`
+- **NEVER** create a subfolder matching the source project name (e.g., `wwwroot/ContosoUniversity/CSS/` is WRONG)
+
+**Why this matters:** If the `-Path` parameter points to the **solution** folder instead of the **project** folder, relative path resolution includes the project folder name, creating incorrect paths like `/ProjectName/CSS/style.css`. The fix is to either:
+1. Point `-Path` at the **project** folder (recommended), OR
+2. Post-process to flatten the wwwroot structure
+
+**Path format in Blazor pages:**
+- Use **absolute paths with leading `/`** for static assets: `href="/CSS/style.css"`
+- Without leading `/`, paths are relative to the current route, which breaks on nested routes
+- Original source may use `href="CSS/style.css"` (relative) — transform to `href="/CSS/style.css"` (absolute)
+
+**Other static asset rules:**
 - CSS bundles (`BundleConfig.cs`) → explicit `<link>` tags in `App.razor`
 - JS bundles → explicit `<script>` tags in `App.razor`
 - Image paths update: `~/Images/` → `/Images/`
