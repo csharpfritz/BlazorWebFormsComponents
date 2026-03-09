@@ -1330,8 +1330,6 @@ function Invoke-PatternD {
     )
 
     $content = Get-Content -Path $RazorPath -Raw -Encoding UTF8
-    $modified = $false
-    $injectionCount = 0
 
     # Find the companion code-behind to detect entity type
     $codeBehindPath = "$RazorPath.cs"
@@ -1390,30 +1388,28 @@ function Invoke-PatternD {
 
     # Inject ItemType into data-bound components that lack it
     $dataBoundComponents = @('GridView', 'DetailsView', 'FormView', 'ListView', 'DataList', 'Repeater')
+    $injectionCount = 0
 
     foreach ($comp in $dataBoundComponents) {
         # Match component opening tags WITHOUT ItemType
         # Pattern: <GridView followed by attributes, NOT containing ItemType, ending with >
-        $pattern = "(?si)(<$comp\b)([^>]*?)(>)"
+        $pattern = "(?si)<$comp\b([^>]*)>"
         
-        $content = [regex]::Replace($content, $pattern, {
-            param($m)
-            $openTag = $m.Groups[1].Value
-            $attrs = $m.Groups[2].Value
-            $closeAngle = $m.Groups[3].Value
-
-            # Check if ItemType already present
-            if ($attrs -match '\bItemType\s*=') {
-                return $m.Value  # Already has ItemType, no change
-            }
-
-            # Inject ItemType after the first space or at the end
-            $script:modified = $true
-            $script:injectionCount++
+        $tagMatches = [regex]::Matches($content, $pattern)
+        foreach ($tm in $tagMatches) {
+            $fullTag = $tm.Value
+            $attrs = $tm.Groups[1].Value
             
-            # Add ItemType as first attribute
-            return "$openTag ItemType=`"$entityType`"$attrs$closeAngle"
-        })
+            # Skip if ItemType already present
+            if ($attrs -match '\bItemType\s*=') {
+                continue
+            }
+            
+            # Inject ItemType as first attribute
+            $newTag = "<$comp ItemType=`"$entityType`"$attrs>"
+            $content = $content.Replace($fullTag, $newTag)
+            $injectionCount++
+        }
     }
 
     if ($injectionCount -gt 0) {
