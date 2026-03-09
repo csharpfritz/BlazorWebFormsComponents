@@ -9,28 +9,27 @@ public class ContosoUniversityContext : DbContext
     {
     }
 
-    public DbSet<Student> Students => Set<Student>();
-    public DbSet<Instructor> Instructors => Set<Instructor>();
-    public DbSet<Department> Departments => Set<Department>();
-    public DbSet<Course> Courses => Set<Course>();
-    public DbSet<Enrollment> Enrollments => Set<Enrollment>();
+    public DbSet<Student> Students { get; set; } = null!;
+    public DbSet<Cours> Courses { get; set; } = null!;
+    public DbSet<Department> Departments { get; set; } = null!;
+    public DbSet<Instructor> Instructors { get; set; } = null!;
+    public DbSet<Enrollment> Enrollments { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Map to existing table names from legacy database
-        modelBuilder.Entity<Course>().ToTable("Courses");
-        modelBuilder.Entity<Enrollment>().ToTable("Enrollment");
-        modelBuilder.Entity<Student>().ToTable("Students");
-        modelBuilder.Entity<Instructor>().ToTable("Instructors");
-        modelBuilder.Entity<Department>().ToTable("Departments");
-        
-        // Configure relationships
-        modelBuilder.Entity<Course>()
+        // Map to existing table names in the database
+        modelBuilder.Entity<Student>().ToTable("Students").HasKey(s => s.StudentID);
+        modelBuilder.Entity<Cours>().ToTable("Courses").HasKey(c => c.CourseID);
+        modelBuilder.Entity<Department>().ToTable("Departments").HasKey(d => d.DepartmentID);
+        modelBuilder.Entity<Instructor>().ToTable("Instructors").HasKey(i => i.InstructorID);
+        modelBuilder.Entity<Enrollment>().ToTable("Enrollment").HasKey(e => e.EnrollmentID);
+
+        modelBuilder.Entity<Cours>()
             .HasOne(c => c.Department)
             .WithMany(d => d.Courses)
             .HasForeignKey(c => c.DepartmentID);
 
-        modelBuilder.Entity<Course>()
+        modelBuilder.Entity<Cours>()
             .HasOne(c => c.Instructor)
             .WithMany(i => i.Courses)
             .HasForeignKey(c => c.InstructorID);

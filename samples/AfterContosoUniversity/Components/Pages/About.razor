@@ -1,0 +1,20 @@
+@page "/About"
+@attribute [StreamRendering]
+<HeadContent>
+     <link href="ContosoUniversity/CSS/CSS_About.css" rel="stylesheet" />
+     <script src="ContosoUniversity/JQuery/JQuery_About.js"></script>
+</HeadContent>
+<div id="header">
+    <h1>Students Body Statistics</h1>
+</div>
+<div id="grv">
+    <GridView ItemType="EnrollmentStatistic" CssClass="grid"
+        ID="EnrollmentsStat" Items="_enrollmentStats"
+        AutoGenerateColumns="false" EmptyDataText="There are no records to display"
+        CellPadding="4">
+        <Columns>
+            <BoundField ItemType="EnrollmentStatistic" DataField="Key" HeaderText="Enrollment Date" ReadOnly="true" />
+            <BoundField ItemType="EnrollmentStatistic" DataField="Value" HeaderText="Students" ReadOnly="true" />
+        </Columns>
+    </GridView>
+</div>

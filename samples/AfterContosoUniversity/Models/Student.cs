@@ -3,12 +3,10 @@ namespace ContosoUniversity.Models;
 public class Student
 {
     public int StudentID { get; set; }
-    public string FirstName { get; set; } = string.Empty;
-    public string LastName { get; set; } = string.Empty;
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
     public DateTime BirthDate { get; set; }
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
 
-    public string FullName => $"{FirstName} {LastName}";
-
-    public virtual ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
+    public virtual ICollection<Enrollment> Enrollments { get; set; } = new HashSet<Enrollment>();
 }
