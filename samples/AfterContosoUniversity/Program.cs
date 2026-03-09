@@ -1,30 +1,22 @@
-// TODO: Review and adjust this generated Program.cs for your application needs.
-using AfterContosoUniversity.Data;
+// Layer2-transformed
 using BlazorWebFormsComponents;
-using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
+using ContosoUniversity.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpContextAccessor();  // Required for BWFC GridView/DetailsView
 builder.Services.AddBlazorWebFormsComponents();
 
-// Add Entity Framework DbContext with SQL Server LocalDB (same as original Web Forms app)
-builder.Services.AddDbContext<SchoolContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection") 
-        ?? "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=ContosoUniversity;Integrated Security=True"));
+// Database - SQL Server LocalDB (same as original WebForms)
+var dbPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "ContosoUniversity", "ContosoUniversity.mdf"));
+builder.Services.AddDbContextFactory<ContosoUniversityContext>(options =>
+    options.UseSqlServer($@"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename={dbPath};Integrated Security=True"));
 
 var app = builder.Build();
-
-// Ensure database is created with schema
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<SchoolContext>();
-    db.Database.EnsureCreated();
-}
 
 if (!app.Environment.IsDevelopment())
 {
@@ -33,17 +25,24 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// ASPX URL backward compatibility — 301 redirects for SEO
-var rewriteOptions = new RewriteOptions()
-    .AddRedirect(@"^Default\.aspx$", "/", statusCode: 301)
-    .AddRedirect(@"^(.+)\.aspx$", "$1", statusCode: 301);
-app.UseRewriter(rewriteOptions);
-
 app.MapStaticAssets();
 app.UseAntiforgery();
+
+// Legacy URL redirects
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value;
+    if (path != null && path.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase))
+    {
+        var newPath = path.Replace(".aspx", "", StringComparison.OrdinalIgnoreCase);
+        context.Response.Redirect(newPath, permanent: true);
+        return;
+    }
+    await next();
+});
 
 app.MapRazorComponents<ContosoUniversity.Components.App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+

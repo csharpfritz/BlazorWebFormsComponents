@@ -1,0 +1,49 @@
+@page "/ContosoUniversity/Courses"
+@page "/Courses"
+@rendermode InteractiveServer
+
+<PageTitle>Courses - Contoso University</PageTitle>
+
+<HeadContent>
+    <link href="css/CSS_Courses.css" rel="stylesheet" />
+</HeadContent>
+
+<div id="dropList">
+    <h1 id="hdrCourse">Select Course</h1>
+    <DropDownList TItem="Department" Items="_departments" 
+        DataTextField="DepartmentName" DataValueField="DepartmentID"
+        @bind-SelectedValue="_selectedDepartmentId" />
+    <Button ID="btnSearchCourse" Text="Search Courses" OnClick="SearchCourses" />
+    <br /><br />
+    
+    <GridView ID="grvCourses" 
+        Items="_courses"
+        ItemType="Course"
+        AllowPaging="true" PageSize="5"
+        AutoGenerateColumns="false"
+        EmptyDataText="Choose a Department to Display Courses">
+        <Columns>
+            <BoundField ItemType="Course" DataField="CourseID" HeaderText="ID" />
+            <BoundField ItemType="Course" DataField="CourseName" HeaderText="Course Name" />
+            <BoundField ItemType="Course" DataField="StudentsMax" HeaderText="Max Capacity" />
+        </Columns>
+    </GridView>
+</div>
+
+<div id="autoComplete">
+    <h1 id="crsByName">Courses By Name</h1>
+    <TextBox ID="txtCourse" @bind-Text="_searchCourse" placeholder="Search Course..." />
+    <Button ID="search" Text="Search" OnClick="SearchCourseByName" />
+    <br /><br />
+    
+    @if (_selectedCourse != null)
+    {
+        <table id="dtlCourses" class="details">
+            <tr><td>Course ID</td><td>@_selectedCourse.CourseID</td></tr>
+            <tr><td>Course Name</td><td>@_selectedCourse.CourseName</td></tr>
+            <tr><td>Max Students</td><td>@_selectedCourse.StudentsMax</td></tr>
+        </table>
+    }
+</div>
+
+

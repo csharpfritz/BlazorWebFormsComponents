@@ -1,18 +1,11 @@
-using System;
-using System.Collections.Generic;
+namespace ContosoUniversity.Models;
 
-namespace AfterContosoUniversity.Models;
-
-public partial class Department
+public class Department
 {
-    public int DepartmentId { get; set; }
-    
-    public string DepartmentName { get; set; } = null!;
-    
+    public int DepartmentID { get; set; }
+    public string? DepartmentName { get; set; }
     public int BuildingNumber { get; set; }
-    
-    public int ManagingInstructorId { get; set; }
+    public int ManagingInstructorID { get; set; }
 
-    public virtual ICollection<Course> Courses { get; set; } = new List<Course>();
+    public virtual ICollection<Course> Courses { get; set; } = new HashSet<Course>();
 }
-

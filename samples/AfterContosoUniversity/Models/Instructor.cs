@@ -1,20 +1,12 @@
-using System;
-using System.Collections.Generic;
+namespace ContosoUniversity.Models;
 
-namespace AfterContosoUniversity.Models;
-
-public partial class Instructor
+public class Instructor
 {
-    public int InstructorId { get; set; }
-    
-    public string FirstName { get; set; } = null!;
-    
-    public string LastName { get; set; } = null!;
-    
+    public int InstructorID { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
     public DateTime BirthDate { get; set; }
-    
     public string? Email { get; set; }
 
-    public virtual ICollection<Course> Courses { get; set; } = new List<Course>();
+    public virtual ICollection<Course> Courses { get; set; } = new HashSet<Course>();
 }
-

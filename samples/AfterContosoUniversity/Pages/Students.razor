@@ -1,0 +1,91 @@
+@page "/ContosoUniversity/Students"
+@page "/Students"
+@rendermode InteractiveServer
+
+<PageTitle>Students - Contoso University</PageTitle>
+
+<HeadContent>
+    <link href="css/Students_CSS.css" rel="stylesheet" />
+</HeadContent>
+
+<div id="grvStudentsData">
+    <GridView ID="grv"
+        Items="_studentData"
+        ItemType="StudentViewModel"
+        CssClass="grv"
+        AutoGenerateColumns="false"
+        EmptyDataText="There are no records to display"
+        CellPadding="4">
+        <Columns>
+            <BoundField ItemType="StudentViewModel" DataField="ID" HeaderText="Student ID" ReadOnly="true" />
+            <BoundField ItemType="StudentViewModel" DataField="FullName" HeaderText="Student Name" />
+            <BoundField ItemType="StudentViewModel" DataField="Email" HeaderText="Email" />
+            <BoundField ItemType="StudentViewModel" DataField="Date" HeaderText="Enrollment Date" ReadOnly="true" />
+            <BoundField ItemType="StudentViewModel" DataField="Count" HeaderText="Number of Courses" ReadOnly="true" />
+        </Columns>
+    </GridView>
+</div>
+
+<div id="addStud">
+    <h1 id="addStudent">Add Student</h1>
+    <Table ID="tabAddStud" CssClass="tabAddStud">
+        <TableRow>
+            <TableCell>First Name</TableCell>
+            <TableCell><TextBox ID="txtFirstName" @bind-Text="_firstName" placeholder="Type Your First Name..." /></TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell>Last Name</TableCell>
+            <TableCell><TextBox ID="txtLastName" @bind-Text="_lastName" placeholder="Type Your Last Name..." /></TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell>Birth Date</TableCell>
+            <TableCell><TextBox ID="txtBirthDate" @bind-Text="_birthDate" placeholder="dd.mm.year" /></TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell>Email</TableCell>
+            <TableCell><TextBox ID="txtEmail" @bind-Text="_email" placeholder="Email is Optional..." /></TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell>Course Name</TableCell>
+            <TableCell>
+                <DropDownList TItem="Course" ID="dropListCourses" Items="_courses" 
+                    DataTextField="CourseName" DataValueField="CourseID"
+                    @bind-SelectedValue="_selectedCourseId" />
+            </TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell></TableCell>
+            <TableCell>
+                <Button CssClass="insert" ID="btnInsert" Text="New Enrollment" OnClick="InsertStudent" />
+                &nbsp;&nbsp;
+                <Button ID="btnClear" Text="Clear" OnClick="ClearForm" />
+            </TableCell>
+        </TableRow>
+    </Table>
+</div>
+
+<div id="ajax">
+    <h1 id="searchStud">Search Student</h1>
+    <TextBox CssClass="txtSearch" ID="txtSearch" @bind-Text="_searchTerm" placeholder="Type Student Name..." />
+    <Button ID="btnSearch" Text="Show Student Info" OnClick="SearchStudent" CssClass="btnInfo" />
+    
+    @if (_foundStudent != null)
+    {
+        <DetailsView
+            ID="studentData"
+            DataItem="_foundStudent"
+            ItemType="Student"
+            AutoGenerateRows="false"
+            CssClass="detailsView">
+            <Fields>
+                <BoundField ItemType="Student" DataField="FirstName" HeaderText="First Name" />
+                <BoundField ItemType="Student" DataField="LastName" HeaderText="Last Name" />
+                <BoundField ItemType="Student" DataField="Email" HeaderText="Email" />
+                <BoundField ItemType="Student" DataField="BirthDate" HeaderText="Birth Date" />
+                <BoundField ItemType="Student" DataField="StudentID" HeaderText="ID" />
+            </Fields>
+        </DetailsView>
+    }
+</div>         
+     
+

@@ -161,6 +161,7 @@ public class CoursesPageTests
         var page = await _fixture.NewPageAsync();
         await page.GotoAsync($"{TestConfiguration.BaseUrl}/Courses.aspx");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await page.WaitForTimeoutAsync(1000); // Wait for Blazor WebSocket connection
 
         var searchBox = page.Locator("input[id*='txtCourse']");
         var searchButton = page.Locator("input[id*='search'], button[id*='search']");
@@ -177,6 +178,7 @@ public class CoursesPageTests
             await searchBox.FillAsync("a");
             await searchButton.ClickAsync();
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            await page.WaitForTimeoutAsync(500); // Allow Blazor UI to re-render after async operation
 
             // DetailsView (ID: dtlCourses) should appear
             var detailsView = page.Locator(
