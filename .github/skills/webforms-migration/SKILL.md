@@ -751,6 +751,19 @@ The BWFC `WebColor` type accepts strings (named colors like `White`, `Red` or he
 
 > **Note:** The migration script (`bwfc-migrate.ps1`) handles this automatically. For manual migrations, always use `@("value")` for color attributes.
 
+### Nullable String Search (Contains)
+Web Forms autocomplete/search often uses `StartsWith()` or `Contains()` on strings. In EF Core with nullable string properties, these throw null reference exceptions:
+
+```csharp
+// ❌ Web Forms (works with EF6 null handling)
+var results = db.Students.Where(s => s.Name.Contains(searchTerm));
+
+// ✅ Blazor/EF Core (add null check)
+var results = db.Students.Where(s => s.Name != null && s.Name.Contains(searchTerm));
+```
+
+> **Note:** EF Core translates `Contains()` to SQL LIKE with wildcards. The null check is required because `string.Contains()` throws on null in C#, even though SQL handles NULL gracefully.
+
 ---
 
 ## Attributes Removed During Migration

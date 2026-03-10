@@ -621,6 +621,13 @@ function ConvertFrom-PageDirective {
 
     # <%@ Page ... %> → @page "/route" — use RelPath for subdirectory-aware routes
     $route = '/' + ($RelPath -replace '\\', '/' -replace '\.aspx$', '')
+    
+    # Strip project folder prefix from route (e.g., /ContosoUniversity/Students → /Students)
+    # Routes should NEVER include the project name
+    if ($script:sourceProjectFolder -and $route -match "^/$([regex]::Escape($script:sourceProjectFolder))/(.*)$") {
+        $route = '/' + $Matches[1]
+    }
+    
     # Handle Default/Index special cases at any directory level
     $route = $route -replace '/Default$', '' -replace '/default$', '' -replace '/Index$', '' -replace '/index$', ''
     if ($route -eq '' -or $route -eq '/') {
@@ -765,32 +772,12 @@ function ConvertFrom-ContentWrappers {
     }
     $Content = $mainRegex.Replace($Content, '')
 
-    # Closing </asp:Content> tags
+    # Closing </asp:Content> tags — always remove them
+    # (PageStyleSheet conversion already handles HeadContent properly, so we never need </HeadContent>)
     $closeRegex = [regex]'</asp:Content>\s*\r?\n?'
     $closeCount = $closeRegex.Matches($Content).Count
     if ($closeCount -gt 0) {
-        # Keep matching number of </HeadContent> if we have HeadContent above
-        $headContentCount = ([regex]'<HeadContent>').Matches($Content).Count
-        if ($headContentCount -gt 0) {
-            # Replace first N closing tags with </HeadContent>, remove the rest
-            $tempContent = $Content
-            $Content = ''
-            $lastIndex = 0
-            $closeMatches = $closeRegex.Matches($tempContent)
-            $headCount = 0
-            foreach ($cm in $closeMatches) {
-                $Content += $tempContent.Substring($lastIndex, $cm.Index - $lastIndex)
-                $headCount++
-                if ($headCount -le $headContentCount) {
-                    $Content += "</HeadContent>`n"
-                }
-                $lastIndex = $cm.Index + $cm.Length
-            }
-            $Content += $tempContent.Substring($lastIndex)
-        }
-        else {
-            $Content = $closeRegex.Replace($Content, '')
-        }
+        $Content = $closeRegex.Replace($Content, '')
         Write-TransformLog -File $RelPath -Transform 'Content' -Detail "Removed $closeCount </asp:Content> closing tag(s)"
     }
 
@@ -2479,6 +2466,10 @@ function Convert-WebFormsFile {
         }
         # Use relative path for a more descriptive route (e.g., /Account/Login)
         $pathRoute = '/' + ($relativePath -replace '\\', '/' -replace '\.aspx$', '')
+        # Strip project folder prefix from route
+        if ($script:sourceProjectFolder -and $pathRoute -match "^/$([regex]::Escape($script:sourceProjectFolder))/(.*)$") {
+            $pathRoute = '/' + $Matches[1]
+        }
         New-CompilableStub -Route $pathRoute -RelPath $relativePath -OutputFile $outputFile -OutputDir $outputDir
         return
     }
@@ -2658,6 +2649,12 @@ $sourceFiles = Get-ChildItem -Path $Path -Recurse -File | Where-Object {
     $ext -in $WebFormsExtensions
 }
 
+# Detect project folder name (e.g., "ContosoUniversity" in ContosoUniversity/CSS/)
+# This handles the common pattern where source has ProjectName/ProjectName/CSS structure
+# Used for both route stripping AND static file path flattening
+$script:sourceProjectFolder = Split-Path (Split-Path $Path -Leaf) -Leaf
+if (-not $script:sourceProjectFolder) { $script:sourceProjectFolder = Split-Path $Path -Leaf }
+
 $fileCount = ($sourceFiles | Measure-Object).Count
 Write-Host "Found $fileCount Web Forms file(s) to transform."
 Write-Host ''
@@ -2676,10 +2673,18 @@ $staticFiles = Get-ChildItem -Path $Path -Recurse -File | Where-Object {
     $ext -in $StaticExtensions
 }
 $staticCount = ($staticFiles | Measure-Object).Count
+
 if ($staticCount -gt 0) {
     Write-Host "Copying $staticCount static file(s)..." -ForegroundColor Green
     foreach ($sf in $staticFiles) {
         $relPath = $sf.FullName.Substring($Path.Length).TrimStart('\', '/')
+        
+        # Strip project folder prefix to flatten wwwroot structure
+        # e.g., "ContosoUniversity/CSS/file.css" -> "CSS/file.css"
+        if ($relPath -match "^$([regex]::Escape($script:sourceProjectFolder))[\\/](.+)$") {
+            $relPath = $Matches[1]
+        }
+        
         $destPath = Join-Path $Output "wwwroot" $relPath
         $destDir = Split-Path $destPath -Parent
 

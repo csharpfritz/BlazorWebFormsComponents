@@ -1,0 +1,22 @@
+@page "/ContosoUniversity/Instructors"
+@page "/Instructors"
+@rendermode InteractiveServer
+<PageStyleSheet Href="CSS/Instructors_CSS.css" />
+
+<ScriptManager></ScriptManager>
+    <UpdatePanel>
+            <div id="grv">
+                <h1 id="hdr">Our Instructors</h1>
+                <GridView ItemType="InstructorViewModel" ID="grvInstructors" Items="@InstructorList" AutoGenerateColumns="false"
+                    CssClass="grv" BorderWidth="Unit.Pixel(2)" Font-Size="30px"                 
+                    AllowSorting="true"
+                    EmptyDataText="There are no records to display">
+                    <Columns>
+                        <BoundField DataField="InstructorID" HeaderText="Instructor ID" SortExpression="InstructorID" />
+                        <BoundField DataField="FirstName" HeaderText="First Name"  SortExpression="FirstName"/>
+                        <BoundField DataField="LastName" HeaderText="Last Name"  SortExpression="LastName"/>
+                        <BoundField DataField="Email" HeaderText="Email"  />
+                    </Columns>
+                </GridView>
+            </div>
+        </UpdatePanel>

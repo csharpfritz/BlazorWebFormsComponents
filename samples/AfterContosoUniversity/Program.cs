@@ -1,21 +1,36 @@
-// ContosoUniversity Blazor Server App (Migrated from Web Forms)
+// ============================================================================
+// TODO: Generate EF Core models from your database using:
+// dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=ContosoUniversityEntities;Trusted_Connection=True;" Microsoft.EntityFrameworkCore.SqlServer --output-dir Models --context ContosoUniversityEntities --namespace "ContosoUniversityModel" --force
+// See scaffold-command.txt for full details and options.
+// ============================================================================
+
+// Layer2-transformed
 using BlazorWebFormsComponents;
 using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
 using ContosoUniversity.Models;
-using ContosoUniversity.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpContextAccessor();  // Required for BWFC GridView/DetailsView
 builder.Services.AddBlazorWebFormsComponents();
 
-// Database - LocalDB (matching original Web Forms config)
-builder.Services.AddDbContextFactory<ContosoUniversityContext>(options =>
-    options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity;Trusted_Connection=True;MultipleActiveResultSets=true"));
+// Database
+builder.Services.AddDbContextFactory<SchoolContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Session
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
@@ -34,6 +49,7 @@ var rewriteOptions = new RewriteOptions()
 app.UseRewriter(rewriteOptions);
 
 app.MapStaticAssets();
+app.UseSession();
 app.UseAntiforgery();
 
 app.MapRazorComponents<ContosoUniversity.Components.App>()

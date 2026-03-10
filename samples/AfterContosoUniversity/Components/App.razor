@@ -5,18 +5,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    <title>Contoso University</title>
     @* CDN references preserved from Site.Master *@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
-    @* Master CSS only - page-specific CSS loaded via PageStyleSheet *@
-    <link rel="stylesheet" href="/CSS/Master_CSS.css" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+
+    <HeadOutlet />
 </head>
 
+@* SSR by default — add @rendermode="InteractiveServer" to pages that need interactivity *@
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes />
     <script src="_framework/blazor.web.js"></script>
-    <script src="_content/Fritz.BlazorWebFormsComponents/js/Basepage.js"></script>
 </body>
 
 </html>
