@@ -42,7 +42,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// ASPX URL backward compatibility — redirect .aspx URLs to Blazor routes
+// ASPX URL backward compatibility ΓÇö redirect .aspx URLs to Blazor routes
 var rewriteOptions = new RewriteOptions()
     .AddRedirect(@"^Default\.aspx$", "/", statusCode: 301)
     .AddRedirect(@"^(.+)\.aspx$", "$1", statusCode: 301);

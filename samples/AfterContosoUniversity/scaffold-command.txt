@@ -1,5 +1,5 @@
 # ============================================================================
-# EF Core Scaffold Command — generated from Model1.edmx
+# EF Core Scaffold Command ΓÇö generated from Model1.edmx
 # ============================================================================
 #
 # Your Web Forms project used DB-first Entity Framework with an .edmx file.
