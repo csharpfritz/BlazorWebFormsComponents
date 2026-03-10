@@ -12,6 +12,8 @@ public static class ComponentCatalog
         new("MasterPage", "Utility", "/control-samples/masterpage", "Master page template support for consistent layouts"),
         new("Localize", "Utility", "/ControlSamples/Localize", "Localization and resource string rendering"),
         new("MultiView", "Utility", "/ControlSamples/MultiView", "Container for multiple View controls with switching"),
+        new("PageStyleSheet", "Utility", "/ControlSamples/PageStyleSheet", "Dynamic CSS loading with automatic cleanup",
+            Keywords: new[] { "css", "stylesheet", "dynamic", "head", "link" }),
         new("PlaceHolder", "Utility", "/ControlSamples/PlaceHolder", "Container for dynamically added controls"),
         new("DataBinder", "Utility", "/ControlSamples/DataBinder", "Data binding helper with Eval() expressions",
             Keywords: new[] { "databind", "eval", "expression" }),

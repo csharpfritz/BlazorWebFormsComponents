@@ -1,0 +1,258 @@
+@page "/ControlSamples/PageStyleSheet"
+@rendermode InteractiveServer
+
+<PageTitle>PageStyleSheet - Dynamic CSS Loading</PageTitle>
+
+@* Load page-specific CSS dynamically *@
+<PageStyleSheet Href="css/PageStyleSheetDemo.css" />
+
+<h2>PageStyleSheet</h2>
+
+<p>
+    <code>PageStyleSheet</code> dynamically loads CSS stylesheets when a component renders
+    and removes them when the component disposes. This is the Blazor equivalent of Web Forms'
+    pattern for page-specific CSS via <code>ContentPlaceHolder</code>.
+</p>
+
+@* ─────────────── Visual indicator that CSS is loaded ─────────────── *@
+
+<div class="pss-demo-banner">
+    <span>
+        <strong>CSS Loaded!</strong> The purple styling you see comes from 
+        <code>PageStyleSheetDemo.css</code>, which was loaded by <code>PageStyleSheet</code>.
+    </span>
+</div>
+
+@* ─────────────── Section 1: Basic Usage ─────────────── *@
+
+<div class="pss-demo-container">
+    <h3>1. Basic Usage</h3>
+    <p>Simply add a <code>PageStyleSheet</code> component pointing to your CSS file:</p>
+    
+    <pre><code>&lt;PageStyleSheet Href="css/PageStyleSheetDemo.css" /&gt;</code></pre>
+    
+    <p>
+        The CSS is loaded when this page renders and <strong>unloaded when you navigate away</strong>.
+        Try it — click a link in the navigation, then use your browser's back button to return.
+    </p>
+</div>
+
+@* ─────────────── Section 2: Navigation Test ─────────────── *@
+
+<div class="pss-demo-container">
+    <h3>2. Test Navigation Behavior</h3>
+    
+    <div class="pss-nav-test">
+        <p>Navigate away and come back to see the CSS load/unload:</p>
+        <p>
+            <a href="/">← Go to Home</a> &nbsp;|&nbsp; 
+            <a href="/ControlSamples/Button">Go to Button →</a>
+        </p>
+        <p><small>When you return, the purple styling reappears because PageStyleSheet reloads the CSS.</small></p>
+    </div>
+</div>
+
+@* ─────────────── Section 3: Why HeadContent Doesn't Work ─────────────── *@
+
+<div class="pss-demo-container">
+    <h3>3. Why Not HeadContent?</h3>
+    
+    <p>
+        Blazor's built-in <code>HeadContent</code> component seems like it should work, but it has limitations:
+    </p>
+    
+    <ul>
+        <li><strong>Layout limitation:</strong> <code>HeadContent</code> only works in page components, not layouts</li>
+        <li><strong>No cleanup:</strong> CSS added via <code>HeadContent</code> persists after navigation</li>
+        <li><strong>Static SSR issues:</strong> Different behavior between static and interactive modes</li>
+    </ul>
+    
+    <p>
+        <code>PageStyleSheet</code> solves all of these by using JavaScript interop with a 
+        reference-counting registry that properly manages the stylesheet lifecycle.
+    </p>
+    
+    <pre><code>// HeadContent — doesn't work in layouts, no cleanup
+&lt;HeadContent&gt;
+    &lt;link href="page.css" rel="stylesheet" /&gt;
+&lt;/HeadContent&gt;
+
+// PageStyleSheet — works anywhere, cleans up on dispose
+&lt;PageStyleSheet Href="page.css" /&gt;</code></pre>
+</div>
+
+@* ─────────────── Section 4: Web Forms Migration ─────────────── *@
+
+<div class="pss-demo-container">
+    <h3>4. Migration from Web Forms</h3>
+    
+    <h4>Before (Web Forms)</h4>
+    <pre><code>&lt;%@@ Page ... MasterPageFile="~/Site.Master" %&gt;
+
+&lt;asp:Content ContentPlaceHolderID="head" runat="server"&gt;
+    &lt;link href="CSS/Products.css" rel="stylesheet" /&gt;
+&lt;/asp:Content&gt;
+
+&lt;asp:Content ContentPlaceHolderID="MainContent" runat="server"&gt;
+    &lt;!-- Page content --&gt;
+&lt;/asp:Content&gt;</code></pre>
+    
+    <h4>After (Blazor)</h4>
+    <pre><code>@@page "/products"
+
+&lt;PageStyleSheet Href="CSS/Products.css" /&gt;
+
+&lt;!-- Page content --&gt;</code></pre>
+    
+    <p>
+        The migration is straightforward: replace the <code>ContentPlaceHolder</code> pattern
+        with a single <code>PageStyleSheet</code> component at the top of your page.
+    </p>
+</div>
+
+@* ─────────────── Section 5: Advanced Options ─────────────── *@
+
+<div class="pss-demo-container">
+    <h3>5. Advanced Options</h3>
+    
+    <p><code>PageStyleSheet</code> supports additional attributes for specialized scenarios:</p>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Parameter</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>Href</code></td>
+                <td>Required. URL of the stylesheet (relative or absolute)</td>
+            </tr>
+            <tr>
+                <td><code>Media</code></td>
+                <td>Media query (e.g., <code>"print"</code>, <code>"(max-width: 600px)"</code>)</td>
+            </tr>
+            <tr>
+                <td><code>Id</code></td>
+                <td>Optional ID for the link element</td>
+            </tr>
+            <tr>
+                <td><code>Integrity</code></td>
+                <td>SRI hash for CDN resources</td>
+            </tr>
+            <tr>
+                <td><code>CrossOrigin</code></td>
+                <td>Cross-origin setting (typically <code>"anonymous"</code> with Integrity)</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <pre><code>@@* Print-only stylesheet *@@
+&lt;PageStyleSheet Href="css/print.css" Media="print" /&gt;
+
+@@* CDN resource with SRI *@@
+&lt;PageStyleSheet Href="https://cdn.example.com/styles.css" 
+                Integrity="sha384-abc123..." 
+                CrossOrigin="anonymous" /&gt;</code></pre>
+</div>
+
+@* ─────────────── Section 6: Render Mode Behavior ─────────────── *@
+
+<div class="pss-demo-container">
+    <h3>6. Render Mode Behavior</h3>
+    
+    <p><code>PageStyleSheet</code> adapts to different Blazor render modes:</p>
+    
+    <ul>
+        <li>
+            <strong>Static SSR:</strong> Renders a <code>&lt;link&gt;</code> tag directly into HTML.
+            No unload on navigation (full page reload clears it).
+        </li>
+        <li>
+            <strong>Prerendering + Interactive:</strong> Renders static <code>&lt;link&gt;</code> during
+            prerender, then JavaScript takes over after hydration.
+        </li>
+        <li>
+            <strong>InteractiveServer / WebAssembly:</strong> Full lifecycle management — CSS loads
+            on render and unloads on dispose (navigation away).
+        </li>
+    </ul>
+    
+    <p>
+        This page uses <code>@@rendermode InteractiveServer</code> to demonstrate the full
+        load/unload behavior. Navigate away and back to see it in action.
+    </p>
+</div>
+
+@* ─────────────── Section 7: Layout CSS ─────────────── *@
+
+<div class="pss-demo-container">
+    <h3>7. Using PageStyleSheet in Layouts</h3>
+    
+    <p>
+        You can also use <code>PageStyleSheet</code> in your layout file for CSS that should
+        persist across all pages:
+    </p>
+    
+    <pre><code>@@* MainLayout.razor *@@
+@@inherits LayoutComponentBase
+
+@@* Layout-wide CSS — persists as long as layout is rendered *@@
+&lt;PageStyleSheet Href="css/layout-theme.css" /&gt;
+
+&lt;div class="layout-wrapper"&gt;
+    @@Body
+&lt;/div&gt;</code></pre>
+    
+    <p>
+        Since the layout component stays alive across navigations, its CSS persists.
+        Page-specific CSS (like on this page) loads and unloads as pages change.
+    </p>
+</div>
+
+<hr />
+
+@* ─────────────── Source Code ─────────────── *@
+
+<div class="code-container">
+    <h2>Source Code</h2>
+    
+    <h4>PageStyleSheetDemo.razor</h4>
+    <pre><code class="language-razor">@@page "/ControlSamples/PageStyleSheet"
+@@rendermode InteractiveServer
+
+&lt;PageTitle&gt;PageStyleSheet Demo&lt;/PageTitle&gt;
+
+@@* Load page-specific CSS dynamically *@@
+&lt;PageStyleSheet Href="css/PageStyleSheetDemo.css" /&gt;
+
+&lt;h2&gt;PageStyleSheet&lt;/h2&gt;
+
+&lt;div class="pss-demo-banner"&gt;
+    &lt;span&gt;CSS Loaded! This purple styling comes from PageStyleSheetDemo.css&lt;/span&gt;
+&lt;/div&gt;
+
+&lt;!-- Page content styled by the dynamically loaded CSS --&gt;</code></pre>
+    
+    <h4>PageStyleSheetDemo.css</h4>
+    <pre><code class="language-css">/* Page-specific CSS loaded by PageStyleSheet */
+.pss-demo-banner {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    animation: pss-pulse 2s infinite;
+}
+
+.pss-demo-container {
+    background: #faf5ff;
+    border: 2px solid #c084fc;
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.pss-demo-container h3 {
+    color: #7c3aed;
+}</code></pre>
+</div>

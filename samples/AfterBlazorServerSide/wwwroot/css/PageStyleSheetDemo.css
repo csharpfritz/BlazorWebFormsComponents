@@ -1,0 +1,75 @@
+/*
+ * PageStyleSheetDemo.css - Page-specific CSS for PageStyleSheet demo
+ * 
+ * This CSS is loaded dynamically when you navigate to the PageStyleSheet demo page
+ * and unloaded when you navigate away. The dramatic styling makes it obvious 
+ * when the CSS is active.
+ */
+
+/* Prominent banner to show CSS is loaded */
+.pss-demo-banner {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    animation: pss-pulse 2s infinite;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+}
+
+.pss-demo-banner::before {
+    content: "✓";
+    font-size: 1.5rem;
+    font-weight: bold;
+    background: rgba(255, 255, 255, 0.2);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@keyframes pss-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.01); }
+}
+
+/* Demo container styling */
+.pss-demo-container {
+    background: #faf5ff;
+    border: 2px solid #c084fc;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.pss-demo-container h3 {
+    color: #7c3aed;
+    border-bottom: 2px dashed #c084fc;
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+/* Highlight effect for code blocks on this page */
+.pss-demo-container pre {
+    background: #1e1b4b;
+    border-left: 4px solid #7c3aed;
+}
+
+/* Interactive navigation test box */
+.pss-nav-test {
+    background: linear-gradient(to right, #ddd6fe, #e9d5ff);
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.pss-nav-test a {
+    color: #5b21b6;
+    font-weight: bold;
+    text-decoration: underline;
+}
