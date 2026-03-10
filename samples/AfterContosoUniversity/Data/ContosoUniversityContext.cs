@@ -10,53 +10,46 @@ public class ContosoUniversityContext : DbContext
     {
     }
 
-    public DbSet<Student> Students { get; set; } = null!;
-    public DbSet<Instructor> Instructors { get; set; } = null!;
-    public DbSet<Cours> Courses { get; set; } = null!;
+    public DbSet<Course> Courses { get; set; } = null!;
     public DbSet<Department> Departments { get; set; } = null!;
     public DbSet<Enrollment> Enrollments { get; set; } = null!;
+    public DbSet<Instructor> Instructors { get; set; } = null!;
+    public DbSet<Student> Students { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        // Configure table names and primary keys
-        modelBuilder.Entity<Student>(entity =>
-        {
-            entity.ToTable("Students");
-            entity.HasKey(e => e.StudentID);
-            entity.Property(e => e.FirstName).IsRequired(false);
-            entity.Property(e => e.LastName).IsRequired(false);
-            entity.Property(e => e.Email).IsRequired(false);
-        });
+        // Table names from EDMX (PLURAL except Enrollment)
+        modelBuilder.Entity<Course>().ToTable("Courses");
+        modelBuilder.Entity<Department>().ToTable("Departments");
+        modelBuilder.Entity<Enrollment>().ToTable("Enrollment");
+        modelBuilder.Entity<Instructor>().ToTable("Instructors");
+        modelBuilder.Entity<Student>().ToTable("Students");
 
-        modelBuilder.Entity<Instructor>(entity =>
-        {
-            entity.ToTable("Instructors");
-            entity.HasKey(e => e.InstructorID);
-            entity.Property(e => e.FirstName).IsRequired(false);
-            entity.Property(e => e.LastName).IsRequired(false);
-            entity.Property(e => e.Email).IsRequired(false);
-        });
+        // Configure relationships
+        modelBuilder.Entity<Course>()
+            .HasOne<Department>()
+            .WithMany()
+            .HasForeignKey(c => c.DepartmentID)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        modelBuilder.Entity<Cours>(entity =>
-        {
-            entity.ToTable("Courses");
-            entity.HasKey(e => e.CourseID);
-            entity.Property(e => e.CourseName).IsRequired(false);
-        });
+        modelBuilder.Entity<Course>()
+            .HasOne<Instructor>()
+            .WithMany()
+            .HasForeignKey(c => c.InstructorID)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        modelBuilder.Entity<Department>(entity =>
-        {
-            entity.ToTable("Departments");
-            entity.HasKey(e => e.DepartmentID);
-            entity.Property(e => e.DepartmentName).IsRequired(false);
-        });
+        modelBuilder.Entity<Enrollment>()
+            .HasOne<Course>()
+            .WithMany()
+            .HasForeignKey(e => e.CourseID)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        modelBuilder.Entity<Enrollment>(entity =>
-        {
-            entity.ToTable("Enrollment");
-            entity.HasKey(e => e.EnrollmentID);
-        });
+        modelBuilder.Entity<Enrollment>()
+            .HasOne<Student>()
+            .WithMany()
+            .HasForeignKey(e => e.StudentID)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

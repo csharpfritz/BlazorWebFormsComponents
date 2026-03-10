@@ -1,7 +1,8 @@
-// Layer2-transformed
+// ContosoUniversity Blazor Server App (Migrated from Web Forms)
 using BlazorWebFormsComponents;
 using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
+using ContosoUniversity.Models;
 using ContosoUniversity.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,21 +10,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddHttpContextAccessor();  // Required for BWFC GridView/DetailsView
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddBlazorWebFormsComponents();
 
-// Database - using LocalDB with ContosoUniversity database
+// Database - LocalDB (matching original Web Forms config)
 builder.Services.AddDbContextFactory<ContosoUniversityContext>(options =>
     options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity;Trusted_Connection=True;MultipleActiveResultSets=true"));
-
-// Session
-builder.Services.AddDistributedMemoryCache();
-builder.Services.AddSession(options =>
-{
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
-    options.Cookie.HttpOnly = true;
-    options.Cookie.IsEssential = true;
-});
 
 var app = builder.Build();
 
@@ -42,7 +34,6 @@ var rewriteOptions = new RewriteOptions()
 app.UseRewriter(rewriteOptions);
 
 app.MapStaticAssets();
-app.UseSession();
 app.UseAntiforgery();
 
 app.MapRazorComponents<ContosoUniversity.Components.App>()

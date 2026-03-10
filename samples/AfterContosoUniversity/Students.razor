@@ -4,86 +4,190 @@
 <PageStyleSheet Href="CSS/Students_CSS.css" />
 
 <div id="grvStudentsData">
-    <GridView TItem="StudentViewModel" ID="grv"
-        Items="_students"
+    <GridView TItem="StudentViewModel" Items="_students"
         CssClass="grv"
         AutoGenerateColumns="false"
         EmptyDataText="There are no records to display"
-        DataKeyNames="ID"
-        BackColor=@("White") BorderColor=@("#3366CC") CellPadding="4">
+        BackColor=@("White") BorderColor=@("#3366CC") BorderStyle="BorderStyle.None" BorderWidth="1"
+        CellPadding="4" Height="336" Width="416">
         <Columns>
             <TemplateField HeaderText="Delete Student">
-                <ItemTemplate Context="item">
-                    <Button Text="Delete" OnClick="() => grv_DeleteItem(item.ID)" />
+                <ItemTemplate Context="student">
+                    <Button Text="Delete" OnClick="@(() => DeleteStudent(student.ID))" />
                 </ItemTemplate>
             </TemplateField>
             <BoundField DataField="ID" HeaderText="Student ID" ReadOnly="true" />
             <BoundField DataField="FullName" HeaderText="Student Name" />
             <BoundField DataField="Email" HeaderText="Email" />
-            <BoundField DataField="Date" HeaderText="Enrollment Date" ReadOnly="true" />
-            <BoundField DataField="Count" HeaderText="Number of Courses" ReadOnly="true" />
+            <BoundField DataField="EnrollmentDate" HeaderText="Enrollment Date" ReadOnly="true" />
+            <BoundField DataField="CourseCount" HeaderText="Number of Courses" ReadOnly="true" />
         </Columns>
+        <FooterStyleContent><GridViewFooterStyle BackColor=@("#99CCCC") ForeColor=@("#003399") /></FooterStyleContent>
+        <HeaderStyleContent><GridViewHeaderStyle BackColor=@("#003399") Font-Bold="true" ForeColor=@("#CCCCFF") /></HeaderStyleContent>
+        <PagerStyleContent><GridViewPagerStyle BackColor=@("#99CCCC") ForeColor=@("#003399") HorizontalAlign="HorizontalAlign.Left" /></PagerStyleContent>
+        <RowStyleContent><GridViewRowStyle BackColor=@("White") ForeColor=@("#003399") /></RowStyleContent>
+        <SelectedRowStyleContent><GridViewSelectedRowStyle BackColor=@("#009999") Font-Bold="true" ForeColor=@("#CCFF99") /></SelectedRowStyleContent>
     </GridView>
 </div>
 <div id="addStud">
     <h1 id="addStudent">Add Student</h1>
-    <Table ID="tabAddStud" CssClass="tabAddStud" BorderColor=@("#0033CC") ForeColor=@("White")>
+    <Table CssClass="tabAddStud" BorderColor=@("#0033CC") Font-Bold="true" ForeColor=@("White")>
         <TableRow>
             <TableCell>First Name</TableCell>
+            <TableCell><TextBox @bind-Text="_firstName" placeholder="Type Your First Name..." /></TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell>Last Name</TableCell>
+            <TableCell><TextBox @bind-Text="_lastName" placeholder="Type Your Last Name..." /></TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell>Birth Date</TableCell>
+            <TableCell><TextBox @bind-Text="_birthDate" placeholder="dd.mm.year" /></TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell>Email</TableCell>
+            <TableCell><TextBox @bind-Text="_email" placeholder="Email is Optional..." /></TableCell>
+        </TableRow>
+        <TableRow>
+            <TableCell>Course Name</TableCell>
             <TableCell>
-                <TextBox ID="txtFirstName" @bind-Text="_firstName" placeholder="Type Your First Name..." />
+                <DropDownList TItem="Course" Items="_courses" @bind-SelectedValue="_selectedCourseId"
+                    DataTextField="CourseName" DataValueField="CourseID">
+                </DropDownList>
             </TableCell>
         </TableRow>
         <TableRow>
-            <TableCell>Last Name</TableCell><TableCell>
-                <TextBox ID="txtLastName" @bind-Text="_lastName" placeholder="Type Your Last Name..." />
-            </TableCell>
-        </TableRow>
-        <TableRow>
-            <TableCell>Birth Date</TableCell><TableCell>
-                <TextBox ID="txtBirthDate" @bind-Text="_birthDate" placeholder="dd.mm.year" />
-            </TableCell>
-        </TableRow>
-        <TableRow>
-            <TableCell>Email</TableCell><TableCell>
-                <TextBox ID="txtEmail" @bind-Text="_email" placeholder="Email is Optional..." />
-            </TableCell>
-        </TableRow>
-        <TableRow>
-            <TableCell>Course Name</TableCell><TableCell>
-                <DropDownList TItem="Cours" ID="dropListCourses" Items="_courses"
-                    DataTextField="CourseName" DataValueField="CourseID" @bind-SelectedValue="_selectedCourseId" />
-            </TableCell>
-        </TableRow>
-        <TableRow>
-            <TableCell>               
-            </TableCell><TableCell>
-                <Button CssClass="insert" ID="btnInsert" Text="New Enrollment" OnClick="btnInsert_Click" />
+            <TableCell></TableCell>
+            <TableCell>
+                <Button CssClass="insert" Text="New Enrollment" OnClick="InsertStudent" />
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                <input type="reset" value="Clear" class="btn" />
+                <Button Text="Clear" OnClick="ClearForm" />
             </TableCell>
         </TableRow>
     </Table>
 </div>
 <div id="ajax">
     <h1 id="searchStud">Search Student</h1>
-    <TextBox CssClass="txtSearch" ID="txtSearch" @bind-Text="_searchName" placeholder="Type Student Name..." />
-    @* AutoCompleteExtender removed — implement with native HTML datalist or JS *@
-    <Button ID="btnSearch" Text="Show Student Info" OnClick="btnSearch_Click" CssClass="btnInfo" />
-    <DetailsView TItem="Student"
-        ID="studentData"
-        Items="@(_selectedStudent != null ? new[] { _selectedStudent } : Array.Empty<Student>())"
-        AutoGenerateRows="false"
-        CssClass="detailsView" BorderColor=@("Black") ForeColor=@("Black")>
-        <Fields>
-            <BoundField DataField="FirstName" HeaderText="First Name" />
-            <BoundField DataField="LastName" HeaderText="Last Name" />
-            <BoundField DataField="Email" HeaderText="Email" />
-            <BoundField DataField="BirthDate" HeaderText="Birth Date" />
-            <BoundField DataField="StudentID" HeaderText="id" />
-        </Fields>
-    </DetailsView>
-</div>         
-     
+    <TextBox CssClass="txtSearch" @bind-Text="_searchText" placeholder="Type Student Name..." />
+    <Button Text="Show Student Info" OnClick="SearchStudent" CssClass="btnInfo" />
+    @if (_selectedStudent != null)
+    {
+        <DetailsView ItemType="Student" DataItem="_selectedStudent" AutoGenerateRows="false"
+            CssClass="detailsView" BorderColor=@("Black") ForeColor=@("Black")>
+            <Fields>
+                <BoundField DataField="FirstName" HeaderText="First Name" />
+                <BoundField DataField="LastName" HeaderText="Last Name" />
+                <BoundField DataField="Email" HeaderText="Email" />
+                <BoundField DataField="BirthDate" HeaderText="Birth Date" />
+                <BoundField DataField="StudentID" HeaderText="ID" />
+            </Fields>
+            <RowStyleContent><DetailsViewRowStyle BackColor=@("White") /></RowStyleContent>
+        </DetailsView>
+    }
+</div>
+
+@code {
+    private List<StudentViewModel> _students = new();
+    private List<Course> _courses = new();
+    private Student? _selectedStudent;
+    
+    private string _firstName = "";
+    private string _lastName = "";
+    private string _birthDate = "";
+    private string _email = "";
+    private string _selectedCourseId = "";
+    private string _searchText = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _courses = await db.Courses.ToListAsync();
+        
+        // Get students with their first enrollment date from Enrollments table
+        var students = await db.Students.ToListAsync();
+        var enrollments = await db.Enrollments.ToListAsync();
+        
+        _students = students.Select(s => {
+            var firstEnrollment = enrollments.Where(e => e.StudentID == s.StudentID).OrderBy(e => e.Date).FirstOrDefault();
+            return new StudentViewModel
+            {
+                ID = s.StudentID,
+                FullName = s.FirstName + " " + s.LastName,
+                Email = s.Email ?? "",
+                EnrollmentDate = firstEnrollment != null ? firstEnrollment.Date.ToString("MMM dd, yyyy") : "",
+                CourseCount = enrollments.Count(e => e.StudentID == s.StudentID)
+            };
+        }).ToList();
+    }
+
+    private async Task InsertStudent()
+    {
+        if (string.IsNullOrEmpty(_firstName) || string.IsNullOrEmpty(_lastName)) return;
+        
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var student = new Student
+        {
+            FirstName = _firstName,
+            LastName = _lastName,
+            Email = string.IsNullOrEmpty(_email) ? null : _email,
+            BirthDate = DateTime.TryParse(_birthDate, out var bd) ? bd : DateTime.Now
+        };
+        db.Students.Add(student);
+        await db.SaveChangesAsync();
+        
+        if (int.TryParse(_selectedCourseId, out var courseId))
+        {
+            db.Enrollments.Add(new Enrollment { StudentID = student.StudentID, CourseID = courseId, Date = DateTime.Now });
+            await db.SaveChangesAsync();
+        }
+        
+        ClearForm();
+        await LoadDataAsync();
+    }
+
+    private void ClearForm()
+    {
+        _firstName = "";
+        _lastName = "";
+        _birthDate = "";
+        _email = "";
+        _selectedCourseId = "";
+    }
+
+    private async Task DeleteStudent(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var student = await db.Students.FindAsync(id);
+        if (student != null)
+        {
+            db.Students.Remove(student);
+            await db.SaveChangesAsync();
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task SearchStudent()
+    {
+        if (string.IsNullOrEmpty(_searchText)) return;
+        
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _selectedStudent = await db.Students
+            .FirstOrDefaultAsync(s => (s.FirstName + " " + s.LastName).Contains(_searchText));
+    }
+
+    public class StudentViewModel
+    {
+        public int ID { get; set; }
+        public string FullName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string EnrollmentDate { get; set; } = "";
+        public int CourseCount { get; set; }
+    }
+}
 
 

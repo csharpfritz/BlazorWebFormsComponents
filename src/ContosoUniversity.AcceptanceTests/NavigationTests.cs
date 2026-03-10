@@ -54,8 +54,19 @@ public class NavigationTests
         await link.ClickAsync();
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // After 301 redirect, URL should contain the page name (without .aspx)
-        Assert.Contains(expectedPage, page.Url, StringComparison.OrdinalIgnoreCase);
+        // After navigation, URL should contain the page name (without .aspx)
+        // Special case: Home page may have "/" as canonical URL
+        if (expectedPage == "Home")
+        {
+            Assert.True(
+                page.Url.Contains("Home", StringComparison.OrdinalIgnoreCase) ||
+                page.Url.EndsWith("/"),
+                $"Expected Home page URL to be '/' or contain 'Home', got: {page.Url}");
+        }
+        else
+        {
+            Assert.Contains(expectedPage, page.Url, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Theory]

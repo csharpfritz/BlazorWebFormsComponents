@@ -5,9 +5,9 @@
 
 <div id="grv">
     <h1 id="hdr">Our Instructors</h1>
-    <GridView TItem="Instructor" ID="grvInstructors" Items="_instructors" AutoGenerateColumns="false"
-        CssClass="grv"                 
-        AllowSorting="true" OnSorting="grvInstructors_Sorting" 
+    <GridView TItem="Instructor" Items="_instructors" AutoGenerateColumns="false"
+        CssClass="grv" BorderWidth="2" Font-Size="30px"
+        AllowSorting="true" OnSorting="HandleSorting"
         EmptyDataText="There are no records to display">
         <Columns>
             <BoundField DataField="InstructorID" HeaderText="Instructor ID" SortExpression="InstructorID" />
@@ -17,5 +17,44 @@
         </Columns>
     </GridView>
 </div>
+
+@code {
+    private List<Instructor> _instructors = new();
+    private string _sortExpression = "LastName";
+    private bool _sortAscending = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInstructorsAsync();
+    }
+
+    private async Task LoadInstructorsAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.Instructors.AsQueryable();
+        
+        query = _sortExpression switch
+        {
+            "InstructorID" => _sortAscending ? query.OrderBy(i => i.InstructorID) : query.OrderByDescending(i => i.InstructorID),
+            "FirstName" => _sortAscending ? query.OrderBy(i => i.FirstName) : query.OrderByDescending(i => i.FirstName),
+            "LastName" => _sortAscending ? query.OrderBy(i => i.LastName) : query.OrderByDescending(i => i.LastName),
+            _ => query.OrderBy(i => i.LastName)
+        };
+        
+        _instructors = await query.ToListAsync();
+    }
+
+    private async Task HandleSorting(GridViewSortEventArgs e)
+    {
+        if (_sortExpression == e.SortExpression)
+            _sortAscending = !_sortAscending;
+        else
+        {
+            _sortExpression = e.SortExpression;
+            _sortAscending = true;
+        }
+        await LoadInstructorsAsync();
+    }
+}
 
 

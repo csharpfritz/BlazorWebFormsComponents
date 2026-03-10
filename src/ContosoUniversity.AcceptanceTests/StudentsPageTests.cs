@@ -85,8 +85,9 @@ public class StudentsPageTests
         if (await searchBox.CountAsync() == 0 || await searchButton.CountAsync() == 0)
         {
             // Fallback: locate by section container
+            // BWFC Button renders as input[type='submit'] not input[type='button']
             searchBox = page.Locator("#ajax input[type='text']").First;
-            searchButton = page.Locator("#ajax input[type='button'], #ajax button").First;
+            searchButton = page.Locator("#ajax input[type='button'], #ajax input[type='submit'], #ajax button").First;
         }
 
         Assert.True(await searchBox.CountAsync() > 0, "Search textbox not found on Students page");
@@ -306,22 +307,28 @@ public class StudentsPageTests
         page.Dialog += async (_, dialog) => await dialog.AcceptAsync();
 
         // Find the first Delete button/link in the GridView
+        // BWFC Button renders as input[type='submit'] or button element
         var deleteButton = page.Locator(
             "table[id*='grv'] a:has-text('Delete'), " +
             "table[id*='grv'] input[value='Delete'], " +
+            "table[id*='grv'] button:has-text('Delete'), " +
             "table.grv a:has-text('Delete'), " +
+            "table.grv button:has-text('Delete'), " +
             "#grvStudentsData a:has-text('Delete'), " +
-            "#grvStudentsData input[value='Delete']").First;
+            "#grvStudentsData input[value='Delete'], " +
+            "#grvStudentsData button:has-text('Delete')").First;
 
         if (await deleteButton.CountAsync() == 0)
         {
-            deleteButton = page.Locator("table a:has-text('Delete'), table input[value='Delete']").First;
+            deleteButton = page.Locator("table a:has-text('Delete'), table input[value='Delete'], table button:has-text('Delete')").First;
         }
 
         if (await deleteButton.CountAsync() > 0)
         {
             await deleteButton.ClickAsync();
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            // Allow Blazor to re-render after delete operation
+            await page.WaitForTimeoutAsync(1000);
 
             var rowsAfter = await CountGridViewDataRows(page);
             Assert.True(rowsAfter < rowsBefore,

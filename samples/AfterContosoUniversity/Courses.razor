@@ -5,15 +5,13 @@
 
 <div id="dropList">
     <h1 id="hdrCourse">Select Course</h1>
-    <DropDownList TItem="Department" ID="drpDepartments" Items="_departments" 
-        DataTextField="DepartmentName" DataValueField="DepartmentID" @bind-SelectedValue="_selectedDepartmentId" />
-    <Button ID="btnSearchCourse" Text="Search Courses" OnClick="btnSearchCourse_Click" />
-    <br />
-    <br />
-    <GridView TItem="Cours" ID="grvCourses" Items="_courses" AllowPaging="true" DataKeyNames="CourseID"
-        PageSize="5" AutoGenerateColumns="false"
-        OnPageIndexChanging="grvCourses_PageIndexChanging"
-        EmptyDataText="Choose Department To Display Courses">
+    <DropDownList TItem="Department" Items="_departments" @bind-SelectedValue="_selectedDepartmentId"
+        DataTextField="DepartmentName" DataValueField="DepartmentID">
+    </DropDownList>
+    <Button Text="Search Courses" OnClick="SearchCourses"></Button>
+    <br /><br />
+    <GridView TItem="Course" Items="_courses" AllowPaging="true" PageSize="5"
+        AutoGenerateColumns="false" EmptyDataText="Choose Department To Display Courses">
         <Columns>
             <BoundField DataField="CourseID" HeaderText="ID" />
             <BoundField DataField="CourseName" HeaderText="Course Name" />
@@ -23,14 +21,55 @@
 </div>
 <div id="autoComplete">
     <h1 id="crsByName">Courses By Name</h1>
-    <TextBox ID="txtCourse" @bind-Text="_searchText" placeholder="Search Course..." />
-    <Button ID="search" Text="Search" OnClick="search_Click" />
-    <br />
-    <br />
-    @* ajaxToolkit:AutoCompleteExtender removed - use native HTML datalist or implement JS *@
-    <DetailsView TItem="Cours" ID="dtlCourses" Items="@(_selectedCourse != null ? new[] { _selectedCourse } : Array.Empty<Cours>())" 
-        AutoGenerateRows="true" CssClass="details" />
+    <TextBox @bind-Text="_searchText" placeholder="Search Course..."></TextBox>
+    <Button Text="Search" OnClick="SearchByName"></Button>
+    <br /><br />
+    @if (_selectedCourse != null)
+    {
+        <DetailsView ItemType="Course" DataItem="_selectedCourse" CssClass="details"
+            AutoGenerateRows="false">
+            <Fields>
+                <BoundField DataField="CourseID" HeaderText="ID" />
+                <BoundField DataField="CourseName" HeaderText="Course Name" />
+                <BoundField DataField="StudentsMax" HeaderText="Max Capacity" />
+            </Fields>
+        </DetailsView>
+    }
 </div>
 
+@code {
+    private List<Department> _departments = new();
+    private List<Course> _courses = new();
+    private Course? _selectedCourse;
+    private string _selectedDepartmentId = "";
+    private string _searchText = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _departments = await db.Departments.ToListAsync();
+    }
+
+    private async Task SearchCourses()
+    {
+        if (int.TryParse(_selectedDepartmentId, out var deptId))
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _courses = await db.Courses
+                .Where(c => c.DepartmentID == deptId)
+                .ToListAsync();
+        }
+    }
+
+    private async Task SearchByName()
+    {
+        if (!string.IsNullOrEmpty(_searchText))
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _selectedCourse = await db.Courses
+                .FirstOrDefaultAsync(c => c.CourseName != null && c.CourseName.Contains(_searchText));
+        }
+    }
+}
 
 
