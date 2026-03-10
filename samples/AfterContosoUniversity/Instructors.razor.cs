@@ -1,53 +1,56 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
+using ContosoUniversity.Data;
 using ContosoUniversity.Models;
-using BlazorWebFormsComponents;
 
-namespace ContosoUniversity
+namespace ContosoUniversity;
+
+public partial class Instructors : ComponentBase
 {
-    public partial class Instructors : ComponentBase
+    [Inject] private IDbContextFactory<ContosoUniversityContext> DbFactory { get; set; } = default!;
+
+    private List<Instructor> _instructors = new();
+    private bool _sortAscending = true;
+    private string _sortField = "InstructorID";
+
+    protected override async Task OnInitializedAsync()
     {
-        [Inject] private IDbContextFactory<ContosoUniversityEntities> DbFactory { get; set; } = default!;
+        await LoadInstructors();
+    }
 
-        private List<Instructor> instructors = new();
-        private string sortExpression = "";
-        private bool sortAscending = true;
-
-        protected override async Task OnInitializedAsync()
+    private async Task LoadInstructors()
+    {
+        using var db = DbFactory.CreateDbContext();
+        
+        IQueryable<Instructor> query = db.Instructors;
+        
+        query = (_sortField, _sortAscending) switch
         {
-            await LoadInstructors();
-        }
+            ("InstructorID", true) => query.OrderBy(i => i.InstructorID),
+            ("InstructorID", false) => query.OrderByDescending(i => i.InstructorID),
+            ("FirstName", true) => query.OrderBy(i => i.FirstName),
+            ("FirstName", false) => query.OrderByDescending(i => i.FirstName),
+            ("LastName", true) => query.OrderBy(i => i.LastName),
+            ("LastName", false) => query.OrderByDescending(i => i.LastName),
+            _ => query.OrderBy(i => i.InstructorID)
+        };
+        
+        _instructors = await query.ToListAsync();
+    }
 
-        private async Task LoadInstructors()
+    private async Task grvInstructors_Sorting(BlazorWebFormsComponents.GridViewSortEventArgs e)
+    {
+        if (e.SortExpression == _sortField)
         {
-            using var db = DbFactory.CreateDbContext();
-            var query = db.Instructors.AsQueryable();
-            
-            if (!string.IsNullOrEmpty(sortExpression))
-            {
-                query = sortExpression switch
-                {
-                    "InstructorID" => sortAscending ? query.OrderBy(i => i.InstructorID) : query.OrderByDescending(i => i.InstructorID),
-                    "FirstName" => sortAscending ? query.OrderBy(i => i.FirstName) : query.OrderByDescending(i => i.FirstName),
-                    "LastName" => sortAscending ? query.OrderBy(i => i.LastName) : query.OrderByDescending(i => i.LastName),
-                    _ => query
-                };
-            }
-            
-            instructors = await query.ToListAsync();
+            _sortAscending = !_sortAscending;
         }
-
-        private async Task grvInstructors_Sorting(GridViewSortEventArgs e)
+        else
         {
-            if (sortExpression == e.SortExpression)
-                sortAscending = !sortAscending;
-            else
-            {
-                sortExpression = e.SortExpression;
-                sortAscending = true;
-            }
-            await LoadInstructors();
+            _sortField = e.SortExpression ?? "InstructorID";
+            _sortAscending = true;
         }
+        
+        await LoadInstructors();
     }
 }
 

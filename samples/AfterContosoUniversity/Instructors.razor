@@ -1,28 +1,21 @@
 @page "/Instructors"
-@page "/Instructors.aspx"
 @rendermode InteractiveServer
-@using ContosoUniversity.Models
 
 <PageStyleSheet Href="CSS/Instructors_CSS.css" />
 
-<ScriptManager></ScriptManager>
-<UpdatePanel>
-    <ContentTemplate>
-        <div id="grv">
-            <h1 id="hdr">Our Instructors</h1>
-            <GridView TItem="Instructor" Items="instructors" ID="grvInstructors" AutoGenerateColumns="false"
-                CssClass="grv"
-                AllowSorting="true" OnSorting="grvInstructors_Sorting" 
-                EmptyDataText="There are no records to display">
-                <Columns>
-                    <BoundField DataField="InstructorID" HeaderText="Instructor ID" SortExpression="InstructorID" />
-                    <BoundField DataField="FirstName" HeaderText="First Name" SortExpression="FirstName"/>
-                    <BoundField DataField="LastName" HeaderText="Last Name" SortExpression="LastName"/>
-                    <BoundField DataField="Email" HeaderText="Email" />
-                </Columns>
-            </GridView>
-        </div>
-    </ContentTemplate>
-</UpdatePanel>
+<div id="grv">
+    <h1 id="hdr">Our Instructors</h1>
+    <GridView TItem="Instructor" ID="grvInstructors" Items="_instructors" AutoGenerateColumns="false"
+        CssClass="grv"                 
+        AllowSorting="true" OnSorting="grvInstructors_Sorting" 
+        EmptyDataText="There are no records to display">
+        <Columns>
+            <BoundField DataField="InstructorID" HeaderText="Instructor ID" SortExpression="InstructorID" />
+            <BoundField DataField="FirstName" HeaderText="First Name" SortExpression="FirstName" />
+            <BoundField DataField="LastName" HeaderText="Last Name" SortExpression="LastName" />
+            <BoundField DataField="Email" HeaderText="Email" />
+        </Columns>
+    </GridView>
+</div>
 
 

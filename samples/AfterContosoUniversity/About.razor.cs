@@ -1,29 +1,31 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
+using ContosoUniversity.Data;
 using ContosoUniversity.Models;
 
-namespace ContosoUniversity
+namespace ContosoUniversity;
+
+public partial class About : ComponentBase
 {
-    public class EnrollmentStat
+    [Inject] private IDbContextFactory<ContosoUniversityContext> DbFactory { get; set; } = default!;
+
+    private List<EnrollmentStatistic> _enrollmentStats = new();
+
+    protected override async Task OnInitializedAsync()
     {
-        public string Key { get; set; } = "";
-        public int Value { get; set; }
-    }
-
-    public partial class About : ComponentBase
-    {
-        [Inject] private IDbContextFactory<ContosoUniversityEntities> DbFactory { get; set; } = default!;
-
-        private List<EnrollmentStat> stats = new();
-
-        protected override async Task OnInitializedAsync()
-        {
-            using var db = DbFactory.CreateDbContext();
-            stats = await db.Enrollments
-                .GroupBy(e => e.EnrollmentDate.HasValue ? e.EnrollmentDate.Value.Year.ToString() : "Unknown")
-                .Select(g => new EnrollmentStat { Key = g.Key, Value = g.Count() })
-                .ToListAsync();
-        }
+        using var db = DbFactory.CreateDbContext();
+        
+        // Group enrollments by date and count them
+        var stats = await db.Enrollments
+            .GroupBy(e => e.Date.Date)
+            .Select(g => new EnrollmentStatistic
+            {
+                Key = g.Key.ToShortDateString(),
+                Value = g.Count()
+            })
+            .ToListAsync();
+        
+        _enrollmentStats = stats;
     }
 }
 

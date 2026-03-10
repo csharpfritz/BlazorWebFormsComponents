@@ -1,13 +1,8 @@
-// ============================================================================
-// TODO: Generate EF Core models from your database using:
-// dotnet ef dbcontext scaffold "YOUR_CONNECTION_STRING" Microsoft.EntityFrameworkCore.SqlServer --output-dir Models --context ContosoUniversityEntitiesDbContext --force
-// See scaffold-command.txt for full details and options.
-// ============================================================================
-
 // Layer2-transformed
 using BlazorWebFormsComponents;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
-using ContosoUniversity.Models;
+using ContosoUniversity.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,9 +12,9 @@ builder.Services.AddRazorComponents()
 builder.Services.AddHttpContextAccessor();  // Required for BWFC GridView/DetailsView
 builder.Services.AddBlazorWebFormsComponents();
 
-// Database
-builder.Services.AddDbContextFactory<ContosoUniversityEntities>(options =>
-    options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity;Trusted_Connection=True"));
+// Database - using LocalDB with ContosoUniversity database
+builder.Services.AddDbContextFactory<ContosoUniversityContext>(options =>
+    options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity;Trusted_Connection=True;MultipleActiveResultSets=true"));
 
 // Session
 builder.Services.AddDistributedMemoryCache();
@@ -39,6 +34,13 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// ASPX URL backward compatibility — redirect .aspx URLs to Blazor routes
+var rewriteOptions = new RewriteOptions()
+    .AddRedirect(@"^Default\.aspx$", "/", statusCode: 301)
+    .AddRedirect(@"^(.+)\.aspx$", "$1", statusCode: 301);
+app.UseRewriter(rewriteOptions);
+
 app.MapStaticAssets();
 app.UseSession();
 app.UseAntiforgery();
@@ -47,6 +49,5 @@ app.MapRazorComponents<ContosoUniversity.Components.App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
-
 
 

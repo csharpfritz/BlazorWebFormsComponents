@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Components;
 
-namespace ContosoUniversity
+namespace ContosoUniversity;
+
+public partial class Home : ComponentBase
 {
-    public partial class Home : ComponentBase
-    {
-        // Home page - no data needed
-    }
+    // No database access needed for home page
 }
 

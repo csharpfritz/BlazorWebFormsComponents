@@ -1,52 +1,50 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
+using ContosoUniversity.Data;
 using ContosoUniversity.Models;
-using Microsoft.AspNetCore.Components.Web;
-using BlazorWebFormsComponents;
 
-namespace ContosoUniversity
+namespace ContosoUniversity;
+
+public partial class Courses : ComponentBase
 {
-    public partial class Courses : ComponentBase
+    [Inject] private IDbContextFactory<ContosoUniversityContext> DbFactory { get; set; } = default!;
+
+    private List<Department> _departments = new();
+    private List<Cours> _courses = new();
+    private string? _selectedDepartmentId;
+    private string? _searchText;
+    private Cours? _selectedCourse;
+
+    protected override async Task OnInitializedAsync()
     {
-        [Inject] private IDbContextFactory<ContosoUniversityEntities> DbFactory { get; set; } = default!;
+        using var db = DbFactory.CreateDbContext();
+        _departments = await db.Departments.ToListAsync();
+    }
 
-        private List<Department> departments = new();
-        private List<Cours> courses = new();
-        private Cours? selectedCourse;
-        private string selectedDepartmentId = "";
-        private string searchText = "";
-
-        protected override async Task OnInitializedAsync()
+    private async Task btnSearchCourse_Click()
+    {
+        if (int.TryParse(_selectedDepartmentId, out var deptId))
         {
             using var db = DbFactory.CreateDbContext();
-            departments = await db.Departments.ToListAsync();
+            _courses = await db.Courses
+                .Where(c => c.DepartmentID == deptId)
+                .ToListAsync();
         }
+    }
 
-        private async Task btnSearchCourse_Click(MouseEventArgs e)
+    private async Task search_Click()
+    {
+        if (!string.IsNullOrWhiteSpace(_searchText))
         {
-            if (int.TryParse(selectedDepartmentId, out int deptId))
-            {
-                using var db = DbFactory.CreateDbContext();
-                courses = await db.Courses
-                    .Where(c => c.DepartmentID == deptId)
-                    .ToListAsync();
-            }
+            using var db = DbFactory.CreateDbContext();
+            _selectedCourse = await db.Courses
+                .FirstOrDefaultAsync(c => c.CourseName != null && c.CourseName.Contains(_searchText));
         }
+    }
 
-        private async Task search_Click(MouseEventArgs e)
-        {
-            if (!string.IsNullOrWhiteSpace(searchText))
-            {
-                using var db = DbFactory.CreateDbContext();
-                selectedCourse = await db.Courses
-                    .FirstOrDefaultAsync(c => c.CourseName.Contains(searchText));
-            }
-        }
-
-        private void grvCourses_PageIndexChanged(PageChangedEventArgs e)
-        {
-            // Paging handled by GridView
-        }
+    private void grvCourses_PageIndexChanging(BlazorWebFormsComponents.PageChangedEventArgs e)
+    {
+        // Paging handled by GridView component
     }
 }
 
