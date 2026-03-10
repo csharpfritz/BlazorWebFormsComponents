@@ -212,6 +212,124 @@ function Find-EdmxNamespace {
     return $null
 }
 
+function Wait-LocalDbReady {
+    <#
+    .SYNOPSIS
+        Ensures LocalDB is running and the database is accessible before EF scaffolding.
+    .DESCRIPTION
+        LocalDB databases using AttachDbFilename (MDF files) need special handling:
+        1. Ensure LocalDB instance is running
+        2. If MDF file exists, attach it
+        3. Wait for database to become accessible (with timeout)
+    .PARAMETER ConnectionString
+        The SQL Server connection string (may include AttachDbFilename).
+    .PARAMETER MaxWaitSeconds
+        Maximum seconds to wait for database to become ready. Default: 30.
+    .OUTPUTS
+        Returns $true if database is ready, $false if timeout or error.
+    #>
+    param(
+        [string]$ConnectionString,
+        [int]$MaxWaitSeconds = 30
+    )
+
+    # Check if this is a LocalDB connection
+    if ($ConnectionString -notmatch 'localdb|\.mdf') {
+        # Not LocalDB — assume always ready
+        return $true
+    }
+
+    Write-Host "    Initializing LocalDB database..." -ForegroundColor DarkGray
+
+    # Extract LocalDB instance name (default: mssqllocaldb)
+    $instanceName = 'mssqllocaldb'
+    if ($ConnectionString -match '\(localdb\)\\([^;]+)') {
+        $instanceName = $Matches[1]
+    }
+
+    # Step 1: Ensure LocalDB instance is running
+    try {
+        $sqllocaldbPath = Get-Command SqlLocalDB.exe -ErrorAction SilentlyContinue
+        if ($sqllocaldbPath) {
+            Write-Host "      Starting LocalDB instance '$instanceName'..." -ForegroundColor DarkGray
+            $startResult = & SqlLocalDB.exe start $instanceName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                # Instance might not exist — create it
+                Write-Host "      Creating LocalDB instance '$instanceName'..." -ForegroundColor DarkGray
+                $createResult = & SqlLocalDB.exe create $instanceName 2>&1
+                $startResult = & SqlLocalDB.exe start $instanceName 2>&1
+            }
+        }
+    }
+    catch {
+        Write-Host "      ⚠ SqlLocalDB.exe not found — LocalDB may not be available" -ForegroundColor Yellow
+        return $false
+    }
+
+    # Step 2: Check for MDF file attachment
+    $mdfPath = $null
+    if ($ConnectionString -match 'AttachDbFilename=([^;]+)') {
+        $mdfPath = $Matches[1]
+        # Resolve |DataDirectory| placeholder
+        if ($mdfPath -match '\|DataDirectory\|') {
+            # In Web Forms, DataDirectory is typically App_Data
+            # We don't have that context here, so warn
+            Write-Host "      ⚠ MDF file uses |DataDirectory| — may need manual attachment" -ForegroundColor Yellow
+            $mdfPath = $null
+        }
+    }
+
+    # Step 3: Wait for database connectivity with exponential backoff
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $attempt = 0
+    $waitMs = 500  # Start with 500ms
+
+    while ($stopwatch.Elapsed.TotalSeconds -lt $MaxWaitSeconds) {
+        $attempt++
+        
+        try {
+            # Use SqlClient to test connection
+            # Note: This requires System.Data.SqlClient or Microsoft.Data.SqlClient
+            # Fall back to sqlcmd if available
+            $sqlcmdPath = Get-Command sqlcmd.exe -ErrorAction SilentlyContinue
+            if ($sqlcmdPath) {
+                # Build a minimal sqlcmd connection test
+                $serverMatch = $ConnectionString -match 'Server=([^;]+)|Data Source=([^;]+)'
+                $server = if ($Matches[1]) { $Matches[1] } else { $Matches[2] }
+                
+                $testResult = & sqlcmd.exe -S $server -Q "SELECT 1" -W -h -1 2>&1
+                if ($LASTEXITCODE -eq 0 -and $testResult -match '1') {
+                    $elapsed = [math]::Round($stopwatch.Elapsed.TotalSeconds, 1)
+                    Write-Host "      ✓ LocalDB ready (took ${elapsed}s)" -ForegroundColor Green
+                    return $true
+                }
+            }
+            else {
+                # No sqlcmd — try PowerShell SqlConnection
+                Add-Type -AssemblyName System.Data -ErrorAction SilentlyContinue
+                $conn = New-Object System.Data.SqlClient.SqlConnection
+                $conn.ConnectionString = "$ConnectionString;Connect Timeout=5"
+                $conn.Open()
+                $conn.Close()
+                
+                $elapsed = [math]::Round($stopwatch.Elapsed.TotalSeconds, 1)
+                Write-Host "      ✓ LocalDB ready (took ${elapsed}s)" -ForegroundColor Green
+                return $true
+            }
+        }
+        catch {
+            # Connection failed — wait and retry
+        }
+
+        Write-Host "      Waiting for LocalDB (attempt $attempt)..." -ForegroundColor DarkGray
+        Start-Sleep -Milliseconds $waitMs
+        $waitMs = [Math]::Min($waitMs * 2, 5000)  # Exponential backoff, max 5s
+    }
+
+    Write-Host "      ⚠ LocalDB not ready after ${MaxWaitSeconds}s — scaffold may fail" -ForegroundColor Yellow
+    return $false
+}
+
 function Find-DbContextName {
     param([string]$ProjectRoot)
 
@@ -474,6 +592,16 @@ function Convert-EdmxToScaffold {
         if ($autoScaffold) {
             Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "Attempting automatic EF Core scaffolding..."
 
+            # Wait for LocalDB to be ready (if applicable)
+            $dbReady = Wait-LocalDbReady -ConnectionString $connectionString -MaxWaitSeconds 30
+            if (-not $dbReady) {
+                Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "LocalDB not ready — falling back to manual scaffold command"
+                Write-Host "    ⚠ Database not ready — generating scaffold command for manual execution" -ForegroundColor Yellow
+                $autoScaffold = $false
+            }
+        }
+
+        if ($autoScaffold) {
             # Add prerequisite packages
             $designPackageResult = $null
             $providerPackageResult = $null
