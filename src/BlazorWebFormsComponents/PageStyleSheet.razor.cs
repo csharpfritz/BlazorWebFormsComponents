@@ -27,9 +27,34 @@ namespace BlazorWebFormsComponents;
 /// <c>PageStyleSheet</c> can be used anywhere and properly cleans up on dispose.
 /// </para>
 /// <para>
-/// The component uses JavaScript interop to inject link elements into the document head.
-/// Stylesheets are automatically removed when the component is disposed (e.g., on navigation).
+/// <strong>Render Mode Behavior:</strong>
 /// </para>
+/// <list type="bullet">
+/// <item><description>
+/// <strong>Static SSR:</strong> Renders a static <c>&lt;link&gt;</c> tag directly into the HTML stream.
+/// No JavaScript interop is used, and the stylesheet persists until full-page navigation.
+/// </description></item>
+/// <item><description>
+/// <strong>Prerendering:</strong> Renders a static <c>&lt;link&gt;</c> tag during prerender. After hydration
+/// to interactive mode, JavaScript manages the stylesheet lifecycle.
+/// </description></item>
+/// <item><description>
+/// <strong>InteractiveServer/WebAssembly:</strong> Uses JavaScript interop to dynamically load the
+/// stylesheet and remove it when the component disposes (e.g., on navigation).
+/// </description></item>
+/// </list>
+/// <para>
+/// <strong>Registry-Based Lifecycle:</strong>
+/// </para>
+/// <para>
+/// CSS lifecycle is managed by a reference-counting registry in JavaScript. A stylesheet persists
+/// as long as at least one PageStyleSheet component references it:
+/// </para>
+/// <list type="bullet">
+/// <item><description>Layout CSS persists because the layout component stays alive across navigations.</description></item>
+/// <item><description>Page CSS swaps on navigation (old page unregisters, new page registers).</description></item>
+/// <item><description>Shared CSS (multiple components) persists until the last component unregisters.</description></item>
+/// </list>
 /// </remarks>
 public partial class PageStyleSheet : ComponentBase, IAsyncDisposable
 {
@@ -68,29 +93,56 @@ public partial class PageStyleSheet : ComponentBase, IAsyncDisposable
     [Parameter]
     public string? CrossOrigin { get; set; }
 
-    private string _linkId = "";
-    private bool _isLoaded;
+    private string _componentId = "";
+    private bool _registered;
     private IJSObjectReference? _module;
+
+    /// <summary>
+    /// Gets the component/link element ID, generating one if needed.
+    /// Called from both .razor markup and code-behind.
+    /// </summary>
+    private string GetLinkId()
+    {
+        if (string.IsNullOrEmpty(_componentId))
+        {
+            _componentId = Id ?? $"bwfc-css-{Guid.NewGuid():N}";
+        }
+        return _componentId;
+    }
 
     /// <inheritdoc />
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && !string.IsNullOrEmpty(Href))
         {
-            _linkId = Id ?? $"bwfc-css-{Guid.NewGuid():N}";
+            // Ensure we have a component ID (may already be set from static render)
+            GetLinkId();
             
             try
             {
                 _module = await JS.InvokeAsync<IJSObjectReference>(
                     "import", "./_content/Fritz.BlazorWebFormsComponents/js/Basepage.module.js");
                 
-                await _module.InvokeVoidAsync("loadStyleSheet", _linkId, Href, Media, Integrity, CrossOrigin);
-                _isLoaded = true;
+                // Check if we're in SSR-to-interactive transition (static link may exist)
+                // The registry handles adoption of existing links automatically
+                if (!RendererInfo.IsInteractive)
+                {
+                    // During prerender, just adopt the static link we rendered
+                    await _module.InvokeVoidAsync("adoptStyleSheet", _componentId, _componentId, Href);
+                }
+                else
+                {
+                    // Interactive mode: register with the global stylesheet registry
+                    // This either adopts existing link from SSR or creates new one
+                    await _module.InvokeVoidAsync("registerStyleSheet", _componentId, Href, Media, Integrity, CrossOrigin);
+                }
+                
+                _registered = true;
             }
             catch (InvalidOperationException)
             {
                 // Prerendering or SSR-only mode - JS not available
-                // The stylesheet won't be dynamically loaded, but that's OK for static scenarios
+                // The stylesheet is already rendered via the static <link> tag in the .razor file
             }
         }
     }
@@ -98,11 +150,14 @@ public partial class PageStyleSheet : ComponentBase, IAsyncDisposable
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (_isLoaded && _module is not null)
+        // Only unregister if we successfully registered with the JS registry.
+        // The registry handles reference counting and deferred cleanup.
+        if (_registered && _module is not null)
         {
             try
             {
-                await _module.InvokeVoidAsync("unloadStyleSheet", _linkId);
+                // Unregister from registry (may trigger deferred cleanup after 100ms)
+                await _module.InvokeVoidAsync("unregisterStyleSheet", _componentId, Href);
             }
             catch (JSDisconnectedException)
             {
@@ -114,7 +169,7 @@ public partial class PageStyleSheet : ComponentBase, IAsyncDisposable
             }
             catch (InvalidOperationException)
             {
-                // Prerendering scenario
+                // Prerendering scenario - shouldn't happen but guard anyway
             }
         }
 

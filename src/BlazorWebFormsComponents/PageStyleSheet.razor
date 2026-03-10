@@ -5,13 +5,22 @@
     Original: <asp:Content ContentPlaceHolderID="head"><link href="CSS/page.css" rel="stylesheet"/></asp:Content>
     Blazor:   <PageStyleSheet Href="CSS/page.css" />
     
-    The CSS is loaded when the component renders and removed when the component disposes,
-    making it ideal for page-specific styles that shouldn't persist across navigation.
+    Render Mode Behavior:
+    - Static SSR: Renders a <link> tag directly into the HTML stream (no unload)
+    - Prerendering: Renders <link> tag during prerender, then JS manages after hydration
+    - InteractiveServer/WebAssembly: Uses JS interop to load/unload CSS dynamically
 *@
 
 @inherits ComponentBase
 @implements IAsyncDisposable
 
+@* For non-interactive renders, emit a static <link> tag directly into the HTML *@
+@if (!string.IsNullOrEmpty(Href) && !RendererInfo.IsInteractive)
+{
+    <link rel="stylesheet" href="@Href" id="@GetLinkId()" 
+          media="@Media" integrity="@Integrity" crossorigin="@CrossOrigin" />
+}
+
 @code {
-    // Rendering handled entirely through JS interop - no visible output
+    // Interactive rendering handled through JS interop
 }
