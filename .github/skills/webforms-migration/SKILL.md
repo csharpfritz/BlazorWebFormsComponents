@@ -211,8 +211,44 @@ dotnet test src\ContosoUniversity.AcceptanceTests
 |-----------|--------|
 | `<asp:Content ContentPlaceHolderID="MainContent" runat="server">` | (remove — page body IS the content) |
 | `</asp:Content>` | (remove) |
-| `<asp:Content ContentPlaceHolderID="HeadContent" runat="server">` | `<HeadContent>` ... `</HeadContent>` |
+| `<asp:Content ContentPlaceHolderID="HeadContent" runat="server">` | `<PageStyleSheet>` for CSS (see below) |
 | `<asp:ContentPlaceHolder ID="MainContent" runat="server" />` | `@Body` (in layout) |
+
+### Page-Specific CSS with PageStyleSheet
+
+⚠️ **Do NOT use `<HeadContent>` for CSS in layouts** — it won't work (Blazor only processes HeadContent from pages, not layouts).
+
+Use BWFC's `<PageStyleSheet>` component instead:
+
+```aspx
+<!-- Web Forms -->
+<asp:Content ContentPlaceHolderID="head" runat="server">
+    <link href="CSS/CSS_Courses.css" rel="stylesheet" />
+</asp:Content>
+```
+
+```razor
+@* Blazor with BWFC *@
+<PageStyleSheet Href="CSS/CSS_Courses.css" />
+```
+
+**PageStyleSheet features:**
+- Works in **pages, layouts, or any component** (unlike HeadContent)
+- **Layout CSS persists** across navigations (layout component stays alive)
+- **Page CSS swaps** on navigation (100ms debounced cleanup)
+- **SSR compatible** — renders static `<link>` tag, JS adopts on hydration
+- **Reference counting** — shared CSS stays until all components unregister
+
+```razor
+@* MainLayout.razor — Layout CSS example *@
+@inherits LayoutComponentBase
+
+<PageStyleSheet Href="CSS/Master_CSS.css" />
+
+<div class="page-wrapper">
+    @Body
+</div>
+```
 
 ### Form Wrapper
 
@@ -573,6 +609,7 @@ builder.Services.AddScoped<IProductService, ProductService>();
 <html>
 <head runat="server">
     <title><%: Page.Title %></title>
+    <link href="CSS/Master_CSS.css" rel="stylesheet" />
     <asp:ContentPlaceHolder ID="HeadContent" runat="server" />
 </head>
 <body>
@@ -598,9 +635,9 @@ builder.Services.AddScoped<IProductService, ProductService>();
 @inherits LayoutComponentBase
 
 <PageTitle>@PageTitle</PageTitle>
-<HeadContent>
-    @HeadContent
-</HeadContent>
+
+@* Master page CSS — use PageStyleSheet, NOT HeadContent *@
+<PageStyleSheet Href="CSS/Master_CSS.css" />
 
 <header>
     <nav>
@@ -617,9 +654,13 @@ builder.Services.AddScoped<IProductService, ProductService>();
 - `<%@ Master %>` directive → `@inherits LayoutComponentBase`
 - `<form runat="server">` → removed entirely
 - `<asp:ContentPlaceHolder ID="MainContent">` → `@Body`
-- `<asp:ContentPlaceHolder ID="HeadContent">` → Handled by `<HeadContent>` in child pages
+- **Master page CSS** → `<PageStyleSheet Href="..." />` (NOT HeadContent — it won't work in layouts!)
+- `<asp:ContentPlaceHolder ID="HeadContent">` → Child pages use `<PageStyleSheet>` for their CSS
 - `<asp:ScriptManager>` → `<ScriptManager />` (renders nothing — correct)
 - `<%: expression %>` → `@expression`
+
+⚠️ **HeadContent in Layouts Warning:**  
+Blazor's `<HeadContent>` ONLY works in `@page` components. Content from layouts is silently ignored (Blazor's "last writer wins" architecture). Use `<PageStyleSheet>` for CSS that must load from layouts.
 
 ---
 
