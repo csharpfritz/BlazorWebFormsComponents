@@ -33,6 +33,15 @@
     justify-content: center;
 }
 
+/* Code elements inside banner need light text on the purple background */
+.pss-demo-banner code {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fef3c7;
+    padding: 0.125rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
 @keyframes pss-pulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.01); }
