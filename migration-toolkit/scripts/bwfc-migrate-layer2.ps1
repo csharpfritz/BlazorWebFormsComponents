@@ -51,7 +51,10 @@ param(
     [string]$ProjectNamespace,
 
     [Parameter(HelpMessage = "Path to the original Web Forms source project (for .edmx and WebMethod detection)")]
-    [string]$SourcePath
+    [string]$SourcePath,
+
+    [Parameter(HelpMessage = "Skip automatic EF Core scaffolding (generate scaffold-command.txt only)")]
+    [switch]$SkipEfScaffold
 )
 
 Set-StrictMode -Version Latest
@@ -94,6 +97,119 @@ function Test-AlreadyTransformed {
     if (-not (Test-Path $FilePath)) { return $false }
     $content = Get-Content -Path $FilePath -Raw -Encoding UTF8
     return $content -match [regex]::Escape($script:Layer2Marker)
+}
+
+function Find-ConnectionString {
+    <#
+    .SYNOPSIS
+        Parses connection strings from Web.config.
+    .DESCRIPTION
+        Searches for <connectionStrings><add name="..." connectionString="..." /></connectionStrings>
+        Also extracts embedded provider connection strings from EF metadata connection strings.
+    .PARAMETER WebConfigPath
+        Path to Web.config file.
+    .PARAMETER ContextName
+        Name of the DbContext (used for LocalDB fallback).
+    .OUTPUTS
+        Returns the first valid SQL Server connection string found, or a LocalDB default.
+    #>
+    param(
+        [string]$WebConfigPath,
+        [string]$ContextName
+    )
+
+    if (-not $WebConfigPath -or -not (Test-Path $WebConfigPath)) {
+        # Return LocalDB fallback
+        return "Server=(localdb)\mssqllocaldb;Database=$ContextName;Trusted_Connection=True;"
+    }
+
+    try {
+        $configContent = Get-Content -Path $WebConfigPath -Raw -Encoding UTF8
+
+        # Pattern 1: Standard connection strings
+        # <add name="..." connectionString="Server=...;Database=...;..." />
+        $standardPattern = '<add\s+name="[^"]*"\s+connectionString="([^"]+)"'
+        $standardMatches = [regex]::Matches($configContent, $standardPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        
+        foreach ($match in $standardMatches) {
+            $connStr = $match.Groups[1].Value
+            # Skip EF metadata connection strings (they wrap the real connection string)
+            if ($connStr -match '^metadata=') {
+                continue
+            }
+            # Check if it looks like a SQL Server connection string
+            if ($connStr -match 'Server=|Data Source=|Initial Catalog=|Database=') {
+                # Decode HTML entities
+                $connStr = $connStr -replace '&quot;', '"'
+                $connStr = $connStr -replace '&amp;', '&'
+                return $connStr
+            }
+        }
+
+        # Pattern 2: EF connection strings with embedded provider connection string
+        # connectionString="metadata=...;provider connection string=&quot;Server=...&quot;"
+        $efPattern = 'provider connection string="([^"]+)"'
+        $efMatches = [regex]::Matches($configContent, $efPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        
+        foreach ($match in $efMatches) {
+            $connStr = $match.Groups[1].Value
+            # Decode HTML entities
+            $connStr = $connStr -replace '&quot;', '"'
+            $connStr = $connStr -replace '&amp;', '&'
+            if ($connStr -match 'Server=|Data Source=|Initial Catalog=|Database=') {
+                return $connStr
+            }
+        }
+
+        # Pattern 3: HTML-encoded EF connection strings
+        # provider connection string=&quot;Data Source=...&quot;
+        $efEncodedPattern = 'provider connection string=&quot;([^&]+)&quot;'
+        $efEncodedMatches = [regex]::Matches($configContent, $efEncodedPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        
+        foreach ($match in $efEncodedMatches) {
+            $connStr = $match.Groups[1].Value
+            if ($connStr -match 'Server=|Data Source=|Initial Catalog=|Database=') {
+                return $connStr
+            }
+        }
+    }
+    catch {
+        Write-Verbose "Could not parse Web.config: $_"
+    }
+
+    # Fallback to LocalDB default
+    return "Server=(localdb)\mssqllocaldb;Database=$ContextName;Trusted_Connection=True;"
+}
+
+function Find-EdmxNamespace {
+    <#
+    .SYNOPSIS
+        Extracts the original namespace from EDMX CSDL Schema element.
+    .PARAMETER EdmxContent
+        Raw content of the EDMX file.
+    .OUTPUTS
+        Returns the namespace string, or $null if not found.
+    #>
+    param([string]$EdmxContent)
+
+    # Look for the CSDL Schema Namespace attribute
+    # The CSDL section has xmlns with /edm patterns and comes after SSDL
+    # Pattern: <Schema Namespace="ContosoUniversity.Models" ...>
+    if ($EdmxContent -match '<Schema\s+Namespace="([^"]+)"[^>]*xmlns="http://schemas\.microsoft\.com/ado/\d+/\d+/edm"') {
+        return $Matches[1]
+    }
+
+    # Alternative: find all Schema Namespace attributes and pick the one that looks like an app namespace
+    $namespaceMatches = [regex]::Matches($EdmxContent, '<Schema\s+Namespace="([^"]+)"')
+    foreach ($nm in $namespaceMatches) {
+        $ns = $nm.Groups[1].Value
+        # Skip SSDL-style namespaces (usually end with "Model.Store" or are database names)
+        if ($ns -notmatch '\.Store$|^dbo$') {
+            return $ns
+        }
+    }
+
+    return $null
 }
 
 function Find-DbContextName {
@@ -282,6 +398,7 @@ function Write-ManualItem {
 #
 # Web Forms DB-first apps use .edmx files. Instead of copying EF6 models
 # verbatim, detect .edmx files and generate a scaffold command for EF Core.
+# With automatic scaffolding enabled (default), actually runs the command.
 
 function Convert-EdmxToScaffold {
     param(
@@ -299,23 +416,15 @@ function Convert-EdmxToScaffold {
         Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "Found .edmx file: $($edmxFile.Name)"
 
         # Parse the .edmx XML to extract useful info
-        $connStringName = ''
         $providerName = 'Microsoft.EntityFrameworkCore.SqlServer'
         $entityNames = @()
         $contextName = ''
+        $edmxNamespace = $null
 
         try {
-            [xml]$edmxXml = Get-Content -Path $edmxFile.FullName -Raw -Encoding UTF8
+            $rawContent = Get-Content -Path $edmxFile.FullName -Raw -Encoding UTF8
 
             # Extract entity type names from ConceptualModels
-            $nsMgr = New-Object System.Xml.XmlNamespaceManager($edmxXml.NameTable)
-            # Common EDMX namespaces
-            $nsMgr.AddNamespace('edmx', 'http://schemas.microsoft.com/ado/2009/11/edmx')
-            $nsMgr.AddNamespace('edm', 'http://schemas.microsoft.com/ado/2009/11/edm')
-            $nsMgr.AddNamespace('edm2', 'http://schemas.microsoft.com/ado/2008/09/edm')
-
-            # Try to find EntityType elements (works across EDMX versions)
-            $rawContent = Get-Content -Path $edmxFile.FullName -Raw -Encoding UTF8
             $entityTypeRegex = [regex]'<EntityType\s+Name="([^"]+)"'
             $entityMatches = $entityTypeRegex.Matches($rawContent)
             foreach ($em in $entityMatches) {
@@ -331,14 +440,8 @@ function Convert-EdmxToScaffold {
                 $contextName = $containerMatches[$containerMatches.Count - 1].Groups[1].Value
             }
 
-            # Try to extract connection string name from the Designer section
-            $connRegex = [regex]'connection\s+string\s*=\s*"([^"]*)"'
-            $connMatch = $connRegex.Match($rawContent)
-            if (-not $connMatch.Success) {
-                # Try metadata-based pattern
-                $metaRegex = [regex]'connectionString="metadata=[^"]*"'
-                $metaMatch = $metaRegex.Match($rawContent)
-            }
+            # Extract the original namespace from CSDL Schema element
+            $edmxNamespace = Find-EdmxNamespace -EdmxContent $rawContent
 
             # Detect provider from SSDL
             if ($rawContent -match 'Provider="([^"]+)"') {
@@ -360,71 +463,165 @@ function Convert-EdmxToScaffold {
             $contextName = [System.IO.Path]::GetFileNameWithoutExtension($edmxFile.Name)
         }
 
-        # Build scaffold command text
-        $sb = [System.Text.StringBuilder]::new()
-        [void]$sb.AppendLine("# ============================================================================")
-        [void]$sb.AppendLine("# EF Core Scaffold Command — generated from $($edmxFile.Name)")
-        [void]$sb.AppendLine("# ============================================================================")
-        [void]$sb.AppendLine("#")
-        [void]$sb.AppendLine("# Your Web Forms project used DB-first Entity Framework with an .edmx file.")
-        [void]$sb.AppendLine("# Instead of adapting EF6 models, use 'dotnet ef dbcontext scaffold' to")
-        [void]$sb.AppendLine("# generate fresh EF Core models directly from your database.")
-        [void]$sb.AppendLine("#")
-        if ($entityNames.Count -gt 0) {
-            [void]$sb.AppendLine("# Entities found in .edmx: $($entityNames -join ', ')")
+        # Find connection string from Web.config
+        $webConfigPath = Join-Path $SourceDir 'Web.config'
+        $connectionString = Find-ConnectionString -WebConfigPath $webConfigPath -ContextName $contextName
+
+        # Determine if we should auto-scaffold
+        $autoScaffold = -not $SkipEfScaffold -and -not $WhatIfPreference
+        $scaffoldSuccess = $false
+
+        if ($autoScaffold) {
+            Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "Attempting automatic EF Core scaffolding..."
+
+            # Add prerequisite packages
+            $designPackageResult = $null
+            $providerPackageResult = $null
+            
+            Push-Location $OutputDir
+            try {
+                Write-Host "    Adding Microsoft.EntityFrameworkCore.Design package..." -ForegroundColor DarkGray
+                $designPackageResult = & dotnet add package Microsoft.EntityFrameworkCore.Design 2>&1
+                
+                Write-Host "    Adding $providerName package..." -ForegroundColor DarkGray
+                $providerPackageResult = & dotnet add package $providerName 2>&1
+
+                # Build namespace argument if we found one
+                $namespaceArg = ''
+                if ($edmxNamespace) {
+                    $namespaceArg = "--namespace `"$edmxNamespace`""
+                }
+
+                # Run scaffold command - use ORIGINAL context name (NOT suffixed with DbContext)
+                Write-Host "    Running dotnet ef dbcontext scaffold..." -ForegroundColor DarkGray
+                $scaffoldCmd = "dotnet ef dbcontext scaffold `"$connectionString`" $providerName --output-dir Models --context `"$contextName`" $namespaceArg --force"
+                Write-Verbose "Scaffold command: $scaffoldCmd"
+
+                $scaffoldResult = Invoke-Expression $scaffoldCmd 2>&1
+                $scaffoldExitCode = $LASTEXITCODE
+
+                if ($scaffoldExitCode -eq 0) {
+                    $scaffoldSuccess = $true
+                    Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "Auto-scaffolded EF Core models: $contextName ($($entityNames.Count) entities)"
+                    Write-Host "    ✓ EF Core scaffolding successful" -ForegroundColor Green
+
+                    # Delete old EF6 model files from output directory
+                    $ef6FilesToDelete = @(
+                        (Join-Path $OutputDir "Models\$($edmxFile.BaseName).edmx"),
+                        (Join-Path $OutputDir "Models\$($edmxFile.BaseName).Designer.cs"),
+                        (Join-Path $OutputDir "Models\$($edmxFile.BaseName).Context.tt"),
+                        (Join-Path $OutputDir "Models\$($edmxFile.BaseName).tt")
+                    )
+                    
+                    # Also find any .tt or .Designer.cs files related to the EDMX
+                    $edmxBaseName = $edmxFile.BaseName
+                    $oldModelFiles = Get-ChildItem -Path $OutputDir -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+                        $_.Name -match "^$edmxBaseName\.(edmx|Designer\.cs|Context\.tt|tt)$" -or
+                        $_.Name -match "\.edmx$" -or
+                        $_.Name -match "\.edmx\.diagram$"
+                    }
+
+                    foreach ($oldFile in $oldModelFiles) {
+                        if (Test-Path $oldFile.FullName) {
+                            Remove-Item -Path $oldFile.FullName -Force -ErrorAction SilentlyContinue
+                            Write-Layer2Log -File $oldFile.Name -Pattern 'EdmxScaffold' -Detail "Deleted old EF6 file: $($oldFile.Name)"
+                        }
+                    }
+                }
+                else {
+                    Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "Scaffold failed (database may not be available) — generating manual command"
+                    Write-Host "    ⚠ Scaffold failed — falling back to manual command generation" -ForegroundColor Yellow
+                    Write-Verbose "Scaffold output: $scaffoldResult"
+                }
+            }
+            catch {
+                Write-Layer2Log -File $relPath -Pattern 'EdmxScaffold' -Detail "Scaffold error: $($_.Exception.Message) — generating manual command"
+                Write-Host "    ⚠ Scaffold error — falling back to manual command generation" -ForegroundColor Yellow
+            }
+            finally {
+                Pop-Location
+            }
         }
-        [void]$sb.AppendLine("# Original context name: $contextName")
-        [void]$sb.AppendLine("#")
-        [void]$sb.AppendLine("# TODO: Run this command to generate EF Core models from your database:")
-        [void]$sb.AppendLine("# dotnet ef dbcontext scaffold ""YOUR_CONNECTION_STRING"" $providerName --output-dir Models --context ${contextName}DbContext --force")
-        [void]$sb.AppendLine("#")
-        [void]$sb.AppendLine("# Replace YOUR_CONNECTION_STRING with your actual database connection string.")
-        [void]$sb.AppendLine("# You can find the original connection string in your Web.config file.")
-        if ($entityNames.Count -gt 0) {
+
+        # Generate scaffold-command.txt (always, for reference or if auto-scaffold failed/skipped)
+        if (-not $scaffoldSuccess) {
+            # Build namespace argument for command text
+            $namespaceArgText = ''
+            if ($edmxNamespace) {
+                $namespaceArgText = "--namespace `"$edmxNamespace`" "
+            }
+
+            $sb = [System.Text.StringBuilder]::new()
+            [void]$sb.AppendLine("# ============================================================================")
+            [void]$sb.AppendLine("# EF Core Scaffold Command — generated from $($edmxFile.Name)")
+            [void]$sb.AppendLine("# ============================================================================")
             [void]$sb.AppendLine("#")
-            [void]$sb.AppendLine("# To scaffold only specific tables, add --table flags:")
-            $tableExamples = ($entityNames | Select-Object -First 3 | ForEach-Object { "--table $_ " }) -join ''
-            [void]$sb.AppendLine("# dotnet ef dbcontext scaffold ""YOUR_CONNECTION_STRING"" $providerName --output-dir Models --context ${contextName}DbContext $tableExamples--force")
-        }
-        [void]$sb.AppendLine("#")
-        [void]$sb.AppendLine("# Prerequisites:")
-        [void]$sb.AppendLine("#   dotnet tool install --global dotnet-ef")
-        [void]$sb.AppendLine("#   dotnet add package Microsoft.EntityFrameworkCore.Design")
-        [void]$sb.AppendLine("#   dotnet add package $providerName")
-        [void]$sb.AppendLine("")
-
-        $scaffoldText = $sb.ToString()
-
-        # Write scaffold-command.txt
-        $scaffoldFile = Join-Path $OutputDir 'scaffold-command.txt'
-        if ($PSCmdlet.ShouldProcess($scaffoldFile, "Write EF Core scaffold command from $($edmxFile.Name)")) {
-            # Append if multiple .edmx files
-            if (Test-Path $scaffoldFile) {
-                Add-Content -Path $scaffoldFile -Value $scaffoldText -Encoding UTF8
-            } else {
-                Set-Content -Path $scaffoldFile -Value $scaffoldText -Encoding UTF8
+            [void]$sb.AppendLine("# Your Web Forms project used DB-first Entity Framework with an .edmx file.")
+            [void]$sb.AppendLine("# Instead of adapting EF6 models, use 'dotnet ef dbcontext scaffold' to")
+            [void]$sb.AppendLine("# generate fresh EF Core models directly from your database.")
+            [void]$sb.AppendLine("#")
+            if ($entityNames.Count -gt 0) {
+                [void]$sb.AppendLine("# Entities found in .edmx: $($entityNames -join ', ')")
             }
-            Write-Layer2Log -File 'scaffold-command.txt' -Pattern 'EdmxScaffold' -Detail "Generated scaffold command for $($edmxFile.Name) ($($entityNames.Count) entities)"
-        }
-
-        # Also prepend as a comment block to Program.cs if it exists
-        $programCs = Join-Path $OutputDir 'Program.cs'
-        if ((Test-Path $programCs) -and $PSCmdlet.ShouldProcess($programCs, "Add scaffold command comment")) {
-            $programContent = Get-Content -Path $programCs -Raw -Encoding UTF8
-            if ($programContent -notmatch 'dotnet ef dbcontext scaffold') {
-                $commentBlock = "// ============================================================================`n"
-                $commentBlock += "// TODO: Generate EF Core models from your database using:`n"
-                $commentBlock += "// dotnet ef dbcontext scaffold ""YOUR_CONNECTION_STRING"" $providerName --output-dir Models --context ${contextName}DbContext --force`n"
-                $commentBlock += "// See scaffold-command.txt for full details and options.`n"
-                $commentBlock += "// ============================================================================`n`n"
-                $programContent = $commentBlock + $programContent
-                Set-Content -Path $programCs -Value $programContent -Encoding UTF8
-                Write-Layer2Log -File 'Program.cs' -Pattern 'EdmxScaffold' -Detail "Added scaffold command reference to top of Program.cs"
+            [void]$sb.AppendLine("# Original context name: $contextName")
+            if ($edmxNamespace) {
+                [void]$sb.AppendLine("# Original namespace: $edmxNamespace")
             }
+            [void]$sb.AppendLine("#")
+            [void]$sb.AppendLine("# Run this command to generate EF Core models from your database:")
+            [void]$sb.AppendLine("dotnet ef dbcontext scaffold `"$connectionString`" $providerName --output-dir Models --context $contextName $namespaceArgText--force")
+            [void]$sb.AppendLine("#")
+            if ($entityNames.Count -gt 0) {
+                [void]$sb.AppendLine("# To scaffold only specific tables, add --table flags:")
+                $tableExamples = ($entityNames | Select-Object -First 3 | ForEach-Object { "--table $_ " }) -join ''
+                [void]$sb.AppendLine("# dotnet ef dbcontext scaffold `"$connectionString`" $providerName --output-dir Models --context $contextName $namespaceArgText$tableExamples--force")
+            }
+            [void]$sb.AppendLine("#")
+            [void]$sb.AppendLine("# Prerequisites:")
+            [void]$sb.AppendLine("#   dotnet tool install --global dotnet-ef")
+            [void]$sb.AppendLine("#   dotnet add package Microsoft.EntityFrameworkCore.Design")
+            [void]$sb.AppendLine("#   dotnet add package $providerName")
+            [void]$sb.AppendLine("")
+
+            $scaffoldText = $sb.ToString()
+
+            # Write scaffold-command.txt
+            $scaffoldFile = Join-Path $OutputDir 'scaffold-command.txt'
+            if ($PSCmdlet.ShouldProcess($scaffoldFile, "Write EF Core scaffold command from $($edmxFile.Name)")) {
+                # Append if multiple .edmx files
+                if (Test-Path $scaffoldFile) {
+                    Add-Content -Path $scaffoldFile -Value $scaffoldText -Encoding UTF8
+                } else {
+                    Set-Content -Path $scaffoldFile -Value $scaffoldText -Encoding UTF8
+                }
+                Write-Layer2Log -File 'scaffold-command.txt' -Pattern 'EdmxScaffold' -Detail "Generated scaffold command for $($edmxFile.Name) ($($entityNames.Count) entities)"
+            }
+
+            # Also prepend as a comment block to Program.cs if it exists
+            $programCs = Join-Path $OutputDir 'Program.cs'
+            if ((Test-Path $programCs) -and $PSCmdlet.ShouldProcess($programCs, "Add scaffold command comment")) {
+                $programContent = Get-Content -Path $programCs -Raw -Encoding UTF8
+                if ($programContent -notmatch 'dotnet ef dbcontext scaffold') {
+                    $commentBlock = "// ============================================================================`n"
+                    $commentBlock += "// TODO: Generate EF Core models from your database using:`n"
+                    $commentBlock += "// dotnet ef dbcontext scaffold `"$connectionString`" $providerName --output-dir Models --context $contextName $namespaceArgText--force`n"
+                    $commentBlock += "// See scaffold-command.txt for full details and options.`n"
+                    $commentBlock += "// ============================================================================`n`n"
+                    $programContent = $commentBlock + $programContent
+                    Set-Content -Path $programCs -Value $programContent -Encoding UTF8
+                    Write-Layer2Log -File 'Program.cs' -Pattern 'EdmxScaffold' -Detail "Added scaffold command reference to top of Program.cs"
+                }
+            }
+
+            Write-ManualItem -File $relPath -Category 'EdmxScaffold' -Detail "DB-first .edmx detected ($($entityNames.Count) entities: $($entityNames -join ', ')). Run 'dotnet ef dbcontext scaffold' — see scaffold-command.txt"
         }
 
-        Write-ManualItem -File $relPath -Category 'EdmxScaffold' -Detail "DB-first .edmx detected ($($entityNames.Count) entities: $($entityNames -join ', ')). Run 'dotnet ef dbcontext scaffold' — see scaffold-command.txt"
         $script:Summary.EdmxScaffold++
+        
+        # Store scaffold status for summary
+        if ($scaffoldSuccess) {
+            $script:Summary['EdmxAutoScaffolded'] = ($script:Summary['EdmxAutoScaffolded'] ?? 0) + 1
+        }
     }
 }
 
@@ -1577,7 +1774,21 @@ Write-Host ''
 Write-Host '╔══════════════════════════════════════════════════════════╗' -ForegroundColor Cyan
 Write-Host '║  Layer 2 Summary                                        ║' -ForegroundColor Cyan
 Write-Host '╠══════════════════════════════════════════════════════════╣' -ForegroundColor Cyan
-Write-Host "║  EDMX Scaffold Commands:              $($script:Summary.EdmxScaffold) file(s)         ║" -ForegroundColor Magenta
+
+# EDMX scaffolding summary with auto/manual distinction
+$autoScaffolded = $script:Summary['EdmxAutoScaffolded'] ?? 0
+$manualScaffold = $script:Summary.EdmxScaffold - $autoScaffolded
+if ($autoScaffolded -gt 0 -or $manualScaffold -gt 0) {
+    if ($autoScaffolded -gt 0) {
+        Write-Host "║  EDMX Auto-scaffolded:                $autoScaffolded file(s)         ║" -ForegroundColor Green
+    }
+    if ($manualScaffold -gt 0) {
+        Write-Host "║  EDMX Manual scaffold needed:         $manualScaffold file(s)         ║" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "║  EDMX Scaffold Commands:              $($script:Summary.EdmxScaffold) file(s)         ║" -ForegroundColor Magenta
+}
+
 Write-Host "║  WebMethod → Minimal API:             $($script:Summary.WebMethod) method(s)       ║" -ForegroundColor Magenta
 Write-Host "║  Pattern A (FormView→ComponentBase):  $($script:Summary.PatternA) file(s)         ║" -ForegroundColor Cyan
 Write-Host "║  Pattern B (Auth Simplification):     $($script:Summary.PatternB) file(s)         ║" -ForegroundColor Green
