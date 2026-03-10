@@ -1167,6 +1167,7 @@ function Invoke-PatternC {
     if ($hasIdentity) {
         [void]$sb.AppendLine('using Microsoft.AspNetCore.Identity;')
     }
+    [void]$sb.AppendLine('using Microsoft.AspNetCore.Rewrite;')
     [void]$sb.AppendLine('using Microsoft.EntityFrameworkCore;')
     [void]$sb.AppendLine("using ${Namespace}.Models;")
     [void]$sb.AppendLine('')
@@ -1247,6 +1248,13 @@ function Invoke-PatternC {
     [void]$sb.AppendLine('}')
     [void]$sb.AppendLine('')
     [void]$sb.AppendLine('app.UseHttpsRedirection();')
+    [void]$sb.AppendLine('')
+    [void]$sb.AppendLine('// ASPX URL backward compatibility — redirect .aspx URLs to Blazor routes')
+    [void]$sb.AppendLine('var rewriteOptions = new RewriteOptions()')
+    [void]$sb.AppendLine('    .AddRedirect(@"^Default\.aspx$", "/", statusCode: 301)')
+    [void]$sb.AppendLine('    .AddRedirect(@"^(.+)\.aspx$", "$1", statusCode: 301);')
+    [void]$sb.AppendLine('app.UseRewriter(rewriteOptions);')
+    [void]$sb.AppendLine('')
     [void]$sb.AppendLine('app.UseStaticFiles();')
     [void]$sb.AppendLine('app.UseSession();')
     if ($hasIdentity) {

@@ -265,9 +265,9 @@ public partial class About : ComponentBase { }
 }
 ```
 
-### ASPX URL Backward Compatibility
+### ASPX URL Backward Compatibility (MANDATORY)
 
-**Use URL Rewriting middleware instead of duplicate `@page` directives.** When users have bookmarked or linked to `.aspx` URLs, preserve them using `RewriteOptions.AddRedirect` in Program.cs — NOT by adding multiple `@page` directives to Razor files.
+**⚠️ ALWAYS include URL Rewriting middleware in every migration.** This is a standard inclusion, not optional. The middleware handles all legacy `.aspx` URL redirects automatically — do NOT add duplicate `@page` directives to Razor files.
 
 **Add to Program.cs (before `app.UseRouting()`):**
 
@@ -295,7 +295,7 @@ app.UseRewriter(rewriteOptions);
 @page "/About.aspx"
 ```
 
-The migration script should inject the `RewriteOptions` snippet into Program.cs when ASPX backward compatibility is needed.
+**Migration script behavior:** The Layer 2 script (`bwfc-migrate-layer2.ps1`) automatically injects the `RewriteOptions` snippet into Program.cs. This is NOT optional — every migrated project MUST include URL rewriting.
 
 ## Patterns
 
@@ -386,6 +386,47 @@ The migration script should inject the `RewriteOptions` snippet into Program.cs 
 - Using `@onclick` instead creates a native HTML event binding that bypasses BWFC's Click handler
 - The button appears to work (renders correctly) but clicking does nothing
 
+### Form Clear/Reset Strategy — Use HTML Reset Button
+
+**Prefer HTML reset buttons over Blazor clear handlers for form clearing.**
+
+Web Forms provided reset functionality via `HtmlInputReset` which rendered `<input type="reset" runat="server">`. In Blazor migration, use native HTML `<input type="reset">` directly — it requires no interactivity and works identically:
+
+**Web Forms:**
+```html
+<input type="reset" runat="server" id="btnClear" value="Clear" class="btn" />
+```
+
+**Blazor (identical output, no code needed):**
+```html
+<input type="reset" value="Clear" class="btn btn-secondary" />
+```
+
+**Migration guidance:**
+1. Strip `runat="server"` and `id` attributes from `<input type="reset">` elements
+2. The reset behavior is native HTML — no Blazor handler needed
+3. Works in SSR mode — no `@rendermode InteractiveServer` required
+
+**Why HTML reset over BWFC Button with clear handler:**
+- **Zero code** — No need for `OnClick="Clear_Click"` handler that sets each field to empty
+- **Works with SSR** — No need for `@rendermode InteractiveServer` just for a clear button
+- **Full form reset** — Clears ALL inputs in the form, not just fields you remember to code
+- **Native browser behavior** — Consistent, accessible, well-tested
+- **Matches original Web Forms output** — `HtmlInputReset` rendered the same `<input type="reset">`
+
+**Do NOT create Blazor clear handlers:**
+```csharp
+// WRONG — unnecessary code when HTML reset works
+private void ClearForm_Click(MouseEventArgs e)
+{
+    SearchTerm = "";
+    SelectedCategory = "";
+    // Easy to forget a field!
+}
+```
+
+**When to use BWFC Button for reset:** Only if the clear operation has side effects beyond form field clearing (e.g., clearing a session, resetting page state, reloading data).
+
 > **Do NOT place `@rendermode InteractiveServer` as a standalone line in `_Imports.razor`** — `@rendermode` is a directive attribute, not a standalone directive. It will cause build errors (RZ10003, CS0103, RZ10024).
 
 > **Why SSR over global InteractiveServer:** Under global InteractiveServer, `HttpContext` is NULL during WebSocket circuits. This breaks cookie auth, session state, and any middleware-dependent operations. SSR preserves a real HTTP request/response for every page load, making auth endpoints, session cookies, and middleware work correctly. Add `InteractiveServer` only to specific components that need real-time updates.
@@ -437,6 +478,29 @@ The migration script should inject the `RewriteOptions` snippet into Program.cs 
 - Replace `DropCreateDatabaseIfModelChanges` with `EnsureCreated` + idempotent seed
 - Use `IDbContextFactory<T>` or scoped `DbContext` injection
 - Models: nullable reference types, file-scoped namespaces, modern init patterns
+
+**⚠️ MANDATORY: Use database-first scaffold for existing databases:**
+
+When the source project uses an existing database (EDMX, database-first EF6, or any existing schema), **ALWAYS** generate EF Core models from the live database using scaffold:
+
+```powershell
+# From the migrated project directory
+dotnet ef dbcontext scaffold "Server=(localdb)\mssqllocaldb;Database=YourDbName" Microsoft.EntityFrameworkCore.SqlServer -o Models --context-dir Data --force
+```
+
+**Why scaffold instead of manual model creation:**
+- **Schema accuracy** — Scaffold reads actual table/column names, avoiding `[Column("Date")]` guesswork
+- **Key detection** — Primary keys, foreign keys, and indexes are auto-configured
+- **Type mapping** — SQL types map correctly to CLR types (no nullable mismatch)
+- **Relationship setup** — Navigation properties and join tables configured automatically
+- **Time savings** — 10-20 minutes of manual `[Key]`, `[Table]`, `[Column]` work avoided
+
+**Do NOT manually fix EF Core model errors.** If you encounter:
+- "Invalid column name 'X'" → Your model has wrong property name — re-scaffold
+- "Missing [Key] attribute" → Scaffold would have configured this automatically
+- Table name mismatch → Scaffold reads actual table names from database
+
+**Layer 2 script integration:** The Layer 2 script generates a `scaffold-command.txt` file with the exact scaffold command for the project's connection string. Run this command as part of migration.
 
 ### Identity Migration
 

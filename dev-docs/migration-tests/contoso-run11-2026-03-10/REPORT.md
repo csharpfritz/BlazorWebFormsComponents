@@ -1,6 +1,6 @@
 # ContosoUniversity Migration Report — Run 11
-**Date:** 2026-03-10 11:31 EST  
-**Branch:** `squad/audit-docs-perf`  
+**Date:** 2026-03-10 11:31 EST
+**Branch:** `squad/audit-docs-perf`
 **Live Demo:** Yes (streaming audience)
 
 ## Executive Summary
@@ -74,8 +74,8 @@ The one failing test (`NavLink_NavigatesToCorrectPage` for "Home") is a test des
 ## What Didn't Work (Required Manual Fixes)
 
 ### 1. Color Attribute Parsing
-**Problem:** Razor interprets `#3366CC` as C# preprocessor directive, `White` as C# identifier  
-**Solution:** Script converts to `@("#3366CC")` and `@("White")` syntax  
+**Problem:** Razor interprets `#3366CC` as C# preprocessor directive, `White` as C# identifier
+**Solution:** Script converts to `@("#3366CC")` and `@("White")` syntax
 **Status:** ✅ Fixed in Layer 1 script
 
 ### 2. EF6 → EF Core Incompatibilities
@@ -87,15 +87,15 @@ The one failing test (`NavLink_NavigatesToCorrectPage` for "Home") is a test des
 | `ObjectContext` references | Converted to `DbContext` |
 
 ### 3. Blazor Render Mode
-**Problem:** Forms not interactive without explicit render mode  
+**Problem:** Forms not interactive without explicit render mode
 **Solution:** Added `@rendermode InteractiveServer` to all pages
 
 ### 4. Route Compatibility
-**Problem:** Tests use `/Page.aspx` URLs  
+**Problem:** Tests use `/Page.aspx` URLs
 **Solution:** Added `@page "/Page.aspx"` fallback routes to all pages
 
 ### 5. TextBox Binding
-**Problem:** Clear button didn't update UI (TextBox used internal state)  
+**Problem:** Clear button didn't update UI (TextBox used internal state)
 **Solution:** Added `@bind-Text="fieldName"` for two-way binding
 
 ---
@@ -121,7 +121,7 @@ The one failing test (`NavLink_NavigatesToCorrectPage` for "Home") is a test des
 ### Home Page
 ![Home Page](./contoso-home-page.png)
 
-### About Page  
+### About Page
 ![About Page](./contoso-about-page.png)
 
 ### Students Page
@@ -164,7 +164,7 @@ The one failing test (`NavLink_NavigatesToCorrectPage` for "Home") is a test des
 - MainLayout.razor
 - CSS/ folder with page stylesheets
 
-### Migration Script Output (Layer 2)  
+### Migration Script Output (Layer 2)
 - Program.cs
 - ContosoUniversity.csproj
 - _Imports.razor
