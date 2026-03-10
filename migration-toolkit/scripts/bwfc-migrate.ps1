@@ -705,13 +705,56 @@ function ConvertFrom-ImportDirective {
 function ConvertFrom-ContentWrappers {
     param([string]$Content, [string]$RelPath)
 
-    # HeadContent placeholder → <HeadContent> / </HeadContent>
-    $headOpenRegex = [regex]'<asp:Content\s+[^>]*ContentPlaceHolderID\s*=\s*"HeadContent"[^>]*>'
-    $headOpenRegex2 = [regex]'<asp:Content\s+[^>]*ContentPlaceHolderID\s*=\s*"head"[^>]*>'
-    if ($Content -match $headOpenRegex -or $Content -match $headOpenRegex2) {
-        $Content = $headOpenRegex.Replace($Content, '<HeadContent>')
-        $Content = $headOpenRegex2.Replace($Content, '<HeadContent>')
-        Write-TransformLog -File $RelPath -Transform 'Content' -Detail 'HeadContent placeholder → <HeadContent>'
+    # HeadContent placeholder handling:
+    # 1. Extract CSS links → convert to <PageStyleSheet Href="..." />
+    # 2. Keep other content as <HeadContent> (or strip if empty after CSS extraction)
+    
+    $headOpenRegex = [regex]'(?s)<asp:Content\s+[^>]*ContentPlaceHolderID\s*=\s*"HeadContent"[^>]*>(.*?)</asp:Content>'
+    $headOpenRegex2 = [regex]'(?s)<asp:Content\s+[^>]*ContentPlaceHolderID\s*=\s*"head"[^>]*>(.*?)</asp:Content>'
+    
+    $headContentMatches = $headOpenRegex.Matches($Content) + $headOpenRegex2.Matches($Content)
+    
+    foreach ($m in $headContentMatches) {
+        $headInner = $m.Groups[1].Value
+        $pageStyleSheets = [System.Collections.Generic.List[string]]::new()
+        $remainingContent = $headInner
+        
+        # Extract CSS <link> tags → convert to <PageStyleSheet>
+        $cssLinkRegex = [regex]'<link\s+[^>]*href\s*=\s*"([^"]*\.css)"[^>]*>'
+        foreach ($linkMatch in $cssLinkRegex.Matches($headInner)) {
+            $href = $linkMatch.Groups[1].Value
+            $href = $href -replace '^~/', '/'  # Convert ~/ to /
+            $pageStyleSheets.Add("<PageStyleSheet Href=`"$href`" />")
+            $remainingContent = $remainingContent.Replace($linkMatch.Value, '')
+            Write-TransformLog -File $RelPath -Transform 'Content' -Detail "HeadContent CSS → <PageStyleSheet Href=`"$href`" />"
+        }
+        
+        # Clean up remaining content
+        $remainingContent = $remainingContent.Trim()
+        
+        # Build replacement
+        $replacement = ""
+        if ($pageStyleSheets.Count -gt 0) {
+            $replacement += ($pageStyleSheets -join "`n") + "`n"
+        }
+        if ($remainingContent -and $remainingContent -notmatch '^\s*$') {
+            $replacement += "<HeadContent>`n$remainingContent`n</HeadContent>`n"
+        }
+        
+        $Content = $Content.Replace($m.Value, $replacement)
+        Write-TransformLog -File $RelPath -Transform 'Content' -Detail "HeadContent → $($pageStyleSheets.Count) PageStyleSheet(s) + remaining content"
+    }
+    
+    # Handle case where regex didn't match (opening tag without matching close handled differently)
+    # Fall back to old behavior for unmatched cases
+    $headOpenOnlyRegex = [regex]'<asp:Content\s+[^>]*ContentPlaceHolderID\s*=\s*"HeadContent"[^>]*>'
+    $headOpenOnlyRegex2 = [regex]'<asp:Content\s+[^>]*ContentPlaceHolderID\s*=\s*"head"[^>]*>'
+    if ($Content -match $headOpenOnlyRegex -or $Content -match $headOpenOnlyRegex2) {
+        # This means we have opening tags without matching close in same block
+        # Convert to TODO comment for manual review
+        $Content = $headOpenOnlyRegex.Replace($Content, '@* TODO: HeadContent section - convert CSS links to <PageStyleSheet Href="..." /> *@')
+        $Content = $headOpenOnlyRegex2.Replace($Content, '@* TODO: head section - convert CSS links to <PageStyleSheet Href="..." /> *@')
+        Write-TransformLog -File $RelPath -Transform 'Content' -Detail 'HeadContent opening tag → TODO comment (unmatched close)'
     }
 
     # MainContent / other ContentPlaceHolderIDs → strip wrapper entirely
@@ -726,21 +769,10 @@ function ConvertFrom-ContentWrappers {
     $closeRegex = [regex]'</asp:Content>\s*\r?\n?'
     $closeCount = $closeRegex.Matches($Content).Count
     if ($closeCount -gt 0) {
-        # Keep matching number of </HeadContent> if we converted HeadContent above
+        # Keep matching number of </HeadContent> if we have HeadContent above
         $headContentCount = ([regex]'<HeadContent>').Matches($Content).Count
         if ($headContentCount -gt 0) {
             # Replace first N closing tags with </HeadContent>, remove the rest
-            $script:replaced_count = 0
-            $Content = $closeRegex.Replace($Content, {
-                param($m)
-                $script:replaced_count++
-                if ($script:replaced_count -le $headContentCount) {
-                    return "</HeadContent>`n"
-                }
-                return ''
-            })
-            # Reset and redo with proper scoping
-            $script:replaced_count = 0
             $tempContent = $Content
             $Content = ''
             $lastIndex = 0
@@ -798,22 +830,53 @@ function ConvertFrom-MasterPage {
     $smSelfRegex = [regex]'<asp:ScriptManager[^>]*/>\s*\r?\n?'
     $Content = $smSelfRegex.Replace($Content, '')
 
-    # 2. Extract head metadata (<meta>, <link>, <title>) before stripping <head> section
+    # 2. Extract head metadata before stripping <head> section
+    # - CSS links → <PageStyleSheet Href="..." /> (works in layouts, unlike HeadContent)
+    # - Meta/title/scripts → HeadContent (with note to move to App.razor)
+    $pageStyleSheetBlock = ''
     $headContentBlock = ''
     $headSectionRegex = [regex]'(?s)<head[^>]*>(.*?)</head>'
     $headMatch = $headSectionRegex.Match($Content)
     if ($headMatch.Success) {
         $headInner = $headMatch.Groups[1].Value
-        $extractedTags = [System.Collections.Generic.List[string]]::new()
+        $pageStyleSheets = [System.Collections.Generic.List[string]]::new()
+        $headContentTags = [System.Collections.Generic.List[string]]::new()
 
+        # Extract CSS <link> tags → convert to <PageStyleSheet>
+        # (HeadContent in layouts is IGNORED by Blazor; PageStyleSheet works everywhere)
+        foreach ($m in ([regex]'<link\s[^>]*rel\s*=\s*"stylesheet"[^>]*>').Matches($headInner)) {
+            $linkTag = $m.Value
+            # Extract href value
+            if ($linkTag -match 'href\s*=\s*"([^"]+)"') {
+                $href = $Matches[1]
+                # Convert ~/ to / for Blazor routing
+                $href = $href -replace '^~/', '/'
+                $pageStyleSheets.Add("<PageStyleSheet Href=`"$href`" />")
+                Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "CSS link → <PageStyleSheet Href=`"$href`" />"
+            }
+        }
+        # Also handle <link> without explicit rel="stylesheet" but with .css extension
+        foreach ($m in ([regex]'<link\s[^>]*href\s*=\s*"[^"]*\.css"[^>]*>').Matches($headInner)) {
+            $linkTag = $m.Value
+            if ($linkTag -match 'href\s*=\s*"([^"]+)"') {
+                $href = $Matches[1]
+                # Skip if already captured
+                $converted = "<PageStyleSheet Href=`"$($href -replace '^~/', '/')`" />"
+                if ($pageStyleSheets -contains $converted) { continue }
+                $href = $href -replace '^~/', '/'
+                $pageStyleSheets.Add("<PageStyleSheet Href=`"$href`" />")
+                Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "CSS link → <PageStyleSheet Href=`"$href`" />"
+            }
+        }
+
+        # Extract <meta> tags → HeadContent (should be moved to App.razor)
         foreach ($m in ([regex]'<meta\s[^>]*>').Matches($headInner)) {
-            $extractedTags.Add("    " + $m.Value.Trim())
+            $headContentTags.Add("    " + $m.Value.Trim())
         }
+
+        # Extract <title> → HeadContent (note: should use PageTitle in actual layout)
         foreach ($m in ([regex]'(?s)<title>.*?</title>').Matches($headInner)) {
-            $extractedTags.Add("    " + $m.Value.Trim())
-        }
-        foreach ($m in ([regex]'<link\s[^>]*>').Matches($headInner)) {
-            $extractedTags.Add("    " + $m.Value.Trim())
+            $headContentTags.Add("    " + $m.Value.Trim())
         }
 
         # Fix 1a: Extract <webopt:bundlereference> tags and flag for manual review
@@ -824,26 +887,31 @@ function ConvertFrom-MasterPage {
                 $bundlePath = $Matches[1]
             }
             if ($bundlePath) {
-                Write-ManualItem -File $RelPath -Category 'CSSBundle' -Detail "CSS bundle reference '$bundlePath' needs manual conversion to <link> tags"
-                $extractedTags.Add("    @* TODO: CSS bundle reference '$bundlePath' — convert to explicit <link> tags for each CSS file *@")
+                Write-ManualItem -File $RelPath -Category 'CSSBundle' -Detail "CSS bundle reference '$bundlePath' needs manual conversion to <PageStyleSheet> components"
+                $headContentTags.Add("    @* TODO: CSS bundle reference '$bundlePath' — convert to <PageStyleSheet Href=`"...`" /> for each CSS file *@")
             } else {
                 Write-ManualItem -File $RelPath -Category 'CSSBundle' -Detail 'webopt:bundlereference tag found without path — needs manual review'
-                $extractedTags.Add("    @* TODO: webopt:bundlereference found — convert to explicit <link> tags *@")
+                $headContentTags.Add("    @* TODO: webopt:bundlereference found — convert to <PageStyleSheet> components *@")
             }
             Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Flagged <webopt:bundlereference> for manual CSS conversion"
         }
 
         # Fix 1a: Preserve CDN references (Bootstrap, jQuery) from <head>
-        # Handle <link> tags (self-closing)
+        # CDN CSS links → still use PageStyleSheet
         $cdnLinkRegex = [regex]'<link\s[^>]*(?:cdn\.|cloudflare|bootstrapcdn|googleapis|jsdelivr|unpkg|cdnjs)[^>]*>'
         foreach ($m in $cdnLinkRegex.Matches($headInner)) {
-            $tag = $m.Value.Trim()
-            # Skip if already captured
-            if ($extractedTags -contains ("    " + $tag)) { continue }
-            $extractedTags.Add("    " + $tag)
-            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Preserved CDN link: $($tag.Substring(0, [Math]::Min(80, $tag.Length)))"
+            $linkTag = $m.Value.Trim()
+            if ($linkTag -match 'href\s*=\s*"([^"]+)"') {
+                $href = $Matches[1]
+                # Skip if already captured as PageStyleSheet
+                $converted = "<PageStyleSheet Href=`"$href`" />"
+                if ($pageStyleSheets -contains $converted) { continue }
+                $pageStyleSheets.Add($converted)
+                Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "CDN CSS → <PageStyleSheet Href=`"$($href.Substring(0, [Math]::Min(60, $href.Length)))...`" />"
+            }
         }
-        # Handle <script>...</script> tags (including closing tag)
+
+        # Handle CDN <script> tags → HeadContent (should move to App.razor)
         $cdnScriptRegex = [regex]'<script\s[^>]*(?:cdn\.|cloudflare|bootstrapcdn|googleapis|jsdelivr|unpkg|cdnjs)[^>]*>(?:</script>)?'
         foreach ($m in $cdnScriptRegex.Matches($headInner)) {
             $tag = $m.Value.Trim()
@@ -851,13 +919,21 @@ function ConvertFrom-MasterPage {
             if ($tag -notmatch '</script>$') {
                 $tag = $tag + '</script>'
             }
-            $extractedTags.Add("    " + $tag)
+            $headContentTags.Add("    " + $tag)
             Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Preserved CDN script: $($tag.Substring(0, [Math]::Min(80, $tag.Length)))"
         }
 
-        if ($extractedTags.Count -gt 0) {
-            $headContentBlock = "<HeadContent>`n" + ($extractedTags -join "`n") + "`n</HeadContent>"
-            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Extracted $($extractedTags.Count) head element(s) into <HeadContent>"
+        # Build the PageStyleSheet block (goes at top of layout, works correctly)
+        if ($pageStyleSheets.Count -gt 0) {
+            $pageStyleSheetBlock = ($pageStyleSheets -join "`n") + "`n"
+            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Extracted $($pageStyleSheets.Count) CSS link(s) as <PageStyleSheet> components"
+        }
+
+        # Build HeadContent block for non-CSS items (with migration note)
+        if ($headContentTags.Count -gt 0) {
+            $headContentBlock = "@* NOTE: Move this HeadContent to App.razor — HeadContent in layouts is ignored by Blazor *@`n"
+            $headContentBlock += "<HeadContent>`n" + ($headContentTags -join "`n") + "`n</HeadContent>`n"
+            Write-TransformLog -File $RelPath -Transform 'MasterPage' -Detail "Extracted $($headContentTags.Count) non-CSS head element(s) into <HeadContent> with migration note"
         }
 
         # Remove the entire <head>...</head> section
@@ -911,10 +987,15 @@ function ConvertFrom-MasterPage {
         Write-ManualItem -File $RelPath -Category 'SelectMethod' -Detail 'SelectMethod detected — will be auto-converted to TODO annotation by ConvertFrom-SelectMethod'
     }
 
-    # 6. Inject @inherits LayoutComponentBase and HeadContent at the top
+    # 6. Inject @inherits LayoutComponentBase, PageStyleSheet, and any HeadContent at the top
     $header = "@inherits LayoutComponentBase`n"
+    # PageStyleSheet components go first (CSS for the layout)
+    if ($pageStyleSheetBlock) {
+        $header += "`n" + $pageStyleSheetBlock
+    }
+    # HeadContent (meta, scripts) goes after with migration note
     if ($headContentBlock) {
-        $header += "`n" + $headContentBlock + "`n"
+        $header += "`n" + $headContentBlock
     }
     $Content = $header + "`n" + $Content
 

@@ -217,8 +217,12 @@ These are 100% mechanical — apply to every file:
 | Web Forms | Blazor |
 |-----------|--------|
 | `<asp:Content ContentPlaceHolderID="MainContent" runat="server">` | (remove — page body IS the content) |
-| `<asp:Content ContentPlaceHolderID="HeadContent" runat="server">` | `<HeadContent>` ... `</HeadContent>` |
+| `<asp:Content ContentPlaceHolderID="HeadContent" runat="server">` with CSS links | `<PageStyleSheet Href="..." />` for each CSS file |
+| `<asp:Content ContentPlaceHolderID="HeadContent" runat="server">` with non-CSS content | Move to `App.razor` `<head>` section |
 | `<asp:ContentPlaceHolder ID="MainContent" runat="server" />` | `@Body` (in layout) |
+| CSS `<link>` tags in master page `<head>` | `<PageStyleSheet Href="..." />` in layout |
+
+> ⚠️ **Do NOT use `<HeadContent>` in layouts** — Blazor ignores HeadContent from layout components. Use `<PageStyleSheet>` for CSS (works everywhere), and move meta/script tags to App.razor.
 
 ### Form Wrapper
 
@@ -700,6 +704,7 @@ For FormView, DetailsView:
 <html>
 <head runat="server">
     <title><%: Page.Title %></title>
+    <link href="CSS/Site.css" rel="stylesheet" />
     <asp:ContentPlaceHolder ID="HeadContent" runat="server" />
 </head>
 <body>
@@ -722,6 +727,9 @@ For FormView, DetailsView:
 ```razor
 @inherits LayoutComponentBase
 
+@* CSS from master page <head> — use PageStyleSheet, NOT HeadContent *@
+<PageStyleSheet Href="CSS/Site.css" />
+
 <header>
     <nav><Menu ... /></nav>
 </header>
@@ -733,15 +741,42 @@ For FormView, DetailsView:
 
 **Key changes:**
 - `<%@ Master %>` → `@inherits LayoutComponentBase`
-- `<form runat="server">` → removed
+- `<form runat="server">` → removed entirely
 - `<asp:ContentPlaceHolder ID="MainContent">` → `@Body`
-- `<asp:ScriptManager>` → `<ScriptManager />` (renders nothing)
-- CSS `<link>` elements from master page `<head>` → `App.razor` `<head>` section
-- `<head runat="server">` content → `<HeadContent>` in layout or `App.razor`
+- `<asp:ScriptManager>` → `<ScriptManager />` (renders nothing in Blazor)
+- **CSS links from `<head>` → `<PageStyleSheet Href="..." />`** (NOT HeadContent!)
+- `<meta>` and `<script>` tags → Move to `App.razor` `<head>` section
 
-> **Alternative:** For a more gradual migration, BWFC provides `<MasterPage>`, `<Content>`, and `<ContentPlaceHolder>` components that preserve Web Forms-style markup. Use these as a stepping stone, then refactor to native Blazor layouts when ready.
+> ⚠️ **CRITICAL: HeadContent in Layouts is IGNORED**  
+> Blazor only processes `<HeadContent>` from `@page` components, NOT from layouts. Any CSS, meta tags, or scripts placed in `<HeadContent>` inside a layout will be silently ignored.  
+> **Solution:** Use `<PageStyleSheet>` for CSS (works in layouts, pages, and components). Move meta tags and scripts to `App.razor`.
 
-> **Tip:** Use `<WebFormsPage>@Body</WebFormsPage>` as the layout wrapper instead of plain `@Body` to get NamingContainer (ID scoping), theming, and head rendering in one component.
+### Page-Level CSS with PageStyleSheet
+
+When pages have `<asp:Content ContentPlaceHolderID="HeadContent">` containing CSS links:
+
+```aspx
+<%-- Web Forms page with page-specific CSS --%>
+<asp:Content ContentPlaceHolderID="head" runat="server">
+    <link href="CSS/Students.css" rel="stylesheet" />
+</asp:Content>
+```
+
+```razor
+@* Blazor page — use PageStyleSheet *@
+@page "/Students"
+
+<PageStyleSheet Href="CSS/Students.css" />
+
+@* ... page content ... *@
+```
+
+**PageStyleSheet behavior:**
+- ✅ Works in pages, layouts, or any component (unlike HeadContent)
+- ✅ Layout CSS persists across navigations (layout stays alive)
+- ✅ Page CSS is swapped on navigation (100ms debounced cleanup)
+- ✅ Reference counting — shared CSS stays until all users unregister
+- ✅ SSR compatible — renders static `<link>` tag, JS adopts on hydration
 
 ### Nested Master Pages → Nested Layouts
 
@@ -757,6 +792,11 @@ For FormView, DetailsView:
 ---
 
 ## Common Gotchas
+
+### HeadContent in Layouts is IGNORED
+**Critical:** Blazor only processes `<HeadContent>` from `@page` components, NOT from layouts. CSS, meta tags, or scripts in layout `<HeadContent>` will be silently ignored.
+- **For CSS:** Use `<PageStyleSheet Href="..." />` — works in pages, layouts, and components
+- **For meta/scripts:** Move to `App.razor` `<head>` section
 
 ### No ViewState
 Replace `ViewState["key"]` with component fields.
@@ -809,6 +849,7 @@ Include during migration to prevent errors, remove when stable.
 - [ ] URLs converted (~/ → /)
 - [ ] <asp:Content> wrappers removed
 - [ ] <form runat="server"> removed
+- [ ] HeadContent CSS links → <PageStyleSheet Href="..." />
 
 ### Layer 2 — Structural
 - [ ] SelectMethod → Items/DataItem
@@ -821,6 +862,7 @@ Include during migration to prevent errors, remove when stable.
 ### Verification
 - [ ] Builds without errors
 - [ ] Renders correctly
+- [ ] CSS loads (check browser DevTools)
 - [ ] Interactive features work
 - [ ] No browser console errors
 ```
