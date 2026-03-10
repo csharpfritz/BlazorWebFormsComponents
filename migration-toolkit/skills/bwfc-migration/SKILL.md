@@ -940,7 +940,32 @@ These errors frequently occur during migration. Know how to fix them quickly.
 </GridView>
 ```
 
-**Also applies to:** DetailsView needs `<Fields>` wrapper.
+**Also applies to:** DetailsView needs `<Fields>` wrapper:
+
+```razor
+@* Web Forms — DetailsView with BoundField columns *@
+<asp:DetailsView ID="studentData" runat="server" 
+    ItemType="ContosoUniversity.Models.Student"
+    SelectMethod="GetStudent"
+    AutoGenerateRows="False">
+    <Fields>
+        <asp:BoundField DataField="FirstName" HeaderText="First Name" />
+        <asp:BoundField DataField="LastName" HeaderText="Last Name" />
+        <asp:BoundField DataField="EnrollmentDate" HeaderText="Enrolled" DataFormatString="{0:d}" />
+    </Fields>
+</asp:DetailsView>
+
+@* Blazor — DetailsView FULLY SUPPORTS BoundField via <Fields> wrapper *@
+<DetailsView Items="@(new[] { student })" ItemType="Student" AutoGenerateRows="false">
+    <Fields>
+        <BoundField ItemType="Student" DataField="FirstName" HeaderText="First Name" />
+        <BoundField ItemType="Student" DataField="LastName" HeaderText="Last Name" />
+        <BoundField ItemType="Student" DataField="EnrollmentDate" HeaderText="Enrolled" DataFormatString="{0:d}" />
+    </Fields>
+</DetailsView>
+```
+
+> **⚠️ NOTE:** DetailsView **fully supports** BoundField. Do NOT replace with HTML tables. The library implements `IColumnCollection<ItemType>` which allows BoundField and other column types to register correctly inside `<Fields>`.
 
 ### RZ10001: Type cannot be inferred
 

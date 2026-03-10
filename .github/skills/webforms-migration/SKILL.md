@@ -443,6 +443,8 @@ Data controls require additional changes for data binding:
 - BoundField, TemplateField, and other column types work inside `<Fields>` just like Web Forms
 - Child components (BoundField, TemplateField) **inherit the type parameter** via Blazor's `[CascadingTypeParameter]` — no `ItemType` needed on each child
 
+> **✅ FULL SUPPORT:** DetailsView **fully supports** BoundField columns via the `<Fields>` wrapper. BWFC's DetailsView implements `IColumnCollection<ItemType>` which allows BoundField and other column types to register correctly. Do NOT replace DetailsView with HTML tables — use the BWFC component.
+
 #### Repeater
 
 ```razor
