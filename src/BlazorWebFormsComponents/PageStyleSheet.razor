@@ -1,0 +1,17 @@
+@* 
+    PageStyleSheet - Dynamically loads and unloads CSS stylesheets.
+    
+    Provides a Web Forms-like pattern for page-specific CSS:
+    Original: <asp:Content ContentPlaceHolderID="head"><link href="CSS/page.css" rel="stylesheet"/></asp:Content>
+    Blazor:   <PageStyleSheet Href="CSS/page.css" />
+    
+    The CSS is loaded when the component renders and removed when the component disposes,
+    making it ideal for page-specific styles that shouldn't persist across navigation.
+*@
+
+@inherits ComponentBase
+@implements IAsyncDisposable
+
+@code {
+    // Rendering handled entirely through JS interop - no visible output
+}

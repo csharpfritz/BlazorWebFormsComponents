@@ -230,3 +230,47 @@ Key learnings:
 - Capitalizes method parameter names when converting to properties (camelCase → TitleCase)
 
 **Key insight:** Web Forms model binding uses attributes on method parameters, but Blazor uses them on class properties. The Layer 2 script must transform between these paradigms, not just copy the pattern.
+
+### PageStyleSheet Component — Dynamic CSS Loading (2026-03-10)
+
+**Created `PageStyleSheet` component to solve Blazor's HeadContent limitation in layouts.**
+
+**Problem:** Blazor's `<HeadContent>` placed in layouts is NOT injected into `<HeadOutlet>` — only page-level HeadContent works. This breaks Web Forms migrations where `Site.Master` contained page-specific CSS via `<asp:Content ContentPlaceHolderID="head">`.
+
+**Root Cause Analysis:**
+- Blazor uses "last writer wins" architecture for HeadContent
+- HeadOutlet only renders the most downstream HeadContent (from page, not layout)
+- This is documented in GitHub issues #45904 and #51864
+- SectionContent/SectionOutlet (.NET 8+) can aggregate, but requires App.razor changes
+
+**Solution — PageStyleSheet Component:**
+```razor
+<PageStyleSheet Href="CSS/CSS_Courses.css" />
+<PageStyleSheet Href="CSS/Print.css" Media="print" />
+```
+
+**Implementation:**
+- Uses JS interop to dynamically inject `<link>` elements into document head
+- Automatically removes CSS on dispose (navigation cleanup)
+- Works anywhere: pages, layouts, or child components
+- Supports: `Href` (required), `Media`, `Id`, `Integrity`, `CrossOrigin`
+
+**Files created:**
+- `src/BlazorWebFormsComponents/PageStyleSheet.razor`
+- `src/BlazorWebFormsComponents/PageStyleSheet.razor.cs`
+- `wwwroot/js/Basepage.module.js` — added `loadStyleSheet()` and `unloadStyleSheet()` functions
+- `dev-docs/proposals/dynamic-css-loader-design.md` — full technical analysis
+
+**Migration pattern:**
+```aspx
+@* Before (Web Forms) *@
+<asp:Content ContentPlaceHolderID="head">
+    <link href="CSS/CSS_Courses.css" rel="stylesheet" />
+</asp:Content>
+```
+```razor
+@* After (Blazor with BWFC) *@
+<PageStyleSheet Href="CSS/CSS_Courses.css" />
+```
+
+**Decision written to:** `.ai-team/decisions/inbox/cyclops-css-loader-design.md`
