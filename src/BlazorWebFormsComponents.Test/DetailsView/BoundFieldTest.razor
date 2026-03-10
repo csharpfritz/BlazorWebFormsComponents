@@ -1,0 +1,52 @@
+@using BlazorWebFormsComponents
+@using BlazorWebFormsComponents.Enums
+
+@code {
+    [Fact]
+    public void DetailsView_WithBoundField_RendersColumns()
+    {
+        var items = new List<Widget> { new Widget { Id = 1, Name = "TestWidget", Price = 9.99M } };
+        var cut = Render(
+            @<DetailsView Items="items" TItem="Widget" AutoGenerateRows="false">
+                <Fields>
+                    <BoundField TItem="Widget" DataField="Name" HeaderText="Product Name" />
+                    <BoundField TItem="Widget" DataField="Price" HeaderText="Price" DataFormatString="{0:C}" />
+                </Fields>
+            </DetailsView>);
+
+        var markup = cut.Markup;
+        markup.ShouldContain("Product Name");
+        markup.ShouldContain("TestWidget");
+    }
+
+    [Fact]
+    public void DetailsView_WithBoundField_RendersCorrectStructure()
+    {
+        var items = new List<Widget> { new Widget { Id = 1, Name = "TestWidget", Price = 9.99M } };
+        var cut = Render(
+            @<DetailsView Items="items" TItem="Widget" AutoGenerateRows="false">
+                <Fields>
+                    <BoundField TItem="Widget" DataField="Name" HeaderText="Product Name" />
+                    <BoundField TItem="Widget" DataField="Price" HeaderText="Price" DataFormatString="{0:C}" />
+                </Fields>
+            </DetailsView>);
+
+        // Verify table structure with 2 rows (one per BoundField)
+        var rows = cut.FindAll("tr");
+        rows.Count.ShouldBe(2);
+        
+        // First row: Product Name header cell + value cell
+        var firstRow = rows[0];
+        var firstRowCells = firstRow.QuerySelectorAll("td");
+        firstRowCells.Length.ShouldBe(2);
+        firstRowCells[0].TextContent.ShouldBe("Product Name");
+        firstRowCells[1].TextContent.ShouldBe("TestWidget");
+        
+        // Second row: Price header cell + formatted value cell
+        var secondRow = rows[1];
+        var secondRowCells = secondRow.QuerySelectorAll("td");
+        secondRowCells.Length.ShouldBe(2);
+        secondRowCells[0].TextContent.ShouldBe("Price");
+        secondRowCells[1].TextContent.ShouldContain("9.99");
+    }
+}

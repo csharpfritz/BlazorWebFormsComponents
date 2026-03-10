@@ -146,7 +146,7 @@ The one failing test (`NavLink_NavigatesToCorrectPage` for "Home") is a test des
 
 ### BWFC Library Gaps
 
-1. **DetailsView BoundField** — Not fully supported, use HTML tables instead
+1. **~~DetailsView BoundField~~** — ✅ ACTUALLY WORKS. This claim was incorrect. DetailsView properly supports BoundField via `<Fields>` wrapper with `IColumnCollection`. Test coverage added in `DetailsView/BoundFieldTest.razor`
 2. **ContentTemplate warning** — Spurious RZ10012 warnings for valid template names
 
 ### Testing Requirements
