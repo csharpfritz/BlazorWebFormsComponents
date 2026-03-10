@@ -1,10 +1,11 @@
 @page "/Home"
+@page "/Home.aspx"
 @page "/"
+@rendermode InteractiveServer
+
 <PageTitle>Home - Contoso University</PageTitle>
-<HeadContent>
-    <link href="/CSS/Home_CSS.css" rel="stylesheet" />
-    <script src="/JQuery/JQuery_Home.js"></script>
-</HeadContent>
+<PageStyleSheet Href="CSS/Home_CSS.css" />
+
 <div id="welcomeHeader">
     <h1>Welcome To Contoso University<span id="com">.com</span></h1>
     <h1>The Darkest Place In The Web...</h1>
@@ -12,3 +13,4 @@
 <footer>
     @(DateTime.Now.Year) - Contoso University&copy;
 </footer>
+

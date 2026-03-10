@@ -1,0 +1,28 @@
+@page "/About"
+@page "/About.aspx"
+@rendermode InteractiveServer
+
+<PageStyleSheet Href="CSS/CSS_About.css" />
+
+<div id="header">
+    <h1>Students Body Statistics</h1>
+</div>
+<div id="grv">
+    <GridView TItem="EnrollmentStat" Items="stats" CssClass="grid" 
+        ID="EnrollmentsStat"
+        AutoGenerateColumns="false" EmptyDataText="There are no records to display"
+        CellPadding="4" ForeColor=@("#333333")>
+        <AlternatingRowStyleContent><GridViewAlternatingRowStyle BackColor=@("White") /></AlternatingRowStyleContent>
+        <Columns>
+            <BoundField DataField="Key" HeaderText="Enrollment Date" ReadOnly="true" />
+            <BoundField DataField="Value" HeaderText="Students" ReadOnly="true" />
+        </Columns>
+        <FooterStyleContent><GridViewFooterStyle BackColor=@("#507CD1") ForeColor=@("White") /></FooterStyleContent>
+        <HeaderStyleContent><GridViewHeaderStyle BackColor=@("#507CD1") ForeColor=@("White") /></HeaderStyleContent>
+        <PagerStyleContent><GridViewPagerStyle BackColor=@("#2461BF") ForeColor=@("White") /></PagerStyleContent>
+        <RowStyleContent><GridViewRowStyle BackColor=@("#EFF3FB") /></RowStyleContent>
+        <SelectedRowStyleContent><GridViewSelectedRowStyle BackColor=@("#D1DDF1") ForeColor=@("#333333") /></SelectedRowStyleContent>
+    </GridView>
+</div>
+
+

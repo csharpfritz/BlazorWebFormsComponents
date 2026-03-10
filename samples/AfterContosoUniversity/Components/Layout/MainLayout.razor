@@ -1,14 +1,13 @@
 @inherits LayoutComponentBase
 
-@* NOTE: Master_CSS.css is in App.razor, not here. HeadContent from layouts is NOT
-   injected into HeadOutlet - only page-level HeadContent works. *@
+<PageStyleSheet Href="CSS/Master_CSS.css" />
 
 <div id="navUp">
     <h1><a href="/" id="contosouniversity">Contoso University</a><span>.com</span></h1>
 </div>
 <div id="navBar">
     <ul>
-        <li><a id="home" href="/Home">Home</a></li>
+        <li><a id="home" href="/">Home</a></li>
         <li><a id="about" href="/About">About</a></li>
         <li><a id="students" href="/Students">Students</a></li>
         <li><a id="courses" href="/Courses">Courses</a></li>
@@ -17,3 +16,5 @@
 </div>
 
 @Body
+    
+    

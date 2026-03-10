@@ -1,0 +1,26 @@
+# ============================================================================
+# EF Core Scaffold Command — generated from Model1.edmx
+# ============================================================================
+#
+# Your Web Forms project used DB-first Entity Framework with an .edmx file.
+# Instead of adapting EF6 models, use 'dotnet ef dbcontext scaffold' to
+# generate fresh EF Core models directly from your database.
+#
+# Entities found in .edmx: Courses, Departments, Enrollment, Instructors, Students, Cours, Department, Enrollment, Instructor, Student
+# Original context name: ContosoUniversityEntities
+#
+# TODO: Run this command to generate EF Core models from your database:
+# dotnet ef dbcontext scaffold "YOUR_CONNECTION_STRING" Microsoft.EntityFrameworkCore.SqlServer --output-dir Models --context ContosoUniversityEntitiesDbContext --force
+#
+# Replace YOUR_CONNECTION_STRING with your actual database connection string.
+# You can find the original connection string in your Web.config file.
+#
+# To scaffold only specific tables, add --table flags:
+# dotnet ef dbcontext scaffold "YOUR_CONNECTION_STRING" Microsoft.EntityFrameworkCore.SqlServer --output-dir Models --context ContosoUniversityEntitiesDbContext --table Courses --table Departments --table Enrollment --force
+#
+# Prerequisites:
+#   dotnet tool install --global dotnet-ef
+#   dotnet add package Microsoft.EntityFrameworkCore.Design
+#   dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+
+

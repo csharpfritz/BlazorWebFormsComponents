@@ -1,7 +1,12 @@
+// ============================================================================
+// TODO: Generate EF Core models from your database using:
+// dotnet ef dbcontext scaffold "YOUR_CONNECTION_STRING" Microsoft.EntityFrameworkCore.SqlServer --output-dir Models --context ContosoUniversityEntitiesDbContext --force
+// See scaffold-command.txt for full details and options.
+// ============================================================================
+
 // Layer2-transformed
 using BlazorWebFormsComponents;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Rewrite;
 using ContosoUniversity.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,14 +14,21 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpContextAccessor();  // Required for BWFC GridView/DetailsView
 builder.Services.AddBlazorWebFormsComponents();
 
-// Database — SQL Server LocalDB (preserving original source database technology)
-var connectionString = builder.Configuration.GetConnectionString("ContosoUniversity")
-    ?? "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=ContosoUniversity;Integrated Security=True";
-builder.Services.AddDbContextFactory<ContosoUniversityContext>(options =>
-    options.UseSqlServer(connectionString));
+// Database
+builder.Services.AddDbContextFactory<ContosoUniversityEntities>(options =>
+    options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ContosoUniversity;Trusted_Connection=True"));
+
+// Session
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
 
 var app = builder.Build();
 
@@ -26,18 +38,15 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// ASPX URL Rewriting — Standard pattern for all Web Forms migrations
-var rewriteOptions = new RewriteOptions()
-    .AddRedirect(@"^Default\.aspx$", "/", statusCode: 301)
-    .AddRedirect(@"^(.+)\.aspx$", "$1", statusCode: 301);
-app.UseRewriter(rewriteOptions);
-
 app.UseHttpsRedirection();
 app.MapStaticAssets();
+app.UseSession();
 app.UseAntiforgery();
 
 app.MapRazorComponents<ContosoUniversity.Components.App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+
 

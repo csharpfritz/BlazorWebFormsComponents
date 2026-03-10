@@ -1,0 +1,47 @@
+@page "/Courses"
+@page "/Courses.aspx"
+@rendermode InteractiveServer
+@using ContosoUniversity.Models
+
+<PageStyleSheet Href="CSS/CSS_Courses.css" />
+
+<ScriptManager></ScriptManager>
+<UpdatePanel>
+    <ContentTemplate>
+        <div id="dropList">
+            <h1 id="hdrCourse">Select Course</h1>
+            <DropDownList TItem="Department" ID="drpDepartments" Items="departments" 
+                DataTextField="DepartmentName" DataValueField="DepartmentID"
+                @bind-SelectedValue="selectedDepartmentId"></DropDownList>
+            <Button ID="btnSearchCourse" Text="Search Courses" OnClick="btnSearchCourse_Click"></Button>
+            <br />
+            <br />
+            <GridView TItem="Cours" Items="courses" ID="grvCourses" AllowPaging="true" DataKeyNames="CourseID"
+                PageSize="10" AutoGenerateColumns="false"
+                OnPageIndexChanged="grvCourses_PageIndexChanged"
+                EmptyDataText="Choose Department To Display Courses">
+                <Columns>
+                    <BoundField DataField="CourseID" HeaderText="ID" />
+                    <BoundField DataField="CourseName" HeaderText="Course Name" />
+                    <BoundField DataField="StudentsMax" HeaderText="Max Capacity" />
+                </Columns>
+            </GridView>
+        </div>
+        <div id="autoComplete">
+            <h1 id="crsByName">Courses By Name</h1>
+            <TextBox ID="txtCourse" @bind-Text="searchText" placeholder="Search Course..."></TextBox>
+            <Button ID="search" Text="Search" OnClick="search_Click"></Button>
+            <br />
+            <br />
+            @* AutoCompleteExtender removed - use Blazor autocomplete pattern instead *@
+            @if (selectedCourse != null)
+            {
+                <DetailsView TItem="Cours" Items="new[] { selectedCourse }" ID="dtlCourses" CssClass="details">
+                </DetailsView>
+            }
+        </div>
+    </ContentTemplate>         
+</UpdatePanel>
+
+
+
