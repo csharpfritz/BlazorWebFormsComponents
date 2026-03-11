@@ -380,6 +380,19 @@ namespace BlazorWebFormsComponents
 			return FontUnit.Point(n);
 		}
 
+		/// <devdoc>
+		/// <para>Implicitly creates a <see cref='System.Web.UI.WebControls.FontUnit'/> from a string value like "12pt", "Medium", "X-Large".</para>
+		/// </devdoc>
+		public static implicit operator FontUnit(string value)
+		{
+			if (string.IsNullOrEmpty(value))
+			{
+				return FontUnit.Empty;
+			}
+
+			return FontUnit.Parse(value);
+		}
+
 		public static object EnumFromString(Type enumType, string value)
 		{
 			try

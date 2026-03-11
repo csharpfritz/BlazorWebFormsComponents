@@ -747,9 +747,19 @@ Web Forms uses inline color attributes like `BackColor="White"` or `ForeColor="#
 <GridView BackColor=@("White") ForeColor=@("#333333")>
 ```
 
-The BWFC `WebColor` type accepts strings (named colors like `White`, `Red` or hex codes like `#FF0000`). The `@("value")` wrapper tells Razor to pass the literal string to the component.
+The BWFC `WebColor` type has implicit string conversion, so once Razor passes the string, it converts automatically. The `@("value")` wrapper is needed to tell the Razor parser to treat the value as a string literal rather than a C# identifier.
 
 > **Note:** The migration script (`bwfc-migrate.ps1`) handles this automatically. For manual migrations, always use `@("value")` for color attributes.
+
+### Unit Attributes (Width, Height, BorderWidth)
+Web Forms uses unit attributes like `Width="100px"` or `BorderWidth="1"`. The BWFC `Unit` type has implicit string conversion:
+
+```razor
+<!-- Both work with @("value") wrapper -->
+<Panel Width=@("100px") Height=@("50%") BorderWidth=@("2")>
+```
+
+> **Note:** The `@("value")` wrapper is required because Razor otherwise interprets the attribute value as C# code.
 
 ### Nullable String Search (Contains)
 Web Forms autocomplete/search often uses `StartsWith()` or `Contains()` on strings. In EF Core with nullable string properties, these throw null reference exceptions:
