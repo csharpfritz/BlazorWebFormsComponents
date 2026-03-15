@@ -121,4 +121,43 @@ public class UnitImplicitConversionTests
 
 		implicitResult.ShouldBe(Unit.Pixel(125));
 	}
+
+	[Theory]
+	[InlineData("12.5em", 12.5, UnitType.Em)]
+	[InlineData("1.5pt", 1.5, UnitType.Point)]
+	[InlineData("99.9%", 99.9f, UnitType.Percentage)]
+	public void DecimalValues_ConvertCorrectly(string input, double expectedValue, UnitType expectedType)
+	{
+		Unit unit = input;
+
+		unit.Value.ShouldBe(expectedValue);
+		unit.Type.ShouldBe(expectedType);
+	}
+
+	[Fact]
+	public void NegativePixelValue_ConvertsCorrectly()
+	{
+		Unit unit = "-10px";
+
+		unit.Value.ShouldBe(-10);
+		unit.Type.ShouldBe(UnitType.Pixel);
+	}
+
+	[Fact]
+	public void WhitespaceString_IsTrimmedAndParsed()
+	{
+		Unit unit = "  125px  ";
+
+		unit.Value.ShouldBe(125);
+		unit.Type.ShouldBe(UnitType.Pixel);
+	}
+
+	[Fact]
+	public void CaseInsensitive_UnitSuffix()
+	{
+		Unit unit = "50PX";
+
+		unit.Value.ShouldBe(50);
+		unit.Type.ShouldBe(UnitType.Pixel);
+	}
 }
