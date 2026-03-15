@@ -246,3 +246,13 @@ L1 script: Added Find-DatabaseProvider parsing Web.config connectionStrings (3-p
 - `CONTROL-REFERENCE.md` — already updated with proper ContentTemplate documentation from previous work. Clean.
 
 **One fix made:** Code-behind TODO header (line 1404) said "UpdatePanel / ScriptManager references → remove" — misleading now that UpdatePanel is a real BWFC component. Split into two lines: ScriptManager → remove, UpdatePanel → BWFC preserved (remove only code-behind API calls).
+
+### Issue #440 — Unit.Parse CSS string operator (2026-07-25)
+
+**Task:** Fix explicit string-to-Unit operator that threw on CSS strings like "125px".
+
+**Findings:** The fix was already applied in prior commits (`c3cc972e` implicit conversion, `e8446caa` simplified to `Unit.Parse()` delegation). The operator at line 444 is now: `public static implicit operator Unit(string s) => Unit.Parse(s);` — correct and clean.
+
+**What I added:** Edge-case tests for decimal values ("12.5em"), negatives ("-10px"), whitespace ("  125px  "), and case-insensitive suffixes ("50PX"). All 23 Unit tests pass. PR #70 opened to formally close #440.
+
+**Key learning:** When a fix lands via migration-toolkit or L2-shim work, the originating issue may remain open. Always check git log for the specific file before assuming work is needed — the real value may be adding test coverage rather than re-implementing.
