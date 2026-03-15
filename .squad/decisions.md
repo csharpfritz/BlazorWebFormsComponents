@@ -7647,3 +7647,36 @@ These changes do NOT alter the canonical standards — they clarify existing pra
 - Issues 21-29 depend on M20 base class fixes being complete
 - Issues 30-34 are optional polish — low impact, low priority
 
+
+
+### 2026-03-14: Component Health Scanner Implementation
+
+**By:** Rogue (QA Analyst)
+
+**What:** Implemented scripts/Invoke-ComponentHealthScan.ps1  a PowerShell scanner that evaluates all 56 tracked components across 7 health dimensions (Property Parity, HTML Fidelity, bUnit Tests, Style Support, Sample Page, Event Support, Integration Tests). Scanner generates docs/component-health.md MkDocs page. Key technical decisions: ChildContent excluded from parameter counts (Blazor convention), IStyle used instead of IHasStyle (actual implementation), ToolTip dimension scores 0 (not currently in BaseWebFormsComponent), integration tests scanned from C# Playwright files, shared test directories filtered by component name.
+
+**Outcomes:** 56 components scored, 84% average health, 2 critical components identified (View, ContentPlaceHolder), 14 components needing work, full MkDocs page generated.
+
+**Why this matters:** Provides transparent component health visibility for prioritization, reveals gaps for backlog, enables tracking library maturity evolution, static build-time scoring complements live dashboard.n
+
+### 2026-03-13: Component Health Dashboard Design
+
+**By:** Jubilee (Sample Writer)
+
+**What:** Created /ComponentHealth live dashboard using reflection-based discovery of implemented components from BWFC assembly. Discovery counts [Parameter] properties and EventCallback parameters at runtime. Reference baseline (expected prop/event counts for 55 Web Forms controls) embedded as static dictionary  intentionally hardcoded because Web Forms API is frozen (.NET Framework 4.8). Dashboard categorizes components, shows 7-dimension health scores, Bootstrap UI with collapsible sections, color-coded status indicators ( >80%,  50-80%,  <50%), unmapped component detection via IsInfrastructureType filter. Added 'Tools' catalog category in ComponentCatalog.cs (distinguishes developer tools from component demos). Updated Index.razor with green 'Component Health' button.
+
+**Consequences:** New components added to library automatically appear in dashboard via reflection; new components need reference data added to hardcoded dictionary to get health scores; test dimension counts (bUnit, integration tests) remain hardcoded to 0 pending build-time file-system scanner.
+
+**Why this matters:** Addresses issue #439 (Jeff's dashboard request), provides live parity visibility for developers, establishes 'Tools' category pattern for other developer-facing pages (migration wizard, test runner, etc.).
+
+
+### 2026-03-15: Issue Migration Review  Origin #40-#68  Upstream #431-#459
+
+**By:** Forge (Lead / Web Forms Reviewer)
+
+**What:** Reviewed all 29 migrated issues to verify production-readiness. 7 CLOSED issues (#431-#437) all have verified implementations in source code (TextBox ReadOnly/MaxLength, ListView templates, DataList direction/columns, FormView mode switching, RequiredFieldValidator/CompareValidator). 22 OPEN issues: #438 (deprecation docs) has no work, #439 (health dashboard) has partial design progress (now COMPLETE via Rogue+Jubilee parallel delivery), #440-#459 (M24 Ajax Toolkit) in planning phase. All 7 CLOSED implementations are production-ready and Web Forms-compliant.
+
+**Why this matters:** Confirms M20 batch work is solid, identifies #439 as complete (dashboard now built), clarifies roadmap for M24 Ajax Toolkit.
+
+
+

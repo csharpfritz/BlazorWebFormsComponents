@@ -207,4 +207,49 @@ The current migration-toolkit is 100% EDMX-blind. Zero references to EDMX in scr
 
 **Outcome:** 34 issues planned: 13 High, 10 Medium, 11 Low. M20 (Component Parity) is foundational, fixes 180+ gaps. M21–M23 build on M20 with advanced features, CRUD, and fine-tuning. Expected project health post-all-34 issues: 68.5% → 78-80%.
 
+---
+
+### Component Parity Branch Review (2026-03-15)
+
+**Task:** Review `squad/component-parity-m20` branch commits and cross-reference with 29 migrated issues (#431–#459 on upstream).
+
+**Branch Status:** 10 commits ahead of origin/dev. Key work:
+- M20 Batch 1 (commit 12ce0d39): ToolTip, AccessKey, GridView style merging — 37 tests
+- M20 Batch 2 (commit 4b2f4b37): RequiredFieldValidator InitialValue, FormView CssClass — 8 tests
+- Migration toolkit improvements from Run 22
+- ContosoUniversity Run 22 prep work (EDMX parser, L1 script enhancements)
+
+**7 CLOSED Issues — Verification Results:**
+
+| Issue | Title | Status | Implementation | Completeness |
+|-------|-------|--------|----------------|--------------|
+| #431 | TextBox ReadOnly/MaxLength | ✅ COMPLETE | Pre-existing (lines 29,38 TextBox.razor.cs). Both properties render correctly (lines 113-114, 134-135). | 100% — Web Forms parity. |
+| #432 | ListView InsertItemTemplate/Position | ✅ COMPLETE | Pre-existing since 2020 (commit d72dcdae). Template at line 34, Position enum property at line 63, rendering logic in ListView.razor. | 100% — Web Forms parity. |
+| #433 | ListView EditItemTemplate/events | ✅ COMPLETE | EditItemTemplate at line 29, EditIndex at line 68, GetItemTemplate() switching at lines 426-433. 16 CRUD events wired (commit 796e6119). | 100% — Web Forms parity. |
+| #434 | DataList RepeatDirection/RepeatColumns | ✅ COMPLETE | RepeatDirection at line 37, RepeatColumns at line 38. ElementIndex() multi-column layout algorithm at lines 51-83. Unified to DataListEnum (commit 8e555f16). | 100% — Web Forms parity. |
+| #435 | FormView DefaultMode/InsertItemTemplate | ✅ COMPLETE | DefaultMode at line 108, InsertItemTemplate at line 36, mode switching via HandleCommandArgs() lines 258-303. CurrentMode property tracks state. | 100% — Web Forms parity. |
+| #436 | RequiredFieldValidator InitialValue | ✅ COMPLETE | **New in M20 Batch 2** (commit 4b2f4b37). Property at line 11 (RequiredFieldValidator.cs), validation logic at line 15 compares trimmed value vs trimmed InitialValue. | 100% — Web Forms parity. |
+| #437 | CompareValidator ValueToCompare/Operator | ✅ COMPLETE | Pre-existing since 2018 (commit 288a580a). Operator at line 9, ValueToCompare at line 11. Compare() logic at line 30 uses both properties. | 100% — Web Forms parity. |
+
+**22 OPEN Issues — Status Check:**
+
+- **#438** (Deprecation guidance docs): No evidence on branch. Planning docs exist (DIVERGENCE-REGISTRY.md references UpdatePanel/ViewState patterns) but no formal deprecation guide.
+- **#439** (Component health dashboard): **PARTIAL WORK EXISTS** on origin/squad/m20-component-parity branch (commit 20f8511c) — 7-dimension scoring methodology designed by Forge, reference data for 60+ components. Dashboard Blazor front page "in progress" per commit message. Not yet on squad/component-parity-m20.
+- **#440** (Unit.Parse explicit string operator): No evidence. EnumParameter<T> (commit f4f3f53a) and Unit implicit string (commit e8446caa) were implemented for L2 automation, but explicit operator fix not found.
+- **#441–#459** (M24 Ajax Toolkit): No evidence. M24 planning session logged (commit 14e408e6), Gambit agent hired for JS interop work, but no Ajax Toolkit component work on this branch.
+
+**Key Learnings:**
+
+1. **All 7 CLOSED issues were already implemented** before issue migration — 6 are legacy features dating back to 2018–2020, only 1 (#436 InitialValue) was new M20 work. Closing them was administrative cleanup, not new development.
+
+2. **M20 Batch 1+2 commits (12ce0d39, 4b2f4b37) addressed different issues** — base class fixes (#15-#18 per commit message), not the 7 CLOSED issues. Commit 4b2f4b37 message explicitly states "#40 TextBox ReadOnly/MaxLength" was "Verified already implemented (no changes needed)".
+
+3. **Component health dashboard (#439) is split across branches** — origin/squad/m20-component-parity has the design spec, but squad/component-parity-m20 does not. Coordination needed.
+
+4. **Migration toolkit automation is active area** — EnumParameter<T>, L2 shims (Unit, Response.Redirect, ViewState, GetRouteUrl), EDMX parser, Run 22 improvements all landed. L1 script test harness (#29 per commit 20f8511c) still in progress.
+
+**Recommendation:** The 7 CLOSED issues are correctly closed — implementations are production-ready and Web Forms-compliant. For the 22 OPEN issues, prioritize #439 (dashboard) since design work exists but needs front-end implementation. #438 (deprecation docs) is documentation-only, low complexity. #440 (Unit.Parse) is a precision bug fix. M24 Ajax Toolkit (#441-#459) requires M24 milestone kickoff.
+
+**Files reviewed:** TextBox.razor.cs, ListView.razor.cs, DataList.razor.cs, FormView.razor.cs, RequiredFieldValidator.cs, CompareValidator.cs, git log output (60 commits), M20 batch commit diffs.
+
 

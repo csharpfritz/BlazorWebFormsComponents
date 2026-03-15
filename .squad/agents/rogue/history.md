@@ -48,6 +48,8 @@ Team updates (2026-03-02-03): Skins roadmap (Forge), M22 planned (Forge), projec
 
 � Team update (2026-03-04): Run 6 improvement analysis  decided by Forge
 
+📌 Team update (2026-03-15): Component health dashboard delivery complete — static scanner (scripts/Invoke-ComponentHealthScan.ps1) + live Blazor dashboard (/ComponentHealth) both shipped. 56 components scored, 84% avg health, 2 critical, 14 at-risk. Scanner: ChildContent excluded from parameter counts, IStyle used instead of IHasStyle, ToolTip scores 0, C# Playwright integration tests, shared test filtering. Dashboard: reflection discovery + hardcoded Web Forms baseline, Bootstrap UI, "Tools" category. Addresses issue #439. Coordinated with Jubilee — decided by Rogue, Jubilee
+
 ### WebFormsPageBase Tests (2026-03-04)
 
 **8 bUnit tests for WebFormsPageBase (all pass):** Title/MetaDescription/MetaKeywords delegate to IPageService, IsPostBack always false, Page returns this, Page.Title shim pattern delegates correctly, reading Title after setting via PageService, IsPostBack guard pattern block always executes. Test file: `src/BlazorWebFormsComponents.Test/WebFormsPageBase/WebFormsPageBaseTests.razor`. Used concrete inner `TestPage` class inheriting `WebFormsPageBase` with `BuildRenderTree` + public accessors for protected `Page` property. Registered `IPageService` as `Services.AddScoped<IPageService, PageService>()`. WebFormsPageBase inherits ComponentBase (not BaseWebFormsComponent), so no JSInterop or LinkGenerator mocking needed — simpler test setup than most component tests.
@@ -125,3 +127,23 @@ And UpdatePanel.razor is updated to render:
 Then all 12 tests should pass.
 
 Test file: `src/BlazorWebFormsComponents.Test/UpdatePanel/ContentTemplateTests.razor` (12 tests, 280 lines)
+
+### Component Health Scanner (2026-03-14)
+
+**Built `scripts/Invoke-ComponentHealthScan.ps1`** — generates `docs/component-health.md` with per-component health scores across 7 weighted dimensions (Property Parity 30%, HTML Fidelity 15%, bUnit Tests 15%, Integration Tests 5%, Style Support 15%, Sample Page 10%, Event Support 10%).
+
+**Key implementation details:**
+- Walks inheritance chain up to framework bases (BaseStyledComponent, BaseWebFormsComponent) to count [Parameter] attributes from intermediate classes like ButtonBaseComponent, DataBoundComponent, BaseValidator.
+- Handles file location overrides for LoginControls/ and Validations/ subdirectories.
+- Sub-style detection via companion `*Style.razor` files and inline property patterns.
+- Integration test check scans C# Playwright test projects (not TypeScript — project uses Microsoft.Playwright NuGet).
+- Test counting: dedicated dirs get full .razor count; shared dirs (LoginControls, Validations) filter by component name.
+
+**First scan results:** 56 components, avg 84%, 40 healthy (>80%), 14 needs work (50-80%), 2 critical (<50%). Criticals: View (32%) and ContentPlaceHolder (32%) — both lack sample pages and have minimal [Parameter] surface (params inherited from framework bases not scanned).
+
+**Codebase patterns confirmed:**
+- [Parameter] uses both inline (`[Parameter] public...`) and multi-line formats.
+- No `IHasStyle` interface — actual interface is `IStyle` (composes IHasLayoutStyle + IFontStyle).
+- No ToolTip parameter in BaseWebFormsComponent (only AccessKey).
+- ContentPlaceHolderBase defined inline in ContentPlaceHolder.razor.cs, inherits BaseWebFormsComponent.
+- BaseValidator<T> inherits BaseStyledComponent (validators are styled).
