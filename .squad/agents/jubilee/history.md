@@ -147,3 +147,20 @@
 
 📌 Team update (2026-03-13): UpdatePanel sample page complete — 6 scenarios + migration guide + audit markers. ComponentList.razor updated with AJAX Controls section. Both changes verified to build clean.
 
+### Component Health Dashboard (2026-03-13 through 2026-03-15)
+
+- **Created `Components/Pages/ComponentHealth.razor`** — a live dashboard at `/ComponentHealth` that uses reflection to scan the BlazorWebFormsComponents assembly and compare implemented components against Web Forms baseline reference data.
+- **Health score algorithm (7 dimensions):** Property Parity (30%), HTML Fidelity (15%), bUnit Tests (15%), Style Support (15%), Sample Page (10%), Event Support (10%), Integration Tests (5%). Test dimensions are placeholders (0) pending file-scanner integration.
+- **Reflection-based discovery:** Scans assembly for public non-abstract ComponentBase descendants, counts `[Parameter]` properties and `EventCallback`/`EventCallback<T>` parameters. Style scoring checks BaseStyledComponent/BaseDataBoundComponent inheritance, IStyle interfaces, AccessKey/ToolTip properties, and *Style property names.
+- **Reference data:** 55 Web Forms components hardcoded with expected prop/event counts, categories (Data, Editor, Display, Button, Navigation, Login, Validation, Infrastructure), and complexity tiers (Complex/Medium/Simple).
+- **UI:** Bootstrap cards for summary stats (total, average, tier counts), collapsible category sections, striped tables with progress bars, color-coded status indicators (✅ >80%, ⚠️ 50-80%, 🔴 <50%). "Unmapped components" section shows assembly types not in the reference data.
+- **ComponentCatalog.cs:** Added "Component Health" entry under new "Tools" category with search keywords.
+- **Index.razor:** Added green "Component Health" button in hero section next to Get Started and View on GitHub.
+- **Lesson:** `IsInfrastructureType` filter needed to exclude base classes, style containers, template fields, and other non-top-level types from the "unmapped" list.
+- **Lesson:** Using `StringComparer.OrdinalIgnoreCase` on the reference dictionary avoids case-sensitivity issues when matching reflection type names.
+- **Parallel coordination with Rogue:** Jubilee built runtime reflection-based dashboard; Rogue built static PowerShell scanner (`scripts/Invoke-ComponentHealthScan.ps1`). Both derive from shared 7-dimension scoring spec. Dashboard automatically updates as library evolves; scanner generates MkDocs page.
+- **Build verified:** 0 errors, all warnings pre-existing.
+- **Impact:** Addresses issue #439 (Jeff's request for visible component health dashboard). Establishes "Tools" category pattern for future developer pages (migration wizard, test runner). Provides transparent parity gap visibility for prioritization and backlog.
+
+📌 Team update (2026-03-15): Component health dashboard delivery complete — coordinated parallel implementation with Rogue (QA). Dashboard live at /ComponentHealth (reflection + hardcoded baseline), scanner builds static docs/component-health.md (PowerShell). 56 components scored, 84% health, addresses issue #439 — decided by Jubilee, Rogue
+
