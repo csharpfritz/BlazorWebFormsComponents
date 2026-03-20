@@ -205,3 +205,13 @@
 - **Build verified:** 0 errors.
 
 
+
+### Analyzer Sample Content (2026-03-20)
+
+- **Created Razor sample page** at `samples/AfterBlazorServerSide/Components/Pages/MigrationTools/Analyzers/Index.razor`  informational/reference page covering all 8 BWFC analyzers (BWFC001-005, BWFC010-012) with installation instructions, summary table, and before/after code examples for each rule.
+- **Created before/after example files** at `samples/AnalyzerExamples/BeforeFix.cs.example` and `AfterFix.cs.example`  realistic ProductManager code-behind showing every analyzer pattern in context.
+- **Added 'Migration Tools' nav category** to `ComponentList.razor` with link to Roslyn Analyzers page.
+- **Route pattern:** `/MigrationTools/Analyzers`  new top-level route alongside `/ControlSamples/` and `/UtilityFeatures/` since analyzers are not controls or utility features.
+- **Convention for non-compilable examples:** Used `.cs.example` extension per task requirements to signal these are reference files, not build artifacts.
+- **Lesson:** Analyzer sample pages are educational/reference-style (like Theming) rather than interactive demo pages. No `@code` block needed since there's no interactive state.
+- **Build verified:** 0 errors.

@@ -497,3 +497,50 @@ Updated `.squad/skills/migration-standards/SKILL.md` to add new section at end:
 - Created docs/ValidationControls/BaseValidator.md 
 - Created docs/ValidationControls/BaseCompareValidator.md
 - Updated mkdocs.yml (Validation Controls section)
+
+### Roslyn Analyzer Suite Documentation (Current Session)
+
+**Delivered:** Comprehensive MkDocs page documenting all 8 BWFC Roslyn analyzers with code fixes.
+
+**File created:** `docs/Migration/Analyzers.md` (~17.7 KB)
+
+**Content structure:**
+1. **Overview** — What the analyzer package is, how to install it, when to use it (post-migration)
+2. **Summary table** — All 8 rules with ID, severity, name, and brief description
+3. **Per-analyzer sections** (8 total, each with):
+   - Rule ID, severity, category
+   - What it detects (the problematic pattern from source code analysis)
+   - Why it matters (migration context for Web Forms devs)
+   - Before/after code examples (realistic, not toy)
+   - Code fix description (what the automatic fix produces)
+4. **Configuration/suppression** — `.editorconfig`, `#pragma warning`, `[SuppressMessage]`, bulk suppression strategy
+5. **Recommended workflow** — 6-step checklist tying analyzers into the migration pipeline
+
+**Analyzer coverage:**
+- BWFC001: Missing [Parameter] attribute on WebControl properties
+- BWFC002: ViewState["key"] usage patterns → component state
+- BWFC003: IsPostBack checks → Blazor lifecycle methods
+- BWFC004: Response.Redirect() → NavigationManager.NavigateTo()
+- BWFC005: Session["key"] and HttpContext.Current → scoped services/ProtectedSessionStorage
+- BWFC010: Required attributes missing on BWFC components (GridView.DataSource, etc.)
+- BWFC011: Web Forms event handler signature (object, EventArgs) → EventCallback
+- BWFC012: Leftover runat="server" in string literals
+
+**Additional updates:**
+- `mkdocs.yml` — added "Roslyn Analyzers: Migration/Analyzers.md" after "Automated Migration Guide"
+- `docs/Migration/readme.md` — added "Clean Up with Roslyn Analyzers" section with install command and link
+
+**Key decisions:**
+- Placed after Automated Migration Guide in nav — developers run automation first, then use analyzers to clean up code-behind
+- Code fix examples show the literal output (TODO comments, commented-out code) so developers know what to expect
+- Tabbed before/after examples using `=== "Before"` / `=== "After"` pattern matching DeprecationGuidance.md style
+- Lifecycle mapping table in BWFC003 section shows IsPostBack → OnInitialized equivalence
+- Bulk suppression strategy section helps large codebases adopt analyzers incrementally
+- Cross-references to existing BWFC docs (ViewState utility, Response.Redirect utility) where relevant
+
+**Learnings:**
+- Analyzer code fixes fall into two categories: (1) additive (BWFC001 adds [Parameter]), (2) commenting-out with TODO (BWFC002-005, BWFC011). The commenting pattern is intentional — these require human judgment for the replacement.
+- BWFC010 (RequiredAttributeAnalyzer) tracks a small set of components (GridView, HyperLink, Image) — extensible in future
+- BWFC012 (RunatServerAnalyzer) targets string literals, not markup — catches dynamically-built HTML, not .razor files
+- Source reading revealed team decision (2026-03-21): BWFC001 skips static properties — documented this in the analyzer description
+- MkDocs strict build passes with analyzer docs included (59.43s build time)
