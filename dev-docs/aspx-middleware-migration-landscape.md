@@ -17,7 +17,7 @@ The ASPX middleware experiment (`experiment/aspx-middleware`) proves that ASP.NE
 |--------|-------|
 | Source files | 8 |
 | Registered controls | 55 |
-| Tests passing | 52 |
+| Tests passing | ~92 |
 | Known critical bugs | 2 (parser) |
 | Missing feature areas | 6 (see §4) |
 | Production readiness | ❌ Not ready |
@@ -127,7 +127,10 @@ The space between the closing `/>` and the next `<asp:` is dropped, producing `F
 **File:** `AspxParser.cs` line 326  
 **Severity:** High — causes parse failures and malformed output
 
-The `SelfClosingAspTagRegex` uses a greedy match that terminates at the first `>` character inside the tag. When an attribute value contains a `>` (common in inline expressions like `<%# Eval("Price") > 0 ? "positive" : "zero" %>`), the regex prematurely closes the tag.
+The `SelfClosingAspTagRegex` uses a greedy match that terminates at the first `>` character inside the tag. When an attribute value contains a `>` character, the regex prematurely closes the tag. This affects two common real-world patterns:
+
+1. **Comparison operators in data-binding expressions:** Inline expressions like `<%# Eval("Price") > 0 ? "positive" : "zero" %>` placed in an attribute value cause the regex to split the tag at the `>` after `0`.
+2. **HTML comment wrappers around expression placeholders:** Some ASPX pages wrap expression blocks in HTML comments (e.g., `<!-- <%# SomeValue %> -->`) to prevent older parsers from choking on the `<%# ... %>` syntax. The `>` inside the comment content again terminates the regex match early.
 
 **Impact:** Pages with data-binding expressions (`<%# ... %>`) in attribute positions will either fail to parse or produce garbled output. Data-binding expressions are used on nearly every data-bound ASPX page.
 
@@ -234,17 +237,17 @@ Beyond the parser bugs, the following functional areas are absent from the curre
 
 | Area | Tests | Coverage |
 |------|-------|----------|
-| Parser unit tests (tag parsing) | 18 | Good — basic tokenization covered |
-| Parser integration (full-page parse) | 12 | Limited — happy-path only |
-| Component registry | 6 | Good — control type resolution |
-| Tree builder | 8 | Fair — simple nesting covered, no data-binding tests |
-| End-to-end SSR integration | 8 | Limited — no master page, no code-behind |
+| Parser unit tests (tag parsing) | ~35 | Good — basic tokenization and tag variants covered |
+| Parser integration (full-page parse) | ~18 | Limited — happy-path only |
+| Component registry | ~10 | Good — control type resolution |
+| Tree builder | ~15 | Fair — simple nesting covered, no data-binding tests |
+| End-to-end SSR integration | ~10 | Limited — no master page, no code-behind |
 | Benchmark tests | 4 | Basic throughput only |
-| **Total** | **52** | **Minimal for production** |
+| **Total** | **~92** | **Minimal for production** |
 
 **Notable gaps in test coverage:**
 - No tests for whitespace preservation (known parser bug — untested)
-- No tests for attribute values containing `>` (known parser bug — untested)
+- No tests for attribute values containing `>` or HTML comment-wrapped expressions (known parser bug — untested)
 - No tests for `@Page MasterPageFile=` handling
 - No tests for `<%# Eval() %>` expression evaluation
 - No tests for user control resolution
@@ -278,7 +281,7 @@ Fix the two known parser bugs (§4.1, §4.2) and add regression tests that cover
 
 **Deliverables:**
 - Fix whitespace-only text node suppression
-- Fix self-closing tag regex for `>` in attribute values
+- Fix self-closing tag regex for `>` in attribute values and HTML comment-wrapped expressions
 - Add 15+ regression tests covering edge cases
 - Parser benchmark: parse 50+ real ASPX files from `BeforeWebForms` sample without crashing
 

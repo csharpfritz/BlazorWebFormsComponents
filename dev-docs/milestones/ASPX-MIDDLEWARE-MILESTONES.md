@@ -41,7 +41,7 @@ Fix the two known parser bugs so that the `AspxParser` can process any syntactic
 
 The landscape evaluation (§4.1, §4.2) identified two bugs in `AspxParser.cs`:
 1. Whitespace-only text nodes are silently dropped, breaking layout and spacing
-2. The `SelfClosingAspTagRegex` prematurely terminates on `>` inside attribute values, causing malformed parse trees for any page with data-binding expressions
+2. The `SelfClosingAspTagRegex` prematurely terminates on `>` inside attribute values, causing malformed parse trees for any page with data-binding expressions or HTML comment-wrapped expression placeholders
 
 These are foundation bugs — every subsequent feature (master pages, expressions, user controls) builds on top of the parser. Fixing them first prevents incorrect behavior from masking issues in later milestones.
 
@@ -50,15 +50,15 @@ These are foundation bugs — every subsequent feature (master pages, expression
 | ID | Deliverable | Description | Priority | Size |
 |----|-------------|-------------|----------|------|
 | A-01 | **Fix whitespace text node suppression** | In `AspxParser.cs`, remove or narrow the `IsNullOrWhiteSpace` check (around line 177) so that whitespace-only nodes between control tags are preserved as `AspxTextNode` instances. Preserve `\n`, `\r\n`, single spaces, and runs of spaces. Only discard nodes that are completely empty (`""`). | P0 | S |
-| A-02 | **Fix self-closing tag regex for `>` in attribute values** | Replace the `SelfClosingAspTagRegex` (around line 326) with a stateful character-by-character attribute parser that tracks quote depth. When inside a quoted attribute value, `>` characters must not be treated as tag boundaries. | P0 | M |
+| A-02 | **Fix self-closing tag regex for `>` in attribute values** | Replace the `SelfClosingAspTagRegex` (around line 326) with a stateful character-by-character attribute parser that tracks quote depth. When inside a quoted attribute value, `>` characters must not be treated as tag boundaries. This also covers HTML comment-wrapped expression placeholders (e.g., `<!-- <%# SomeValue %> -->`), where the `>` inside the comment content is a known additional trigger for the same premature termination. | P0 | M |
 | A-03 | **Add whitespace preservation regression tests** | Write unit tests that parse ASPX fragments where whitespace between controls is significant and verify that `AspxTextNode` instances with whitespace content are present in the resulting AST. Cover: single space between inline elements, newline between block elements, multiple spaces (should be preserved as-is). | P0 | S |
-| A-04 | **Add attribute value `>` regression tests** | Write unit tests for ASPX tags whose attribute values contain `>` characters (comparison operators, data-binding expressions with `> 0`, HTML entities `&gt;`). Verify parse tree is correct and not truncated. | P0 | S |
+| A-04 | **Add attribute value `>` regression tests** | Write unit tests for ASPX tags whose attribute values contain `>` characters (comparison operators in `<%# ... %>` expressions, `> 0` patterns, HTML entities `&gt;`, and HTML comment-wrapped expressions). Verify parse tree is correct and not truncated in each case. | P0 | S |
 | A-05 | **Real-file parse smoke test** | Write an integration test that attempts to parse every `.aspx` file from the `samples/BeforeWebForms` project without throwing an exception. Failures are captured and reported (not asserted) so the test suite continues. This provides a baseline for parser stability. | P1 | M |
 | A-06 | **Parser benchmark baseline** | Record parse time and allocation for the 10 largest `.aspx` files in `BeforeWebForms`. Document results in `dev-docs/benchmarks/`. This baseline is the reference point for detecting performance regressions in subsequent milestones. | P2 | S |
 
 ### Acceptance Criteria
 
-1. All 52 existing tests still pass
+1. All ~92 existing tests still pass
 2. A-03 and A-04 regression tests pass
 3. A-05 smoke test runs without uncaught exceptions (parse errors are acceptable as diagnostic output, not test failures)
 4. No new `[Skip]` or `[Fact(Skip=...)]` annotations added to existing tests
