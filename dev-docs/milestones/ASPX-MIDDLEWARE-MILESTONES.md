@@ -58,8 +58,8 @@ These are foundation bugs — every subsequent feature (master pages, expression
 
 ### Acceptance Criteria
 
-1. All ~92 existing tests still pass
-2. A-03 and A-04 regression tests pass
+1. All ~52 existing tests still pass (unchanged from pre-Milestone-A baseline)
+2. A-03 and A-04 regression tests are written and pass (bringing total to ~92)
 3. A-05 smoke test runs without uncaught exceptions (parse errors are acceptable as diagnostic output, not test failures)
 4. No new `[Skip]` or `[Fact(Skip=...)]` annotations added to existing tests
 

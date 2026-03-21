@@ -17,7 +17,8 @@ The ASPX middleware experiment (`experiment/aspx-middleware`) proves that ASP.NE
 |--------|-------|
 | Source files | 8 |
 | Registered controls | 55 |
-| Tests passing | ~92 |
+| Tests passing (current) | ~52 |
+| Tests passing (projected after Milestone A) | ~92 |
 | Known critical bugs | 2 (parser) |
 | Missing feature areas | 6 (see §4) |
 | Production readiness | ❌ Not ready |
@@ -235,19 +236,21 @@ Beyond the parser bugs, the following functional areas are absent from the curre
 
 ## 6. Test Coverage Assessment
 
-| Area | Tests | Coverage |
-|------|-------|----------|
-| Parser unit tests (tag parsing) | ~35 | Good — basic tokenization and tag variants covered |
-| Parser integration (full-page parse) | ~18 | Limited — happy-path only |
-| Component registry | ~10 | Good — control type resolution |
-| Tree builder | ~15 | Fair — simple nesting covered, no data-binding tests |
-| End-to-end SSR integration | ~10 | Limited — no master page, no code-behind |
-| Benchmark tests | 4 | Basic throughput only |
-| **Total** | **~92** | **Minimal for production** |
+> **Note on test counts:** The figures below reflect the current state of the `experiment/aspx-middleware` branch (~52 tests total). The "Projected (post-A)" column shows the expected counts after Milestone A regression tests (A-03, A-04) are written. Readers searching the repository will find approximately 52 tests today, not 92.
+
+| Area | Current Tests | Projected (post-A) | Coverage |
+|------|----------|---------------------|----------|
+| Parser unit tests (tag parsing) | ~18 | ~33 | Good — basic tokenization covered; regression tests added in A-03/A-04 |
+| Parser integration (full-page parse) | ~12 | ~18 | Limited — happy-path only |
+| Component registry | ~6 | ~10 | Good — control type resolution |
+| Tree builder | ~8 | ~15 | Fair — simple nesting covered, no data-binding tests |
+| End-to-end SSR integration | ~8 | ~12 | Limited — no master page, no code-behind |
+| Benchmark tests | 4 | 4 | Basic throughput only |
+| **Total** | **~52** | **~92** | **Minimal for production** |
 
 **Notable gaps in test coverage:**
-- No tests for whitespace preservation (known parser bug — untested)
-- No tests for attribute values containing `>` or HTML comment-wrapped expressions (known parser bug — untested)
+- No tests for whitespace preservation (known parser bug — untested; addressed by A-03)
+- No tests for attribute values containing `>` or HTML comment-wrapped expressions (known parser bug — untested; addressed by A-04)
 - No tests for `@Page MasterPageFile=` handling
 - No tests for `<%# Eval() %>` expression evaluation
 - No tests for user control resolution
