@@ -1,0 +1,10 @@
+@page "/TC25-DataBindAndEvents"
+<PageTitle>Products</PageTitle>
+<GridView ItemType="object" id="gvProducts" Items="@_gvProductsData" OnRowCommand="@Grid_RowCommand" AutoGenerateColumns="false">
+    <Columns>
+        <BoundField ItemType="object" DataField="Name" HeaderText="Name" />
+        <ButtonField ItemType="object" CommandName="Select" Text="Select" />
+    </Columns>
+</GridView>
+<Button id="btnRefresh" Text="Refresh" OnClick="@Refresh_Click" />
+

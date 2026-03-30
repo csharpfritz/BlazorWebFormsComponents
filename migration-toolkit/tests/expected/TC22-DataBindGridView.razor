@@ -1,0 +1,9 @@
+@page "/TC22-DataBindGridView"
+<PageTitle>Products</PageTitle>
+<GridView ItemType="object" id="gvProducts" Items="@_gvProductsData" AutoGenerateColumns="false">
+    <Columns>
+        <BoundField ItemType="object" DataField="Name" HeaderText="Product Name" />
+        <BoundField ItemType="object" DataField="Price" HeaderText="Price" />
+    </Columns>
+</GridView>
+

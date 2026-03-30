@@ -1,0 +1,9 @@
+@page "/TC23-DataBindMultiple"
+<PageTitle>Dashboard</PageTitle>
+<GridView ItemType="object" id="gvOrders" Items="@_gvOrdersData" />
+<Repeater ItemType="object" id="rptCategories" Items="@_rptCategoriesData">
+    <ItemTemplate>
+        <span><%# Eval("Name") %></span>
+    </ItemTemplate>
+</Repeater>
+

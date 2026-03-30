@@ -188,6 +188,9 @@ nav:
           - Session State: Migration/Phase2-SessionShim.md
           - Page Lifecycle: Migration/Phase2-LifecycleTransforms.md
           - Event Handler Signatures: Migration/Phase2-EventHandlerSignatures.md
+      - Phase 3 - Data Binding & Events:
+          - Event Handler Wiring: Migration/Phase3-EventHandlerWiring.md
+          - DataBind Conversion: Migration/Phase3-DataBindConversion.md
       - Assess:
           - Migration Readiness Assessment: Migration/migration_readiness.md
           - Deprecation Guidance: Migration/DeprecationGuidance.md

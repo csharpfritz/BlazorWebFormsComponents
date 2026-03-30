@@ -351,3 +351,55 @@ private void ProductList_ItemCommand(CommandEventArgs e)
 | `CommandEventArgs` / `GridViewCommandEventArgs` / `ListViewCommandEventArgs` | **Keep** — map to BWFC type | `CommandEventArgs` |
 | `GridViewEditEventArgs` / `GridViewDeleteEventArgs` | **Keep** — map to BWFC type | Check BWFC component API |
 | `RepeaterCommandEventArgs` | **Keep** — map to BWFC type | `CommandEventArgs` |
+
+## Phase 3 Transforms
+
+Phase 3 automates two critical transforms that previously required manual intervention: event handler wiring in markup and DataSource/DataBind pattern conversion.
+
+### Event Handler Wiring (Markup)
+
+L1 script adds `@` prefix to event handler attributes so Razor compiles them as method references:
+
+```html
+<!-- Before (Phase 1 output): -->
+<Button id="btnSave" Text="Save" OnClick="Save_Click" />
+<GridView id="gvItems" OnRowCommand="Grid_RowCommand" />
+
+<!-- After (Phase 3): -->
+<Button id="btnSave" Text="Save" OnClick="@Save_Click" />
+<GridView id="gvItems" OnRowCommand="@Grid_RowCommand" />
+```
+
+**Pattern:** `On[A-Z]*="MethodName"` → `On[A-Z]*="@MethodName"`
+
+### DataBind Pattern Conversion (Cross-File)
+
+L1 script detects `DataSource`/`DataBind()` in code-behind and correlates with markup:
+
+**Code-behind transform:**
+
+```csharp
+// Before:
+gvProducts.DataSource = GetProducts();
+gvProducts.DataBind();
+
+// After:
+private IEnumerable<object> _gvProductsData;
+// In OnInitializedAsync:
+_gvProductsData = GetProducts();
+```
+
+**Markup transform (correlated by control ID):**
+
+```html
+<!-- Before: -->
+<GridView id="gvProducts" />
+
+<!-- After: -->
+<GridView id="gvProducts" Items="@_gvProductsData" />
+```
+
+**Field naming:** `controlName` → `_controlNameData` (lowercase first char, append `Data`)
+
+**Manual follow-up:** Change `IEnumerable<object>` to the actual typed collection (e.g., `IEnumerable<Product>`).
+
