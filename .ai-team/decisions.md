@@ -1,4 +1,4 @@
-﻿# Decisions
+# Decisions
 
 > Shared team decisions. All agents read this. Only Scribe writes here (by merging from inbox).
 
@@ -7658,3 +7658,20 @@ $content = $content -replace '\s*:\s*(?:System\.Web\.UI\.)?(?:Page|UserControl|M
 **Why:** User directive from Jeff + Forge's S5 recommendation. This is the single most common code-behind edit (33 files in WingtipToys). Even a partial rename saves significant time.
 **Risk:** Method body may contain `sender` or `e` references that become invalid. Mitigate by flagging a TODO if those identifiers appear in the method body.
 **Assign to:** Bishop
+
+### 2026-03-30: Add fetch-depth: 0 to Squad CI Workflow
+
+**By:** Bishop (Migration Tooling Dev)
+**What:** Added etch-depth: 0 to .github/workflows/squad-ci.yml checkout step to fetch full git history. Audited all other squad-*.yml workflows: squad-insider-release.yml, squad-promote.yml, and squad-release.yml already have fetch-depth: 0. Other workflows (docs, preview, heartbeat, issue-assign, label-enforce, triage) do not build .NET code and do not require it.
+**Why:** Nerdbank.GitVersioning (NBGV) requires full git history to calculate version heights by walking commit graph. ctions/checkout@v4 defaults to etch-depth: 1 (shallow clone), causing GitException. The fix is minimal, non-breaking, and ensures PR #114 CI checks pass.
+
+### 2026-03-30: Phase 4 Migration Skills  L1 PowerShell Frozen (consolidated)
+
+**By:** Psylocke (Skills Engineer), per charter from Jeffrey T. Fritz
+**What:** L1 PowerShell script (wfc-migrate.ps1) is FROZEN at Phase 3. Remaining ~30% of migration work becomes Layer 2 (L2) Copilot skills: AI-guided transforms with decision trees, before/after examples, and explicit "What Developers Must Do Manually" sections. Created 4 Phase 4 skills: wfc-session-state (Application[], Cache[], HttpContext.Current), wfc-middleware-migration (HttpModule, Global.asax), wfc-usercontrol-migration (.ascx, FindControl, [Parameter]), enhanced wfc-identity-migration v2 (FormsAuth, Membership, Roles). Three-layer migration model: L1 (automated, ~70%), L2 (AI-guided, ~25%), L3 (human, ~5%).
+**Why:** L1 has reached deterministic limit at Phase 3. Remaining gaps require architecture decisions (Is Application["key"] global or per-user? IMemoryCache or IDistributedCache?), cross-file reasoning (FindControl requires understanding component trees), and domain knowledge (Membership password hashes, Global.asax event flow). Skills provide better guidance than silent script failures. Skills iterate faster than PowerShell (markdown vs code). Prevents L1 from becoming unmaintainable catch-all.
+### 2026-03-30: Add fetch-depth: 0 to Squad CI Workflow
+
+**By:** Bishop (Migration Tooling Dev)
+**What:** Added etch-depth: 0 to .github/workflows/squad-ci.yml checkout step to fetch full git history. Audited all other squad-*.yml workflows: squad-insider-release.yml, squad-promote.yml, and squad-release.yml already have fetch-depth: 0. Other workflows (docs, preview, heartbeat, issue-assign, label-enforce, triage) do not build .NET code and do not require it.
+**Why:** Nerdbank.GitVersioning (NBGV) requires full git history to calculate version heights by walking commit graph. ctions/checkout@v4 defaults to etch-depth: 1 (shallow clone), causing GitException. The fix is minimal, non-breaking, and ensures PR #114 CI checks pass.

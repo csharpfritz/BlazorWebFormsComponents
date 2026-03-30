@@ -351,3 +351,119 @@ private void ProductList_ItemCommand(CommandEventArgs e)
 | `CommandEventArgs` / `GridViewCommandEventArgs` / `ListViewCommandEventArgs` | **Keep** — map to BWFC type | `CommandEventArgs` |
 | `GridViewEditEventArgs` / `GridViewDeleteEventArgs` | **Keep** — map to BWFC type | Check BWFC component API |
 | `RepeaterCommandEventArgs` | **Keep** — map to BWFC type | `CommandEventArgs` |
+
+## Phase 3 Transforms
+
+Phase 3 automates two critical transforms that previously required manual intervention: event handler wiring in markup and DataSource/DataBind pattern conversion.
+
+### Event Handler Wiring (Markup)
+
+L1 script adds `@` prefix to event handler attributes so Razor compiles them as method references:
+
+```html
+<!-- Before (Phase 1 output): -->
+<Button id="btnSave" Text="Save" OnClick="Save_Click" />
+<GridView id="gvItems" OnRowCommand="Grid_RowCommand" />
+
+<!-- After (Phase 3): -->
+<Button id="btnSave" Text="Save" OnClick="@Save_Click" />
+<GridView id="gvItems" OnRowCommand="@Grid_RowCommand" />
+```
+
+**Pattern:** `On[A-Z]*="MethodName"` → `On[A-Z]*="@MethodName"`
+
+### DataBind Pattern Conversion (Cross-File)
+
+L1 script detects `DataSource`/`DataBind()` in code-behind and correlates with markup:
+
+**Code-behind transform:**
+
+```csharp
+// Before:
+gvProducts.DataSource = GetProducts();
+gvProducts.DataBind();
+
+// After:
+private IEnumerable<object> _gvProductsData;
+// In OnInitializedAsync:
+_gvProductsData = GetProducts();
+```
+
+**Markup transform (correlated by control ID):**
+
+```html
+<!-- Before: -->
+<GridView id="gvProducts" />
+
+<!-- After: -->
+<GridView id="gvProducts" Items="@_gvProductsData" />
+```
+
+**Field naming:** `controlName` → `_controlNameData` (lowercase first char, append `Data`)
+
+**Manual follow-up:** Change `IEnumerable<object>` to the actual typed collection (e.g., `IEnumerable<Product>`).
+
+---
+
+## Phase 4: Skills-Based Transforms (L2 — AI-Guided)
+
+**Strategic Decision:** As of Phase 3, the L1 PowerShell script (`bwfc-migrate.ps1`) is **frozen**. It handles ~70% of migration work — the deterministic, pattern-based transforms that regex and AST manipulation can reliably automate. Everything remaining requires **contextual reasoning** — understanding data flow, application architecture, and developer intent. These transforms are now handled by **Copilot skills** that guide Layer 2 (L2) manual migrations.
+
+### Why L1 is Frozen
+
+Deterministic transforms have reached their practical limit. The remaining migration gaps fall into three categories that L1 cannot reliably handle:
+
+1. **Architecture decisions** — Is `Application["key"]` global state or per-user? Should `Cache["key"]` use `IMemoryCache` or `IDistributedCache`? Is this HttpModule a logging module or authentication logic?
+2. **Cross-file reasoning** — Converting `FindControl("id")` requires understanding the component tree. Mapping `Global.asax` events to `Program.cs` requires analyzing startup logic flow.
+3. **Domain knowledge** — Migrating Membership provider passwords requires understanding hash compatibility. Converting `Session_Start` logic requires knowing Blazor circuit lifetime.
+
+L1 can *detect* these patterns and flag them. But automating the conversion risks incorrect migrations that developers will spend hours debugging.
+
+### Phase 4 Skills
+
+Each skill provides:
+- **When to apply** — Trigger patterns for Copilot to detect
+- **Before/after examples** — Concrete code samples for each pattern
+- **Decision trees** — Guidance for context-dependent choices
+- **Common gotchas** — Known failure modes to avoid
+
+| Skill | Covers | Related Items |
+|-------|--------|---------------|
+| **bwfc-session-state** | `Application["key"]` → singleton services, `Cache["key"]` → IMemoryCache, `HttpContext.Current` → IHttpContextAccessor | #13, #14, #15, #16 |
+| **bwfc-middleware-migration** | HttpModule → middleware, Global.asax events → Program.cs | #22, #23, #24 |
+| **bwfc-usercontrol-migration** | .ascx → component with [Parameter], FindControl → @ref patterns | #30, #31, #8 |
+| **bwfc-identity-migration** (enhanced) | FormsAuthentication → cookie auth, Membership → Identity, Roles provider → policy-based authz | #25, #26, #27 |
+
+### Using Phase 4 Skills
+
+**For developers:**
+1. Run L1 script to complete Phase 1–3 transforms
+2. Review TODO comments flagged by L1 for manual work
+3. Invoke `/bwfc-session-state`, `/bwfc-middleware-migration`, `/bwfc-usercontrol-migration`, or `/bwfc-identity-migration` skills in Copilot based on the pattern
+4. Follow the skill's guidance for contextual transforms
+
+**For AI agents:**
+- Phase 4 skills are invoked during Layer 2 migration when Copilot detects specific patterns (e.g., `Application["key"]`, `IHttpModule`, `.ascx` files, `FormsAuthentication`)
+- Skills provide decision trees and examples for context-dependent transforms
+- Skills document "What Developers Must Do Manually" for tasks that cannot be automated
+
+### L1 vs L2 Decision Table
+
+| Transform | L1 (Deterministic) | L2 (Skill-Guided) | Reason |
+|-----------|-------------------|------------------|--------|
+| `asp:Button` → `<Button>` | ✅ L1 | | Regex-based, no context needed |
+| `Response.Redirect` → `NavigationManager.NavigateTo` | ✅ L1 | | String literal replacement |
+| `Application["key"]` detection | ✅ L1 (flag) | ✅ L2 (convert) | Requires deciding singleton vs scoped |
+| `Cache["key"]` → `IMemoryCache` | ✅ L1 (flag) | ✅ L2 (convert) | Requires understanding cache lifetime |
+| `Global.asax` event → `Program.cs` | ✅ L1 (flag) | ✅ L2 (convert) | Requires understanding startup logic flow |
+| `FindControl("id")` → `@ref` | ✅ L1 (flag) | ✅ L2 (convert) | Requires understanding component tree |
+| `.ascx` public property → `[Parameter]` | ✅ L1 (flag) | ✅ L2 (convert) | Requires understanding parent/child communication |
+
+---
+
+## Summary: Three-Layer Migration Strategy
+
+1. **Layer 1 (L1) — PowerShell Script (`bwfc-migrate.ps1`):** Automated, deterministic transforms. Handles ~70% of migration work. **Frozen at Phase 3.**
+2. **Layer 2 (L2) — Copilot Skills:** AI-guided, contextual transforms. Provides decision trees and examples for manual work. **Active development (Phase 4).**
+3. **Layer 3 (L3) — Developer Judgment:** Project-specific architecture decisions that no skill can automate (e.g., choosing a database provider, designing service layer). Always requires human review.
+

@@ -1,0 +1,7 @@
+@page "/TC24-EventWiringMultiple"
+<PageTitle>Form</PageTitle>
+<TextBox id="txtName" OnTextChanged="@Name_Changed" />
+<DropDownList ItemType="object" id="ddlCategory" OnSelectedIndexChanged="@Category_Changed" />
+<CheckBox id="chkActive" OnCheckedChanged="@Active_Changed" />
+<Button id="btnSave" Text="Save" OnClick="@Save_Click" />
+

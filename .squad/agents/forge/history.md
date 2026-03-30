@@ -725,3 +725,23 @@ Plan written to session workspace plan.md. Architecture decisions written to `.s
 **Pattern established:** All 8 issues follow consistent template (Context, Scope, Definition of Done, Notes). Labeled with `squad` + `type:docs`. Enables clear work delegation and measurable completion criteria.
 
 **Status:** Issues created and triaged in inbox. Awaiting team assignment. Decision note written to `.squad/decisions/inbox/forge-doc-task-plan.md`.
+
+### Global Tool Architecture Proposal (2026-07-26)
+
+**Designed the C# global tool architecture to replace bwfc-migrate.ps1.** Key decisions:
+
+1. **Sequential pipeline pattern** chosen over middleware or visitor. The PowerShell script's 41 functions run in a fixed, order-dependent sequence. Middleware adds unnecessary flexibility that invites ordering bugs. Visitor is wrong for regex-based text transforms.
+
+2. **Explicit transform ordering** via numeric Order property (100, 200, 300). Gaps allow insertion without renumbering. AjaxToolkitPrefix (600) MUST run before AspPrefix (610).
+
+3. **Cross-file correlation** handled by DataBindTransform with a 3-phase approach: pre-scan code-behind  rewrite code-behind  inject Items attributes into markup. Only transform that spans both pipelines.
+
+4. **No hybrid mode**  the C# tool does not shell out to PowerShell. Accepts partial coverage during porting, tracks via test pass rate against 25 L1 test cases.
+
+5. **AI integration via structured TODO comments**  --use-ai flag enables L2 transforms via Microsoft.Extensions.AI. Without the flag, generates structured TODO(skill-name) comments that Copilot skills can parse.
+
+6. **CLI design:** 3 subcommands (migrate, nalyze, convert). migrate is the primary workflow. convert enables single-file incremental migration. nalyze replaces wfc-migrate.ps1 -Prescan.
+
+7. **NuGet packaging:** Fritz.WebFormsToBlazor, command name webforms-to-blazor, tied to NBGV versioning.
+
+**Deliverable:** dev-docs/global-tool-architecture.md  full architecture proposal with project structure, service architecture, transform porting plan (41 functions  ~30 classes), CLI interface, testing strategy, migration path, AI integration, and security considerations.

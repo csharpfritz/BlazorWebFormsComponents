@@ -144,3 +144,22 @@ Both functions called in `Copy-CodeBehind` after existing transforms, before fil
 Updated 6 expected test files (TC13, TC14, TC15, TC16, TC18, TC19) to reflect new transforms.
 TC19 (lifecycle) and TC20/TC21 (event handlers) are dedicated test cases for these features.
 **All 21 tests pass at 100% line accuracy.**
+
+## 2026-03-30: Squad CI Workflow  fetch-depth: 0 Fix
+
+**Task:** Fix squad-ci.yml GitHub Actions workflow failing with NBGV GitException due to shallow clone.
+
+**Root Cause:** ctions/checkout@v4 defaults to etch-depth: 1 (shallow clone), fetching only the most recent commit. Nerdbank.GitVersioning requires full git history to walk the commit graph and calculate version heights.
+
+**Solution:** Added etch-depth: 0 to the checkout step in .github/workflows/squad-ci.yml.
+
+**Audit:** Verified all other squad-*.yml workflows:
+-  squad-insider-release.yml  Already has fetch-depth: 0
+-  squad-promote.yml  Already has fetch-depth: 0 on both checkouts
+-  squad-release.yml  Already has fetch-depth: 0
+-  squad-docs.yml, squad-preview.yml, squad-heartbeat.yml, squad-issue-assign.yml, squad-label-enforce.yml, squad-triage.yml  N/A (don't build .NET)
+
+**Impact:** 
+- PR #114 CI checks now pass
+- All .NET-building workflows have consistent git history fetching
+- No performance impact (CI already requires full history for NBGV)

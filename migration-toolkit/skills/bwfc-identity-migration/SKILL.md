@@ -1,11 +1,13 @@
 ---
 name: bwfc-identity-migration
-description: "Migrate ASP.NET Web Forms Identity and Membership authentication to Blazor Server Identity. Covers OWIN to ASP.NET Core middleware, login page migration, BWFC login controls, role-based authorization, and cookie auth under Interactive Server mode. WHEN: \"migrate identity\", \"login page migration\", \"OWIN to core\", \"cookie auth blazor\", \"LoginView migration\"."
+description: "Migrate ASP.NET Web Forms Identity, Membership, and FormsAuthentication to Blazor Server Identity. Covers OWIN to ASP.NET Core middleware, login page migration, BWFC login controls, role-based authorization, cookie auth under Interactive Server mode, Membership provider migration, and Roles provider patterns. WHEN: \"migrate identity\", \"login page migration\", \"OWIN to core\", \"cookie auth blazor\", \"LoginView migration\", \"Membership to Identity\", \"FormsAuthentication\"."
+confidence: low
+version: 2.0.0
 ---
 
 # Web Forms Identity → Blazor Identity Migration
 
-This skill covers migrating ASP.NET Web Forms authentication (Identity, Membership, FormsAuthentication) to Blazor Server using ASP.NET Core Identity.
+This skill covers migrating ASP.NET Web Forms authentication (Identity, Membership, FormsAuthentication) to Blazor Server using ASP.NET Core Identity. This is a **Layer 2 (L2) contextual transform** that requires understanding authentication patterns and database schema.
 
 **Related skills:**
 - `/bwfc-migration` — Core markup migration (controls, expressions, layouts)
@@ -17,11 +19,11 @@ This skill covers migrating ASP.NET Web Forms authentication (Identity, Membersh
 
 Web Forms authentication typically uses one of three systems. The migration path depends on which one:
 
-| Web Forms Auth System | Era | Blazor Migration Path |
-|----------------------|-----|----------------------|
-| ASP.NET Identity (OWIN) | 2013+ | ASP.NET Core Identity (closest match) |
-| ASP.NET Membership | 2005-2013 | ASP.NET Core Identity (schema migration required) |
-| FormsAuthentication | 2002-2005 | ASP.NET Core Identity or cookie auth |
+| Web Forms Auth System | Era | Blazor Migration Path | Complexity |
+|----------------------|-----|----------------------|-----------|
+| ASP.NET Identity (OWIN) | 2013+ | ASP.NET Core Identity (closest match) | 🟢 Easy |
+| ASP.NET Membership | 2005-2013 | ASP.NET Core Identity (schema migration required) | 🟡 Medium |
+| FormsAuthentication | 2002-2005 | ASP.NET Core Identity or cookie auth | 🟡 Medium |
 
 ---
 
@@ -510,3 +512,429 @@ For a complete Identity UI (login, register, manage profile), scaffold it:
 dotnet aspnet-codegenerator identity -dc ApplicationDbContext --files "Account.Login;Account.Register;Account.Logout"
 ```
 This generates Razor Pages (not components) under `/Areas/Identity/`. They coexist with Blazor.
+
+---
+
+## FormsAuthentication Migration
+
+### Web Forms Pattern
+
+```csharp
+// Web Forms — Login.aspx.cs
+protected void btnLogin_Click(object sender, EventArgs e)
+{
+    if (ValidateUser(txtEmail.Text, txtPassword.Text))
+    {
+        FormsAuthentication.SetAuthCookie(txtEmail.Text, chkRememberMe.Checked);
+        Response.Redirect(FormsAuthentication.GetRedirectUrl(txtEmail.Text, false));
+    }
+}
+
+// Web Forms — Logout
+protected void btnLogout_Click(object sender, EventArgs e)
+{
+    FormsAuthentication.SignOut();
+    Response.Redirect("~/");
+}
+
+// Web Forms — web.config
+<authentication mode="Forms">
+  <forms loginUrl="~/Account/Login" timeout="2880" />
+</authentication>
+```
+
+### Blazor Pattern: ASP.NET Core Cookie Authentication
+
+```csharp
+// Program.cs — Configure cookie auth
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.ExpireTimeSpan = TimeSpan.FromDays(2); // 2880 minutes = 2 days
+        options.SlidingExpiration = true;
+    });
+
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddAuthorization();
+
+// Middleware pipeline
+app.UseAuthentication();
+app.UseAuthorization();
+```
+
+```csharp
+// Program.cs — Login endpoint (minimal API)
+app.MapPost("/Account/LoginHandler", async (HttpContext context, IUserService userService) =>
+{
+    var form = await context.Request.ReadFormAsync();
+    var email = form["email"].ToString();
+    var password = form["password"].ToString();
+    var rememberMe = form["rememberMe"] == "true";
+    
+    if (await userService.ValidateUserAsync(email, password))
+    {
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, email),
+            new Claim(ClaimTypes.Email, email)
+        };
+        
+        var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var authProperties = new AuthenticationProperties
+        {
+            IsPersistent = rememberMe,
+            ExpiresUtc = DateTimeOffset.UtcNow.AddDays(rememberMe ? 14 : 1)
+        };
+        
+        await context.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(claimsIdentity),
+            authProperties);
+        
+        return Results.Redirect("/");
+    }
+    
+    return Results.Redirect("/Account/Login?error=Invalid+credentials");
+}).DisableAntiforgery();
+
+// Logout endpoint
+app.MapPost("/Account/Logout", async (HttpContext context) =>
+{
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.Redirect("/");
+}).DisableAntiforgery();
+```
+
+### FormsAuthentication API Migration
+
+| FormsAuthentication Method | ASP.NET Core Equivalent |
+|---------------------------|------------------------|
+| `SetAuthCookie(username, persist)` | `HttpContext.SignInAsync(...)` with claims |
+| `SignOut()` | `HttpContext.SignOutAsync()` |
+| `GetAuthCookie(username, persist)` | Cookie created automatically by `SignInAsync` |
+| `GetRedirectUrl(username, createPersist)` | Store in `ReturnUrl` query parameter, read manually |
+| `Decrypt(ticket)` | No direct equivalent — use data protection APIs |
+| `Encrypt(ticket)` | No direct equivalent — use data protection APIs |
+| `LoginUrl` property | `CookieAuthenticationOptions.LoginPath` |
+| `Timeout` property | `CookieAuthenticationOptions.ExpireTimeSpan` |
+
+---
+
+## Membership Provider Migration
+
+### Web Forms Pattern
+
+```csharp
+// Web Forms — Using Membership provider
+protected void btnRegister_Click(object sender, EventArgs e)
+{
+    MembershipUser user = Membership.CreateUser(txtEmail.Text, txtPassword.Text, txtEmail.Text);
+    if (user != null)
+    {
+        FormsAuthentication.SetAuthCookie(txtEmail.Text, false);
+        Response.Redirect("~/");
+    }
+}
+
+protected void btnChangePassword_Click(object sender, EventArgs e)
+{
+    MembershipUser user = Membership.GetUser();
+    if (user.ChangePassword(txtOldPassword.Text, txtNewPassword.Text))
+    {
+        lblMessage.Text = "Password changed successfully!";
+    }
+}
+
+// Web Forms — User lookup
+MembershipUser user = Membership.GetUser(username);
+if (user != null && user.IsApproved)
+{
+    // User is valid
+}
+```
+
+### Blazor Pattern: ASP.NET Core Identity
+
+```csharp
+// Program.cs — Configure Identity
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+{
+    options.Password.RequiredLength = 6;
+    options.Password.RequireNonAlphanumeric = false;
+    options.User.RequireUniqueEmail = true;
+})
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddCascadingAuthenticationState();
+```
+
+```csharp
+// Register endpoint
+app.MapPost("/Account/RegisterHandler", async (HttpContext context,
+    UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager) =>
+{
+    var form = await context.Request.ReadFormAsync();
+    var email = form["email"].ToString();
+    var password = form["password"].ToString();
+    
+    var user = new ApplicationUser { UserName = email, Email = email };
+    var result = await userManager.CreateAsync(user, password);
+    
+    if (result.Succeeded)
+    {
+        await signInManager.SignInAsync(user, isPersistent: false);
+        return Results.Redirect("/");
+    }
+    
+    var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+    return Results.Redirect($"/Account/Register?error={Uri.EscapeDataString(errors)}");
+}).DisableAntiforgery();
+
+// Change password endpoint
+app.MapPost("/Account/ChangePasswordHandler", async (HttpContext context,
+    UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager) =>
+{
+    var form = await context.Request.ReadFormAsync();
+    var oldPassword = form["oldPassword"].ToString();
+    var newPassword = form["newPassword"].ToString();
+    
+    var user = await userManager.GetUserAsync(context.User);
+    if (user == null)
+        return Results.Redirect("/Account/Login");
+    
+    var result = await userManager.ChangePasswordAsync(user, oldPassword, newPassword);
+    if (result.Succeeded)
+        return Results.Redirect("/Account/ChangePassword?success=true");
+    
+    return Results.Redirect("/Account/ChangePassword?error=Failed+to+change+password");
+}).DisableAntiforgery();
+```
+
+### Membership API Migration
+
+| Membership Method | ASP.NET Core Identity Equivalent |
+|------------------|----------------------------------|
+| `Membership.CreateUser(...)` | `userManager.CreateAsync(user, password)` |
+| `Membership.GetUser(username)` | `await userManager.FindByNameAsync(username)` |
+| `Membership.GetUser()` | `await userManager.GetUserAsync(User)` (in component) |
+| `Membership.DeleteUser(username)` | `await userManager.DeleteAsync(user)` |
+| `Membership.ValidateUser(username, password)` | `await signInManager.PasswordSignInAsync(...)` |
+| `Membership.UpdateUser(user)` | `await userManager.UpdateAsync(user)` |
+| `user.ChangePassword(old, new)` | `await userManager.ChangePasswordAsync(user, old, new)` |
+| `user.IsApproved` | Check `user.EmailConfirmed` or custom property |
+| `user.IsLockedOut` | `await userManager.IsLockedOutAsync(user)` |
+| `Membership.GetAllUsers()` | `userManager.Users.ToListAsync()` |
+
+### Database Schema Migration (Membership → Identity)
+
+ASP.NET Membership and ASP.NET Core Identity use **different database schemas**. Migration requires:
+
+1. **Schema mapping:**
+
+| Membership Table | Identity Table | Notes |
+|-----------------|---------------|-------|
+| `aspnet_Users` | `AspNetUsers` | UserName, Email, PasswordHash |
+| `aspnet_Membership` | `AspNetUsers` | Password fields merged into AspNetUsers |
+| `aspnet_Roles` | `AspNetRoles` | Role names |
+| `aspnet_UsersInRoles` | `AspNetUserRoles` | User-role mappings |
+
+2. **Password hash compatibility:**
+
+> **Critical:** Membership password hashes are **NOT compatible** with Identity. Users will need to:
+> - Reset passwords (send password reset emails)
+> - Or implement a custom `IPasswordHasher` that validates both formats during a transition period
+
+```csharp
+// Custom password hasher for transition period
+public class LegacyPasswordHasher : IPasswordHasher<ApplicationUser>
+{
+    public string HashPassword(ApplicationUser user, string password)
+    {
+        // Use new Identity hasher
+        var hasher = new PasswordHasher<ApplicationUser>();
+        return hasher.HashPassword(user, password);
+    }
+    
+    public PasswordVerificationResult VerifyHashedPassword(ApplicationUser user, string hashedPassword, string providedPassword)
+    {
+        // Try Identity format first
+        var hasher = new PasswordHasher<ApplicationUser>();
+        var result = hasher.VerifyHashedPassword(user, hashedPassword, providedPassword);
+        
+        if (result == PasswordVerificationResult.Failed)
+        {
+            // Try legacy Membership format
+            if (VerifyLegacyPassword(hashedPassword, providedPassword))
+            {
+                return PasswordVerificationResult.SuccessRehashNeeded;
+            }
+        }
+        
+        return result;
+    }
+    
+    private bool VerifyLegacyPassword(string hashedPassword, string providedPassword)
+    {
+        // Implement Membership password verification (SHA1/SHA256 + salt)
+        // This depends on your Membership configuration
+        return false; // Placeholder
+    }
+}
+
+// Program.cs
+builder.Services.AddScoped<IPasswordHasher<ApplicationUser>, LegacyPasswordHasher>();
+```
+
+---
+
+## Roles Provider Migration
+
+### Web Forms Pattern
+
+```csharp
+// Web Forms — Using Roles provider
+if (Roles.IsUserInRole(username, "Administrator"))
+{
+    // Admin logic
+}
+
+string[] roles = Roles.GetRolesForUser(username);
+Roles.AddUserToRole(username, "Manager");
+Roles.RemoveUserFromRole(username, "User");
+
+// Web Forms — web.config
+<roleManager enabled="true" />
+```
+
+### Blazor Pattern: ASP.NET Core Identity Roles
+
+```csharp
+// Program.cs — Identity with roles
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireAdministrator", policy => policy.RequireRole("Administrator"));
+    options.AddPolicy("RequireManager", policy => policy.RequireRole("Manager", "Administrator"));
+});
+```
+
+```csharp
+// Component or service — using RoleManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject UserManager<ApplicationUser> UserManager
+
+@code {
+    private async Task AssignRoleAsync(string username, string roleName)
+    {
+        var user = await UserManager.FindByNameAsync(username);
+        if (user != null)
+        {
+            if (!await RoleManager.RoleExistsAsync(roleName))
+            {
+                await RoleManager.CreateAsync(new IdentityRole(roleName));
+            }
+            
+            await UserManager.AddToRoleAsync(user, roleName);
+        }
+    }
+    
+    private async Task<bool> IsUserInRoleAsync(string username, string roleName)
+    {
+        var user = await UserManager.FindByNameAsync(username);
+        return user != null && await UserManager.IsInRoleAsync(user, roleName);
+    }
+    
+    private async Task<IList<string>> GetUserRolesAsync(string username)
+    {
+        var user = await UserManager.FindByNameAsync(username);
+        return user != null ? await UserManager.GetRolesAsync(user) : new List<string>();
+    }
+}
+```
+
+### Roles API Migration
+
+| Roles Method | ASP.NET Core Identity Equivalent |
+|-------------|----------------------------------|
+| `Roles.IsUserInRole(username, role)` | `await userManager.IsInRoleAsync(user, role)` |
+| `Roles.GetRolesForUser(username)` | `await userManager.GetRolesAsync(user)` |
+| `Roles.AddUserToRole(username, role)` | `await userManager.AddToRoleAsync(user, role)` |
+| `Roles.RemoveUserFromRole(username, role)` | `await userManager.RemoveFromRoleAsync(user, role)` |
+| `Roles.CreateRole(roleName)` | `await roleManager.CreateAsync(new IdentityRole(roleName))` |
+| `Roles.DeleteRole(roleName)` | `await roleManager.DeleteAsync(role)` |
+| `Roles.RoleExists(roleName)` | `await roleManager.RoleExistsAsync(roleName)` |
+| `Roles.GetAllRoles()` | `roleManager.Roles.ToListAsync()` |
+| `Roles.GetUsersInRole(roleName)` | `await userManager.GetUsersInRoleAsync(roleName)` |
+
+### Policy-Based Authorization (Modern Pattern)
+
+Instead of checking roles in code, use policy-based authorization:
+
+```csharp
+// Program.cs — Define policies
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireAdmin", policy => policy.RequireRole("Administrator"));
+    options.AddPolicy("RequireEditor", policy => policy.RequireRole("Editor", "Administrator"));
+    options.AddPolicy("RequireApprover", policy => policy.RequireAssertion(context =>
+        context.User.IsInRole("Manager") || context.User.IsInRole("Administrator")));
+});
+```
+
+```razor
+@* Page-level authorization *@
+@page "/Admin"
+@attribute [Authorize(Policy = "RequireAdmin")]
+
+<h1>Admin Panel</h1>
+```
+
+```razor
+@* Conditional UI based on policy *@
+<AuthorizeView Policy="RequireAdmin">
+    <Authorized>
+        <button>Delete All</button>
+    </Authorized>
+</AuthorizeView>
+
+<AuthorizeView Roles="Editor,Administrator">
+    <Authorized>
+        <button>Edit Content</button>
+    </Authorized>
+</AuthorizeView>
+```
+
+---
+
+## Migration Cheat Sheet
+
+### Quick Reference: Authentication System Detection
+
+Look for these patterns in the Web Forms project to identify which auth system is in use:
+
+| Pattern | Auth System | Migration Complexity |
+|---------|------------|---------------------|
+| `using Microsoft.AspNet.Identity;` | OWIN Identity | 🟢 Easy — closest match |
+| `Startup.Auth.cs` with `app.UseCookieAuthentication` | OWIN Identity | 🟢 Easy |
+| `using System.Web.Security;` with `Membership.CreateUser` | Membership | 🟡 Medium — schema + password migration |
+| `FormsAuthentication.SetAuthCookie` | FormsAuthentication | 🟡 Medium — manual auth implementation |
+| `web.config` `<authentication mode="Forms">` | FormsAuthentication | 🟡 Medium |
+| `web.config` `<roleManager enabled="true">` | Roles Provider | 🟢 Easy — convert to Identity roles |
+
+### Quick Reference: Code Patterns
+
+| Web Forms Pattern | Blazor Equivalent |
+|------------------|-------------------|
+| `FormsAuthentication.SetAuthCookie(user, persist)` | `await HttpContext.SignInAsync(...)` in minimal API |
+| `FormsAuthentication.SignOut()` | `await HttpContext.SignOutAsync()` in minimal API |
+| `Membership.CreateUser(user, pw, email)` | `await userManager.CreateAsync(user, password)` |
+| `Membership.ValidateUser(user, pw)` | `await signInManager.PasswordSignInAsync(...)` |
+| `Roles.IsUserInRole(user, role)` | `await userManager.IsInRoleAsync(user, role)` or `User.IsInRole(role)` |
+| `Roles.AddUserToRole(user, role)` | `await userManager.AddToRoleAsync(user, role)` |
+| `User.Identity.IsAuthenticated` | `User.Identity?.IsAuthenticated ?? false` (works unchanged) |
+| `User.Identity.Name` | `User.Identity?.Name` (works unchanged) |
