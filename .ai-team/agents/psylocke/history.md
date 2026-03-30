@@ -40,3 +40,48 @@
 
  Team update (2026-03-06): WebFormsPageBase is the canonical base class for all migrated pages (not ComponentBase). All agents must use WebFormsPageBase  decided by Jeffrey T. Fritz
  Team update (2026-03-06): LoginView is a native BWFC component  do NOT convert to AuthorizeView. Strip asp: prefix only  decided by Jeffrey T. Fritz
+
+### 2026-03-30: Phase 4 Migration Skills — L1 Frozen, L2 Skills Created
+
+**Strategic decision:** L1 PowerShell script (`bwfc-migrate.ps1`) is **frozen at Phase 3**. It handles ~70% of migration work (deterministic transforms). All remaining work shifts to **Layer 2 (L2) Copilot skills** for contextual, AI-guided transforms.
+
+**Rationale:**
+- Deterministic regex/AST transforms have reached their practical limit (~70% coverage)
+- Remaining gaps require contextual reasoning: architecture decisions, cross-file understanding, domain knowledge
+- L1 can *detect* patterns but cannot reliably *convert* them without risking incorrect migrations
+- Skills provide decision trees, before/after examples, and "What Developers Must Do Manually" guidance
+
+**Skills created:**
+- `bwfc-session-state/SKILL.md` (low confidence) — Application["key"] → singleton/scoped services, Cache["key"] → IMemoryCache, HttpContext.Current → IHttpContextAccessor. Covers items #13, #14, #15, #16 from migration-shim-analysis.
+- `bwfc-middleware-migration/SKILL.md` (low confidence) — HttpModule → middleware, Global.asax events → Program.cs (Application_Start, Session_Start, Application_Error). Covers items #22, #23, #24.
+- `bwfc-usercontrol-migration/SKILL.md` (low confidence) — .ascx → component with [Parameter], FindControl → @ref patterns, parent/child communication, event delegation. Covers items #30, #31, #8.
+
+**Skills enhanced:**
+- `bwfc-identity-migration/SKILL.md` (v2.0.0, low → low confidence) — Added comprehensive FormsAuthentication, Membership provider, and Roles provider migration patterns. Includes:
+  - FormsAuthentication.SetAuthCookie → HttpContext.SignInAsync in minimal API endpoints
+  - Membership.CreateUser → UserManager<T>.CreateAsync with password hash compatibility notes
+  - Roles.IsUserInRole → UserManager<T>.IsInRoleAsync + policy-based authorization
+  - Database schema migration table (Membership → Identity)
+  - Migration cheat sheet for detecting auth system in Web Forms projects
+  - Covers items #25, #26, #27 from migration-shim-analysis.
+
+**Updated documentation:**
+- `bwfc-migration/CODE-TRANSFORMS.md` — Added "Phase 4: Skills-Based Transforms" section explaining:
+  - Why L1 is frozen (deterministic vs contextual)
+  - L1 vs L2 decision table
+  - Three-layer migration strategy (L1 automated, L2 AI-guided, L3 developer judgment)
+  - Links to each Phase 4 skill
+
+**Key patterns identified:**
+- **Application state decisions:** L1 can detect `Application["key"]`, but only developers can decide if data is global (singleton) or per-user (scoped)
+- **Cache lifetime decisions:** L1 can detect `Cache["key"]`, but only developers know if data should use IMemoryCache or IDistributedCache
+- **HttpModule event mapping:** L1 can detect IHttpModule classes, but only developers understand the business logic to map correctly to middleware
+- **FindControl patterns:** L1 can detect FindControl() calls, but understanding component tree structure requires human reasoning
+- **Authentication system detection:** Projects may use Identity (OWIN), Membership, or FormsAuthentication — each requires different migration paths
+
+**Confidence levels:**
+- All new skills marked as "low confidence" — these are first-draft guides based on Forge's analysis
+- Skills will iterate based on real-world migration feedback
+- "What Developers Must Do Manually" sections explicitly document non-automatable tasks
+
+**Team decision recorded:** L1 PowerShell frozen at Phase 3. Phase 4 = skills-based L2 transforms only.
