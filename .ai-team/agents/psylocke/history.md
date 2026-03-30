@@ -85,3 +85,18 @@
 - "What Developers Must Do Manually" sections explicitly document non-automatable tasks
 
 **Team decision recorded:** L1 PowerShell frozen at Phase 3. Phase 4 = skills-based L2 transforms only.
+
+**Skills created:**
+- wfc-session-state/SKILL.md  Application[], Cache[], HttpContext.Current state migration decisions (singleton vs scoped, IMemoryCache vs IDistributedCache)
+- wfc-middleware-migration/SKILL.md  HttpModule, Global.asax  middleware conversion (event  middleware position mapping, pipeline order)
+- wfc-usercontrol-migration/SKILL.md  .ascx, FindControl, [Parameter]  component conversion (public property vs internal state, @ref timing)
+- wfc-identity-migration/SKILL.md (v2)  Added FormsAuthentication, Membership, Roles sections (auth system detection, password hash compatibility)
+
+**Documentation updated:**
+- migration-toolkit/skills/bwfc-migration/CODE-TRANSFORMS.md  Added "Phase 4: Skills-Based Transforms" section
+- .ai-team/agents/psylocke/history.md  Recorded Phase 4 learnings
+
+**Strategic outcome:** Three-layer migration model formalized and locked in:
+1. L1 (PowerShell)  70% deterministic automation  **FROZEN at Phase 3**
+2. L2 (Skills)  25% contextual AI-guided transforms  **Phase 4 active**
+3. L3 (Developer)  5% architectural decisions  **always requires human review**

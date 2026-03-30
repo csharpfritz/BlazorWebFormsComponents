@@ -105,3 +105,9 @@ Added `Convert-PageLifecycleMethods` (GAP-05) and `Convert-EventHandlerSignature
 - GAP-05: Page_Load  OnInitializedAsync, Page_Init  OnInitialized, Page_PreRender  OnAfterRenderAsync(bool firstRender)
 - GAP-07: Standard EventArgs handlers strip both params; specialized *EventArgs handlers keep the EventArgs param, strip sender
 - Updated 6 expected test files. All 21 L1 tests pass at 100% line accuracy.
+
+### 2026-03-30: Squad CI Workflow  fetch-depth: 0 Fix
+
+**What:** Added etch-depth: 0 to .github/workflows/squad-ci.yml checkout step. Audited all other squad-*.yml workflows for the same issue (found existing fix in squad-insider-release.yml, squad-promote.yml, squad-release.yml).
+**Why:** Nerdbank.GitVersioning requires full git history. ctions/checkout@v4 defaults to shallow clone (etch-depth: 1), causing GitException in PR #114. Fix ensures CI checks pass with no performance impact.
+**Outcome:** PR #114 CI unblocked. All .NET-building workflows now have consistent configuration.
