@@ -2,6 +2,7 @@ using System.CommandLine;
 using BlazorWebFormsComponents.Cli.Io;
 using BlazorWebFormsComponents.Cli.Pipeline;
 using BlazorWebFormsComponents.Cli.Transforms;
+using BlazorWebFormsComponents.Cli.Transforms.CodeBehind;
 using BlazorWebFormsComponents.Cli.Transforms.Directives;
 using BlazorWebFormsComponents.Cli.Transforms.Markup;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,6 +45,19 @@ class Program
         services.AddSingleton<IMarkupTransform, TemplatePlaceholderTransform>();
         services.AddSingleton<IMarkupTransform, AttributeNormalizeTransform>();
         services.AddSingleton<IMarkupTransform, DataSourceIdTransform>();
+
+        // Register code-behind transforms in order
+        services.AddSingleton<ICodeBehindTransform, TodoHeaderTransform>();
+        services.AddSingleton<ICodeBehindTransform, UsingStripTransform>();
+        services.AddSingleton<ICodeBehindTransform, BaseClassStripTransform>();
+        services.AddSingleton<ICodeBehindTransform, ResponseRedirectTransform>();
+        services.AddSingleton<ICodeBehindTransform, SessionDetectTransform>();
+        services.AddSingleton<ICodeBehindTransform, ViewStateDetectTransform>();
+        services.AddSingleton<ICodeBehindTransform, IsPostBackTransform>();
+        services.AddSingleton<ICodeBehindTransform, PageLifecycleTransform>();
+        services.AddSingleton<ICodeBehindTransform, EventHandlerSignatureTransform>();
+        services.AddSingleton<ICodeBehindTransform, DataBindTransform>();
+        services.AddSingleton<ICodeBehindTransform, UrlCleanupTransform>();
 
         // Pipeline
         services.AddSingleton<MigrationPipeline>();

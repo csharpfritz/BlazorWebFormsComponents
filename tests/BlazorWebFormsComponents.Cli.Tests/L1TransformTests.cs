@@ -1,5 +1,7 @@
 namespace BlazorWebFormsComponents.Cli.Tests;
 
+using BlazorWebFormsComponents.Cli.Pipeline;
+
 /// <summary>
 /// Parameterized L1 transform acceptance tests.
 /// Each TC* test case reads input .aspx (and optional .aspx.cs), runs the full
@@ -11,6 +13,7 @@ namespace BlazorWebFormsComponents.Cli.Tests;
 public class L1TransformTests
 {
     private static readonly string TestDataRoot = TestHelpers.GetTestDataRoot();
+    private readonly MigrationPipeline _pipeline = TestHelpers.CreateDefaultPipeline();
 
     /// <summary>
     /// Provides all markup test case names for [Theory] parameterization.
@@ -31,9 +34,6 @@ public class L1TransformTests
             .Select(name => new object[] { name });
     }
 
-    // TODO: Uncomment when MigrationPipeline is built by Bishop.
-    // private readonly MigrationPipeline _pipeline = TestHelpers.CreateDefaultPipeline();
-
     [Theory]
     [MemberData(nameof(GetMarkupTestCases))]
     public void L1Transform_ProducesExpectedMarkup(string testCaseName)
@@ -49,18 +49,26 @@ public class L1TransformTests
         var expected = TestHelpers.NormalizeContent(File.ReadAllText(expectedPath));
 
         // Act
-        // TODO: Replace with pipeline call when MigrationPipeline is built:
-        //   var metadata = new FileMetadata { SourceFilePath = inputPath, FileType = FileType.Page };
-        //   var result = _pipeline.TransformMarkup(input, metadata);
-        //   var actual = TestHelpers.NormalizeContent(result);
-        //
-        // For now, verify test infrastructure works by asserting files are readable
-        Assert.False(string.IsNullOrWhiteSpace(input), "Input file should not be empty");
-        Assert.False(string.IsNullOrWhiteSpace(expected), "Expected file should not be empty");
+        var ext = Path.GetExtension(inputPath).ToLowerInvariant();
+        var fileType = ext switch
+        {
+            ".master" => FileType.Master,
+            ".ascx" => FileType.Control,
+            _ => FileType.Page
+        };
+        var metadata = new FileMetadata
+        {
+            SourceFilePath = inputPath,
+            OutputFilePath = inputPath.Replace(".aspx", ".razor"),
+            FileType = fileType,
+            OriginalContent = input
+        };
 
-        // Placeholder assertion — will be replaced with actual transform comparison.
-        // This ensures the test data is properly discovered and loadable.
-        Assert.NotEqual(expected, TestHelpers.NormalizeContent(input));
+        var result = _pipeline.TransformMarkup(input, metadata);
+        var actual = TestHelpers.NormalizeContent(result);
+
+        // Assert
+        Assert.Equal(expected, actual);
     }
 
     [Theory]
@@ -78,18 +86,19 @@ public class L1TransformTests
         var expectedCs = TestHelpers.NormalizeContent(File.ReadAllText(expectedCsPath));
 
         // Act
-        // TODO: Replace with pipeline call when code-behind transforms are built:
-        //   var metadata = new FileMetadata { SourceFilePath = inputCsPath, FileType = FileType.CodeBehind };
-        //   var result = _pipeline.TransformCodeBehind(inputCs, metadata);
-        //   var actualCs = TestHelpers.NormalizeContent(result);
-        //   Assert.Equal(expectedCs, actualCs);
-        //
-        // For now, verify the test data is properly paired and loadable
-        Assert.False(string.IsNullOrWhiteSpace(inputCs), "Input code-behind should not be empty");
-        Assert.False(string.IsNullOrWhiteSpace(expectedCs), "Expected code-behind should not be empty");
+        var metadata = new FileMetadata
+        {
+            SourceFilePath = inputCsPath,
+            OutputFilePath = inputCsPath.Replace(".aspx.cs", ".razor.cs"),
+            FileType = FileType.Page,
+            OriginalContent = inputCs
+        };
 
-        // Placeholder assertion — input and expected should differ (transforms change content)
-        Assert.NotEqual(expectedCs, TestHelpers.NormalizeContent(inputCs));
+        var result = _pipeline.TransformCodeBehind(inputCs, metadata);
+        var actualCs = TestHelpers.NormalizeContent(result);
+
+        // Assert
+        Assert.Equal(expectedCs, actualCs);
     }
 
     [Fact]

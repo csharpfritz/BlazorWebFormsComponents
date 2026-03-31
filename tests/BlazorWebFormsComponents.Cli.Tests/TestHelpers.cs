@@ -1,5 +1,10 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using BlazorWebFormsComponents.Cli.Pipeline;
+using BlazorWebFormsComponents.Cli.Transforms;
+using BlazorWebFormsComponents.Cli.Transforms.CodeBehind;
+using BlazorWebFormsComponents.Cli.Transforms.Directives;
+using BlazorWebFormsComponents.Cli.Transforms.Markup;
 
 namespace BlazorWebFormsComponents.Cli.Tests;
 
@@ -96,59 +101,54 @@ public static class TestHelpers
             .Distinct();
     }
 
-    // TODO: Uncomment when MigrationPipeline and transform interfaces are built by Bishop.
-    //
-    // /// <summary>
-    // /// Creates a fully configured MigrationPipeline with all markup and code-behind
-    // /// transforms registered in the canonical order from global-tool-architecture.md.
-    // /// </summary>
-    // public static MigrationPipeline CreateDefaultPipeline()
-    // {
-    //     var markupTransforms = new List<IMarkupTransform>
-    //     {
-    //         // Order 100-120: Directives
-    //         new PageDirectiveTransform(),
-    //         new MasterDirectiveTransform(),
-    //         new ControlDirectiveTransform(),
-    //         // Order 200-210: Imports & Registers
-    //         new ImportDirectiveTransform(),
-    //         new RegisterDirectiveTransform(),
-    //         // Order 300-310: Content/Form wrappers
-    //         new ContentWrapperTransform(),
-    //         new FormWrapperTransform(),
-    //         // Order 400: Route URLs
-    //         new GetRouteUrlTransform(),
-    //         // Order 500-520: Expressions
-    //         new ExpressionTransform(),
-    //         new LoginViewTransform(),
-    //         new SelectMethodTransform(),
-    //         // Order 600-610: Prefix stripping (Ajax before Asp)
-    //         new AjaxToolkitPrefixTransform(),
-    //         new AspPrefixTransform(),
-    //         // Order 700-720: Attributes
-    //         new AttributeStripTransform(),
-    //         new EventWiringTransform(),
-    //         new UrlReferenceTransform(),
-    //         // Order 800-820: Normalize & templates
-    //         new TemplatePlaceholderTransform(),
-    //         new AttributeNormalizeTransform(),
-    //         new DataSourceIdTransform(),
-    //     };
-    //
-    //     var codeBehindTransforms = new List<ICodeBehindTransform>
-    //     {
-    //         new UsingStripTransform(),
-    //         new BaseClassStripTransform(),
-    //         new ResponseRedirectTransform(),
-    //         new SessionDetectTransform(),
-    //         new ViewStateDetectTransform(),
-    //         new IsPostBackTransform(),
-    //         new PageLifecycleTransform(),
-    //         new EventHandlerSignatureTransform(),
-    //         new DataBindTransform(),
-    //         new UrlCleanupTransform(),
-    //     };
-    //
-    //     return new MigrationPipeline(markupTransforms, codeBehindTransforms);
-    // }
+    /// <summary>
+    /// Creates a fully configured MigrationPipeline with all markup and code-behind
+    /// transforms registered in the canonical order.
+    /// </summary>
+    public static MigrationPipeline CreateDefaultPipeline()
+    {
+        var markupTransforms = new List<IMarkupTransform>
+        {
+            // Order 100-120: Directives
+            new PageDirectiveTransform(),
+            new MasterDirectiveTransform(),
+            new ControlDirectiveTransform(),
+            // Order 200-210: Imports & Registers
+            new ImportDirectiveTransform(),
+            new RegisterDirectiveTransform(),
+            // Order 300-310: Content/Form wrappers
+            new ContentWrapperTransform(),
+            new FormWrapperTransform(),
+            // Order 500: Expressions
+            new ExpressionTransform(),
+            // Order 600-610: Prefix stripping (Ajax before Asp)
+            new AjaxToolkitPrefixTransform(),
+            new AspPrefixTransform(),
+            // Order 700-720: Attributes
+            new AttributeStripTransform(),
+            new EventWiringTransform(),
+            new UrlReferenceTransform(),
+            // Order 800-820: Normalize & templates
+            new TemplatePlaceholderTransform(),
+            new AttributeNormalizeTransform(),
+            new DataSourceIdTransform(),
+        };
+
+        var codeBehindTransforms = new List<ICodeBehindTransform>
+        {
+            new TodoHeaderTransform(),
+            new UsingStripTransform(),
+            new BaseClassStripTransform(),
+            new ResponseRedirectTransform(),
+            new SessionDetectTransform(),
+            new ViewStateDetectTransform(),
+            new IsPostBackTransform(),
+            new PageLifecycleTransform(),
+            new EventHandlerSignatureTransform(),
+            new DataBindTransform(),
+            new UrlCleanupTransform(),
+        };
+
+        return new MigrationPipeline(markupTransforms, codeBehindTransforms);
+    }
 }

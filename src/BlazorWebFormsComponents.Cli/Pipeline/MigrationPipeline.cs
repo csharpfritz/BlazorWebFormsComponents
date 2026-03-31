@@ -102,4 +102,16 @@ public class MigrationPipeline
         }
         return content;
     }
+
+    /// <summary>
+    /// Run only the code-behind pipeline on a single string.
+    /// </summary>
+    public string TransformCodeBehind(string content, FileMetadata metadata)
+    {
+        foreach (var transform in _codeBehindTransforms)
+        {
+            content = transform.Apply(content, metadata);
+        }
+        return content;
+    }
 }

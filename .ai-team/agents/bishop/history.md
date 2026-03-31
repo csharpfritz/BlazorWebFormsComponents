@@ -105,3 +105,36 @@ Added `Convert-PageLifecycleMethods` (GAP-05) and `Convert-EventHandlerSignature
 - GAP-05: Page_Load  OnInitializedAsync, Page_Init  OnInitialized, Page_PreRender  OnAfterRenderAsync(bool firstRender)
 - GAP-07: Standard EventArgs handlers strip both params; specialized *EventArgs handlers keep the EventArgs param, strip sender
 - Updated 6 expected test files. All 21 L1 tests pass at 100% line accuracy.
+
+## Phase 3: Code-Behind C# Transforms — TC13-TC21 (2026-03-30)
+
+Ported all 10 code-behind transforms from PowerShell regex patterns to C# classes implementing `ICodeBehindTransform`.
+
+### Transforms Built (in pipeline order)
+| Order | Class | Coverage |
+|-------|-------|----------|
+| 10 | `TodoHeaderTransform` | Injects migration guidance header |
+| 100 | `UsingStripTransform` | Strips System.Web.*, Microsoft.AspNet.*, Microsoft.Owin.*, Owin usings |
+| 200 | `BaseClassStripTransform` | Removes `: System.Web.UI.Page` etc. from partial classes |
+| 300 | `ResponseRedirectTransform` | `Response.Redirect()` → `NavigationManager.NavigateTo()` + [Inject] injection |
+| 400 | `SessionDetectTransform` | Detects `Session["key"]`, generates migration guidance block |
+| 410 | `ViewStateDetectTransform` | Detects `ViewState["key"]`, generates field replacement suggestions |
+| 500 | `IsPostBackTransform` | Unwraps simple `if (!IsPostBack)` guards (brace-counting), TODO for else clauses |
+| 600 | `PageLifecycleTransform` | Page_Load→OnInitializedAsync, Page_Init→OnInitialized, Page_PreRender→OnAfterRenderAsync |
+| 700 | `EventHandlerSignatureTransform` | Strips (object sender, EventArgs e); keeps specialized EventArgs |
+| 800 | `DataBindTransform` | Cross-file DataSource/DataBind handling + InjectItemsAttributes for markup |
+| 900 | `UrlCleanupTransform` | .aspx URL literals → clean routes |
+
+### Infrastructure Changes
+- Added `TransformCodeBehind()` public method to `MigrationPipeline` for test access
+- Registered all 11 code-behind transforms in `Program.cs` DI container
+- Activated real pipeline in `TestHelpers.CreateDefaultPipeline()` (replaced TODO stubs)
+- Activated real assertions in `L1TransformTests` for both markup and code-behind tests
+- Fixed TC20/TC21 expected markup files: `OnClick="@Handler"` matches EventWiringTransform output
+
+### Key Learnings
+- **IDE0007 enforcement:** Project .editorconfig treats `var` preference as error. Always use `var` over explicit types.
+- **Transform ordering matters:** ResponseRedirect strips `~/` but preserves `.aspx`; UrlCleanup then handles `.aspx` patterns on `"~/..."` and relative NavigateTo forms. URLs like `/Products.aspx` survive because URL cleanup patterns don't match leading `/`.
+- **TodoHeader as standalone transform (Order 10):** Splitting the TODO header into its own transform class keeps Session/ViewState detect transforms cleaner — they find the marker and insert after it.
+- **Test discovery was previously placeholder:** The old tests only verified input ≠ expected. Wiring real pipeline exposed TC20/TC21 markup mismatches from EventWiringTransform `@` prefix.
+- **All 72 tests pass:** 21 markup + 8 code-behind + 4 infrastructure + 39 unit tests.
