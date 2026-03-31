@@ -144,3 +144,39 @@ Both functions called in `Copy-CodeBehind` after existing transforms, before fil
 Updated 6 expected test files (TC13, TC14, TC15, TC16, TC18, TC19) to reflect new transforms.
 TC19 (lifecycle) and TC20/TC21 (event handlers) are dedicated test cases for these features.
 **All 21 tests pass at 100% line accuracy.**
+
+
+### Global Tool Pipeline Infrastructure + First 16 Markup Transforms (2026-07-27)
+
+**Task**: Build the C# global tool pipeline from the architecture doc (`dev-docs/global-tool-architecture.md`), replacing the PR #328 single-converter approach with the full sequential pipeline.
+
+**Implementation Details**:
+
+- **Pipeline Infrastructure**: Created `MigrationPipeline.cs` (orchestrates IMarkupTransform + ICodeBehindTransform chains, sorted by Order), `MigrationContext.cs` (per-file + project state), `FileMetadata.cs` (per-file metadata with FileType enum), `TransformResult.cs` (immutable step result), `MigrationReport.cs` (summary metrics).
+
+- **Transform Interfaces**: `IMarkupTransform` and `ICodeBehindTransform` with Name, Order, Apply(content, metadata) contract. All transforms are DI-registered singletons sorted by Order at pipeline construction time.
+
+- **SourceScanner**: Discovers .aspx/.ascx/.master files, pairs with .cs/.vb code-behind, generates output paths with .razor extension.
+
+- **16 Markup Transforms** (all regex patterns ported exactly from bwfc-migrate.ps1):
+  - Directives (100-210): PageDirective, MasterDirective, ControlDirective, ImportDirective, RegisterDirective
+  - Content/Form (300-310): ContentWrapper, FormWrapper
+  - Expressions (500): ExpressionTransform (comments, Bind(), Eval(), Item., encoded/unencoded)
+  - Tag Prefixes (600-610): AjaxToolkitPrefix, AspPrefix (+ ContentTemplate stripping, uc: prefix)
+  - Attributes (700-720): AttributeStrip (runat, AutoEventWireup, etc. + ItemTypeTItem + IDid + ItemType="object" fallback), EventWiring, UrlReference
+  - Normalization (800-820): TemplatePlaceholder, AttributeNormalize (booleans, enums, px units), DataSourceId
+
+- **CLI Subcommands**: Replaced single root command with `migrate` (full project) and `convert` (single file) subcommands per architecture doc. Options: --input, --output, --skip-scaffold, --dry-run, --verbose, --overwrite, --use-ai, --report.
+
+- **Deleted**: AscxToRazorConverter.cs (replaced by pipeline + transforms).
+
+- **PackageId**: Changed from `WebformsToBlazor.Cli` to `Fritz.WebFormsToBlazor`.
+
+**Validation**: All 12 test cases (TC01-TC12) produce exact expected output. Zero build errors.
+
+**Key Learnings**:
+1. Order of transforms matters critically  AjaxToolkitPrefix (600) MUST run before AspPrefix (610) to avoid treating `ajaxToolkit:` controls as `asp:` controls.
+2. AttributeStrip's ItemType="object" fallback injects BEFORE other attributes in the tag, matching the PS script's behavior and test expectations.
+3. Expression transforms must be ordered: Bind() before Eval() before encoded/unencoded, with comments first.
+4. DataSourceId transform runs last (820) because it matches bare control names (asp: prefix already stripped).
+5. ContentWrapperTransform strips asp:Content open+close tags using horizontal-whitespace-only patterns to avoid consuming indentation on the next line.
