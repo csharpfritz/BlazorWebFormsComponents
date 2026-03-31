@@ -1,0 +1,154 @@
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace BlazorWebFormsComponents.Cli.Tests;
+
+/// <summary>
+/// Shared test utilities for L1 transform testing.
+/// Normalization logic ported from migration-toolkit/tests/Run-L1Tests.ps1.
+/// </summary>
+public static class TestHelpers
+{
+    /// <summary>
+    /// Normalizes content for comparison by:
+    /// 1. Normalizing line endings (CRLF → LF)
+    /// 2. Trimming trailing whitespace from each line
+    /// 3. Removing trailing empty lines (collapses to zero trailing blanks)
+    /// 4. Trimming leading/trailing whitespace from the entire result
+    /// </summary>
+    public static string NormalizeContent(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        // Normalize CRLF → LF
+        var normalized = text.Replace("\r\n", "\n");
+
+        // Split into lines, trim trailing whitespace from each line
+        var lines = normalized.Split('\n')
+            .Select(line => line.TrimEnd())
+            .ToList();
+
+        // Remove trailing empty lines
+        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[^1]))
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Resolves the TestData directory relative to the test assembly output.
+    /// Works both from IDE (bin/Debug) and dotnet test contexts.
+    /// </summary>
+    public static string GetTestDataRoot()
+    {
+        // Try output directory first (for CopyToOutputDirectory items)
+        var assemblyDir = Path.GetDirectoryName(typeof(TestHelpers).Assembly.Location)!;
+        var outputTestData = Path.Combine(assemblyDir, "TestData");
+        if (Directory.Exists(outputTestData))
+            return outputTestData;
+
+        // Fallback: walk up from assembly location to find the project TestData
+        var dir = new DirectoryInfo(assemblyDir);
+        while (dir != null)
+        {
+            var candidate = Path.Combine(dir.FullName, "TestData");
+            if (Directory.Exists(candidate) &&
+                Directory.Exists(Path.Combine(candidate, "inputs")) &&
+                Directory.Exists(Path.Combine(candidate, "expected")))
+            {
+                return candidate;
+            }
+            dir = dir.Parent;
+        }
+
+        throw new DirectoryNotFoundException(
+            "Could not locate TestData directory. Ensure TestData/inputs and TestData/expected exist.");
+    }
+
+    /// <summary>
+    /// Discovers all TC* test case names from the TestData/inputs directory.
+    /// Returns base names without extensions (e.g., "TC01-AspPrefix").
+    /// </summary>
+    public static IEnumerable<string> DiscoverTestCases()
+    {
+        var inputDir = Path.Combine(GetTestDataRoot(), "inputs");
+        return Directory.GetFiles(inputDir, "*.aspx")
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .OrderBy(name => name)
+            .Distinct();
+    }
+
+    /// <summary>
+    /// Discovers test case names that have code-behind files (.aspx.cs inputs and .razor.cs expected).
+    /// </summary>
+    public static IEnumerable<string> DiscoverCodeBehindTestCases()
+    {
+        var inputDir = Path.Combine(GetTestDataRoot(), "inputs");
+        var expectedDir = Path.Combine(GetTestDataRoot(), "expected");
+
+        return Directory.GetFiles(inputDir, "*.aspx.cs")
+            .Select(f => Path.GetFileName(f).Replace(".aspx.cs", ""))
+            .Where(name => File.Exists(Path.Combine(expectedDir, $"{name}.razor.cs")))
+            .OrderBy(name => name)
+            .Distinct();
+    }
+
+    // TODO: Uncomment when MigrationPipeline and transform interfaces are built by Bishop.
+    //
+    // /// <summary>
+    // /// Creates a fully configured MigrationPipeline with all markup and code-behind
+    // /// transforms registered in the canonical order from global-tool-architecture.md.
+    // /// </summary>
+    // public static MigrationPipeline CreateDefaultPipeline()
+    // {
+    //     var markupTransforms = new List<IMarkupTransform>
+    //     {
+    //         // Order 100-120: Directives
+    //         new PageDirectiveTransform(),
+    //         new MasterDirectiveTransform(),
+    //         new ControlDirectiveTransform(),
+    //         // Order 200-210: Imports & Registers
+    //         new ImportDirectiveTransform(),
+    //         new RegisterDirectiveTransform(),
+    //         // Order 300-310: Content/Form wrappers
+    //         new ContentWrapperTransform(),
+    //         new FormWrapperTransform(),
+    //         // Order 400: Route URLs
+    //         new GetRouteUrlTransform(),
+    //         // Order 500-520: Expressions
+    //         new ExpressionTransform(),
+    //         new LoginViewTransform(),
+    //         new SelectMethodTransform(),
+    //         // Order 600-610: Prefix stripping (Ajax before Asp)
+    //         new AjaxToolkitPrefixTransform(),
+    //         new AspPrefixTransform(),
+    //         // Order 700-720: Attributes
+    //         new AttributeStripTransform(),
+    //         new EventWiringTransform(),
+    //         new UrlReferenceTransform(),
+    //         // Order 800-820: Normalize & templates
+    //         new TemplatePlaceholderTransform(),
+    //         new AttributeNormalizeTransform(),
+    //         new DataSourceIdTransform(),
+    //     };
+    //
+    //     var codeBehindTransforms = new List<ICodeBehindTransform>
+    //     {
+    //         new UsingStripTransform(),
+    //         new BaseClassStripTransform(),
+    //         new ResponseRedirectTransform(),
+    //         new SessionDetectTransform(),
+    //         new ViewStateDetectTransform(),
+    //         new IsPostBackTransform(),
+    //         new PageLifecycleTransform(),
+    //         new EventHandlerSignatureTransform(),
+    //         new DataBindTransform(),
+    //         new UrlCleanupTransform(),
+    //     };
+    //
+    //     return new MigrationPipeline(markupTransforms, codeBehindTransforms);
+    // }
+}
