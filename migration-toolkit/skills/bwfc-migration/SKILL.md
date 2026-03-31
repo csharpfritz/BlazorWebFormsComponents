@@ -1,41 +1,403 @@
 ---
 name: bwfc-migration
-description: "Migrate ASP.NET Web Forms .aspx/.ascx/.master markup to Blazor Server using BlazorWebFormsComponents (BWFC). Covers control translation, expression conversion, data binding, code-behind lifecycle, and Master Page to Layout conversion. WHEN: \"migrate aspx\", \"convert web forms markup\", \"master page to layout\", \"asp prefix removal\", \"data binding expressions\". FOR SINGLE OPERATIONS: use /bwfc-identity-migration for auth, /bwfc-data-migration for EF/architecture."
+description: "Migrate ASP.NET Web Forms applications to Blazor Server using the webforms-to-blazor CLI tool and BlazorWebFormsComponents (BWFC). Orchestrates L1 automated transforms via CLI, then guides L2 contextual transforms. WHEN: \"migrate aspx\", \"convert web forms\", \"web forms to blazor\", \"run migration\". INVOKES: webforms-to-blazor CLI tool. FOR SINGLE OPERATIONS: use /bwfc-identity-migration for auth, /bwfc-data-migration for EF/architecture."
 ---
 
-# Web Forms → Blazor Markup Migration with BWFC
+# Web Forms → Blazor Migration with BWFC
 
-This skill provides transformation rules for migrating ASP.NET Web Forms markup to Blazor Server using the **BlazorWebFormsComponents** (BWFC) NuGet package.
+## Overview
+
+This skill orchestrates the full migration from ASP.NET Web Forms to Blazor Server using a **three-layer architecture**:
+
+| Layer | Executor | Coverage | Description |
+|-------|----------|----------|-------------|
+| **L1: Deterministic** | `webforms-to-blazor` CLI tool | ~70% | 27 compiled transforms (16 markup + 11 code-behind), project scaffolding, config migration |
+| **L2: Contextual** | Copilot (this skill) | ~15–20% | TODO-driven transforms requiring semantic understanding — session state, lifecycle, data binding |
+| **L3: Architectural** | Developer | ~10–15% | Business logic, custom controls, auth flows, architectural decisions |
+
+The CLI tool emits structured `// TODO(bwfc-*)` comments and a JSON migration report. L2 reads that report and applies contextual transforms per TODO category.
 
 **Related skills:**
 - `/bwfc-identity-migration` — ASP.NET Identity/Membership → Blazor Identity
 - `/bwfc-data-migration` — EF6 → EF Core, DataSource → services, architecture decisions
 
-## What Is BWFC?
+---
 
-BlazorWebFormsComponents is an open-source library that provides **drop-in Blazor replacements** for ASP.NET Web Forms server controls. It preserves the same component names, attribute names, and rendered HTML output — enabling migration with minimal markup changes.
+## Prerequisites
 
-- **NuGet Package:** <https://www.nuget.org/packages/Fritz.BlazorWebFormsComponents>
-- **GitHub Repository:** <https://github.com/FritzAndFriends/BlazorWebFormsComponents>
-- **58 components** across 6 categories
-- **Same HTML output** — existing CSS and JavaScript continue to work
-
-> **Core Principle:** Strip `asp:` and `runat="server"`, keep everything else, and it just works.
+- **.NET 10 SDK** or later
+- **Install the global tool:**
+  ```bash
+  dotnet tool install -g Fritz.WebFormsToBlazor
+  ```
+- **BlazorWebFormsComponents NuGet package** (added automatically by the tool's scaffolding)
 
 ---
 
-## Installation
+## Migration Workflow
 
-### Step 1: Create Blazor Server Project
+### Phase 1: L1 Automated Transforms (CLI)
+
+> ⚠️ **CRITICAL: Always run L1 via the CLI tool. Do NOT apply L1 transforms manually.** The tool produces deterministic, testable output. Manual L1 transforms corrupt measurement and miss edge cases.
+
+#### Full Project Migration
 
 ```bash
-dotnet new blazor -n MyBlazorApp --interactivity Server
-cd MyBlazorApp
-dotnet add package Fritz.BlazorWebFormsComponents
+webforms-to-blazor migrate -i ./MyWebFormsApp -o ./MyBlazorApp --report migration-report.json --verbose
 ```
 
-### Step 2: Configure `_Imports.razor`
+| Option | Description |
+|--------|-------------|
+| `-i, --input <path>` | Source Web Forms project root (required) |
+| `-o, --output <path>` | Output Blazor project directory (required) |
+| `--report <path>` | Write JSON migration report to file |
+| `--report-format <fmt>` | `json` (default) or `markdown` |
+| `--skip-scaffold` | Skip `.csproj`, `Program.cs`, `_Imports.razor` generation |
+| `--dry-run` | Show transforms without writing files |
+| `-v, --verbose` | Detailed per-file transform log |
+| `--overwrite` | Overwrite existing files in output directory |
 
+#### Single File Conversion
+
+```bash
+webforms-to-blazor convert -i ./Pages/Products.aspx -o ./Pages/ --overwrite
+```
+
+| Option | Description |
+|--------|-------------|
+| `-i, --input <file>` | `.aspx`, `.ascx`, or `.master` file (required) |
+| `-o, --output <path>` | Output directory (default: same directory) |
+| `--overwrite` | Overwrite existing `.razor` file |
+
+#### What L1 Handles (27 Transforms)
+
+**Markup Transforms (16):**
+
+| # | Transform | Description |
+|---|-----------|-------------|
+| 1 | PageDirective | `<%@ Page %>` → `@page "/route"` with title extraction |
+| 2 | MasterDirective | Remove `<%@ Master %>`, add `@inherits LayoutComponentBase` |
+| 3 | ControlDirective | Remove `<%@ Control %>` directives |
+| 4 | ImportDirective | `<%@ Import Namespace="X" %>` → `@using X` |
+| 5 | RegisterDirective | Remove `<%@ Register %>` tag registrations |
+| 6 | ContentWrapper | Strip `<asp:Content>` wrappers, convert HeadContent |
+| 7 | FormWrapper | `<form runat="server">` → `<div>` (preserves `id` for CSS) |
+| 8 | GetRouteUrl | `Page.GetRouteUrl()` → `GetRouteUrlHelper.GetRouteUrl()` |
+| 9 | Expression | `<%: %>` → `@()`, `<%# Item.X %>` → `@context.X`, Eval/Bind conversion |
+| 10 | LoginView | Strip attributes, flag RoleGroups for review |
+| 11 | SelectMethod | Preserve attribute, add TODO for delegate conversion |
+| 12 | AjaxToolkitPrefix | `ajaxToolkit:X` → `X` (runs before asp: prefix) |
+| 13 | AspPrefix | `asp:X` → `X` for all server controls |
+| 14 | AttributeStrip | Remove `runat="server"`, normalize `ID` → `id` |
+| 15 | EventWiring | `OnClick="Handler"` → `OnClick="@Handler"` |
+| 16 | UrlReference | `~/path` → `/path` in href, NavigateUrl, ImageUrl |
+
+**Code-Behind Transforms (11):**
+
+| # | Transform | Description |
+|---|-----------|-------------|
+| 1 | UsingStrip | Remove `System.Web.*`, `Microsoft.AspNet.*` usings |
+| 2 | BaseClassStrip | Remove `: Page`, `: System.Web.UI.Page` base classes |
+| 3 | ResponseRedirect | `Response.Redirect("~/X")` → `NavigationManager.NavigateTo("/X")` with `[Inject]` |
+| 4 | SessionDetect | Detect `Session["key"]` patterns, inject `// TODO(bwfc-session-state)` guidance |
+| 5 | ViewStateDetect | Detect `ViewState["key"]` patterns, inject `// TODO(bwfc-viewstate)` guidance |
+| 6 | IsPostBack | Unwrap simple `if (!IsPostBack)` guards; TODO complex guards with `else` |
+| 7 | PageLifecycle | `Page_Load` → `OnInitializedAsync`, `Page_Init` → `OnInitialized`, `Page_PreRender` → `OnAfterRenderAsync` |
+| 8 | EventHandlerSignature | Strip `(object sender, EventArgs e)` from standard handlers |
+| 9 | DataBind | Cross-file: `ctrl.DataSource = x` → field assignment, inject `Items=` in markup |
+| 10 | UrlCleanup | `"~/Products.aspx?id=5"` → `"/Products?id=5"` in string literals |
+| 11 | AttributeNormalize | Boolean, enum, and unit value normalization |
+
+**Scaffolding:**
+- `.csproj` with BWFC NuGet reference
+- `Program.cs` with `AddBlazorWebFormsComponents()`, `UseConfigurationManagerShim()`, `AddSessionShim()`
+- `_Imports.razor` with BWFC usings and `@inherits WebFormsPageBase`
+- `App.razor` with `InteractiveServer` render mode, detected CSS/JS references
+- `Routes.razor`, `GlobalUsings.cs`, `launchSettings.json`
+- `appsettings.json` from `web.config` connection strings and app settings
+- `WebFormsShims.cs`, `IdentityShims.cs` when applicable
+- Copies `App_Start/BundleConfig.cs` and `RouteConfig.cs` as no-op shims
+
+#### Reading the Migration Report
+
+The `--report` flag generates a JSON file that drives L2 decisions:
+
+```json
+{
+  "summary": {
+    "filesProcessed": 24,
+    "transformsApplied": 187,
+    "todosGenerated": 12,
+    "scaffoldFilesCreated": 8
+  },
+  "todos": [
+    {
+      "category": "bwfc-session-state",
+      "file": "Cart.razor.cs",
+      "line": 15,
+      "message": "Session[\"CartId\"] detected — convert to scoped service",
+      "severity": "warning"
+    },
+    {
+      "category": "bwfc-identity-migration",
+      "file": "Login.razor.cs",
+      "line": 8,
+      "message": "FormsAuthentication.SignOut() → SignInManager.SignOutAsync()",
+      "severity": "warning"
+    }
+  ],
+  "transforms": [ ... ],
+  "scaffolding": { ... }
+}
+```
+
+**TODO categories** map directly to L2 sections below:
+- `bwfc-session-state` → Session shim wiring
+- `bwfc-identity-migration` → Auth conversion (delegate to `/bwfc-identity-migration`)
+- `bwfc-data-migration` → DataSource → service conversion (delegate to `/bwfc-data-migration`)
+- `bwfc-viewstate` → ViewState replacement
+- `bwfc-page-lifecycle` → Complex lifecycle patterns L1 couldn't auto-convert
+- `bwfc-manual` → Items requiring developer decision
+
+---
+
+### Phase 2: L2 Contextual Transforms (Copilot-Assisted)
+
+After L1 completes, read the migration report (`migration-report.json`). For each TODO category, apply the corresponding transforms below.
+
+> ⚠️ **MANDATORY — READ BEFORE STARTING L2:** Open and read **all three** child documents:
+> - **[CODE-TRANSFORMS.md](CODE-TRANSFORMS.md)** — Lifecycle mapping, event handlers, data binding, Master Page → Layout
+> - **[CONTROL-REFERENCE.md](CONTROL-REFERENCE.md)** — 58 BWFC component translation tables
+> - **[AJAX-TOOLKIT.md](AJAX-TOOLKIT.md)** — Ajax Control Toolkit extender migration (14 components)
+
+#### TODO(bwfc-session-state)
+
+L1 detects `Session["key"]` patterns and inserts guidance comments. L2 wires the SessionShim:
+
+**Setup** (already in scaffolded `Program.cs`):
+```csharp
+builder.Services.AddSessionShim();
+```
+
+**Code-behind unchanged** — `WebFormsPageBase` provides a `Session` property backed by `SessionShim`:
+```csharp
+// This code works in BOTH Web Forms and Blazor (with SessionShim):
+Session["CartId"] = cartId;
+var id = Session["CartId"]?.ToString();
+```
+
+> **Note:** `SessionShim` is an in-memory per-circuit store. It does NOT persist across browser refreshes. For durable state, migrate to a scoped DI service with server-side persistence.
+
+**For non-page components** that need session access, inject `SessionShim` directly:
+```csharp
+@inject SessionShim Session
+
+@code {
+    protected override void OnInitialized()
+    {
+        var cartId = Session["CartId"]?.ToString();
+    }
+}
+```
+
+#### TODO(bwfc-identity-migration)
+
+L1 detects `FormsAuthentication.*`, `Membership.*`, and `Roles.*` calls. These require deep auth migration.
+
+**Quick patterns:**
+```csharp
+// Before (L1 output with TODO):
+// TODO(bwfc-identity-migration): FormsAuthentication.SignOut() → SignInManager.SignOutAsync()
+FormsAuthentication.SignOut();
+
+// After (L2):
+await SignInManager.SignOutAsync();
+```
+
+**For full auth migration**, invoke the `/bwfc-identity-migration` skill — it handles ASP.NET Membership → ASP.NET Core Identity conversion, including database schema migration, cookie configuration, and role-based authorization.
+
+#### TODO(bwfc-data-migration)
+
+L1 removes `DataSourceID` attributes from data-bound controls and replaces `<asp:SqlDataSource>`, `<asp:ObjectDataSource>`, and `<asp:EntityDataSource>` controls with TODO comments.
+
+**Pattern — SqlDataSource → injected service:**
+```csharp
+// Before (Web Forms):
+// <asp:SqlDataSource ID="ProductsDS" SelectCommand="SELECT * FROM Products" />
+// <asp:GridView DataSourceID="ProductsDS" />
+
+// After L1:
+// TODO(bwfc-data-migration): Replace SqlDataSource "ProductsDS" with injected service
+// <GridView />
+
+// After L2:
+@inject ProductService ProductService
+
+<GridView ItemType="Product" SelectMethod="@ProductService.GetProducts" />
+```
+
+**For full data migration**, invoke the `/bwfc-data-migration` skill — it handles EF6 → EF Core conversion, service extraction, and repository patterns.
+
+#### TODO(bwfc-viewstate)
+
+L1 detects `ViewState["key"]` access patterns but cannot determine replacement strategy without context.
+
+**Pattern — simple value storage → component field:**
+```csharp
+// Before (L1 output with TODO):
+// TODO(bwfc-viewstate): ViewState["SortColumn"] detected — replace with component field or parameter
+ViewState["SortColumn"] = "Name";
+var sort = ViewState["SortColumn"]?.ToString();
+
+// After (L2):
+private string _sortColumn = "Name";
+```
+
+**Pattern — cross-page state → cascading parameter or query string:**
+```csharp
+// Before:
+// TODO(bwfc-viewstate): ViewState["SelectedId"] detected
+ViewState["SelectedId"] = selectedId;
+
+// After (if needed across navigations):
+NavigationManager.NavigateTo($"/Details?id={selectedId}");
+
+// Or (if parent-child component communication):
+[CascadingParameter] public int SelectedId { get; set; }
+```
+
+**Pattern — ViewStateDictionary shim** (compile-compatibility bridge):
+```csharp
+// For complex ViewState usage that can't be trivially replaced,
+// BWFC's ViewStateDictionary provides a per-component dictionary:
+// Code-behind that uses ViewState["key"] compiles unchanged via WebFormsPageBase.
+```
+
+#### TODO(bwfc-page-lifecycle)
+
+L1 auto-converts simple lifecycle methods but flags complex patterns it cannot handle:
+
+**Complex `IsPostBack` guards with `else`:**
+```csharp
+// L1 output (flagged, not unwrapped):
+// TODO(bwfc-page-lifecycle): IsPostBack guard with else clause — review manually
+if (!IsPostBack)
+{
+    LoadInitialData();
+}
+else
+{
+    ProcessPostBackData();
+}
+
+// L2 fix: Move 'if' body to OnInitializedAsync, 'else' body to event handlers
+protected override async Task OnInitializedAsync()
+{
+    await LoadInitialDataAsync();
+}
+
+// ProcessPostBackData() logic moves to the specific event handler that triggers it
+```
+
+**Page_Load with async operations:**
+```csharp
+// L1 converts signature but can't determine async boundaries:
+protected override async Task OnInitializedAsync()
+{
+    products = GetProducts();  // TODO(bwfc-page-lifecycle): consider making async
+}
+
+// L2 fix:
+protected override async Task OnInitializedAsync()
+{
+    products = await GetProductsAsync();
+}
+```
+
+**Page_PreRender patterns:**
+```csharp
+// L1 converts to OnAfterRenderAsync but complex logic needs review:
+protected override async Task OnAfterRenderAsync(bool firstRender)
+{
+    if (firstRender)
+    {
+        lblCount.Text = products.Count.ToString();
+        StateHasChanged();  // Required — OnAfterRenderAsync runs AFTER render
+    }
+}
+```
+
+#### TODO(bwfc-manual)
+
+Items requiring developer decision. Document these and move on:
+
+- Custom `HttpModule` / `HttpHandler` implementations
+- Complex `Page_Error` / `Application_Error` patterns
+- Dynamic control creation (`Controls.Add(new TextBox())`)
+- `Literal.Mode = LiteralMode.PassThrough` with raw HTML injection
+- Custom `WebPart` or `WebPartZone` usage
+- Third-party control libraries not covered by BWFC
+
+**Action:** Create a `MIGRATION-NOTES.md` file documenting each manual item with context and recommended approach.
+
+#### Data Binding Transforms (applies to all migrated files)
+
+> **⚠️ MANDATORY: SelectMethod MUST be preserved as a delegate.** Do NOT convert to `Items=` binding — this is the #1 recurring migration error.
+
+```csharp
+// Before (Web Forms): SelectMethod="GetProducts"
+// After (L2): SelectMethod="@productService.GetProducts"
+// BWFC's DataBoundComponent.OnAfterRenderAsync calls the delegate to populate Items.
+```
+
+**Full L2 checklist for each file:**
+- Convert `SelectMethod` string → `SelectHandler<ItemType>` delegate reference
+- Preserve `ItemType` attribute (strip namespace prefix only)
+- Add `Context="Item"` to `<ItemTemplate>` elements
+- Ensure null-safe collection access for `Items`: `Items="@(_products ?? new())"`
+- When `SelectMethod` is set, `Items` is auto-populated — do NOT also set `Items`
+- Add `@inject` directives for required services (NavigationManager, DbContext, etc.)
+
+---
+
+### Phase 3: Build & Verify
+
+```bash
+cd MyBlazorApp
+dotnet build
+```
+
+**Common build errors and fixes:**
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `CS0246: 'Page' could not be found` | Missing `@inherits WebFormsPageBase` | Verify `_Imports.razor` has `@inherits BlazorWebFormsComponents.WebFormsPageBase` |
+| `CS0103: 'Session' does not exist` | Non-page component using Session | Add `@inject SessionShim Session` |
+| `CS0103: 'Response' does not exist` | Code-behind using `Response.Redirect` | L1 should have converted; check for missed patterns |
+| `CS1061: 'X' does not contain 'DataBind'` | Explicit `.DataBind()` calls remaining | Remove — BWFC auto-binds via `SelectMethod` or `Items` |
+| `CS0234: 'Web' does not exist in 'System'` | Remaining `System.Web.*` using | Remove unless it's a BWFC shim namespace (`System.Web.Optimization`, `System.Web.Routing`) |
+| `RZ9986: Component attributes do not support complex content` | Expression in attribute without `@()` | Wrap with `@()`: `Value="@(expr)"` |
+
+---
+
+### Phase 4: L3 Developer Tasks
+
+These require human judgment and cannot be automated:
+
+- **Custom controls** — Third-party or custom `WebControl` / `CompositeControl` subclasses need manual Blazor component creation
+- **Business logic review** — Verify migrated BLL/DAL behaves correctly with async patterns
+- **Authentication flows** — Full auth migration via `/bwfc-identity-migration`
+- **Data architecture** — EF6 → EF Core via `/bwfc-data-migration`
+- **Performance tuning** — `StateHasChanged()` call optimization, virtualization for large lists
+- **Integration testing** — Verify form submissions, navigation, data operations end-to-end
+
+---
+
+## BWFC Configuration Reference
+
+### Project Setup (scaffolded by L1)
+
+**`_Imports.razor`:**
 ```razor
 @using BlazorWebFormsComponents
 @using BlazorWebFormsComponents.Enums
@@ -43,101 +405,51 @@ dotnet add package Fritz.BlazorWebFormsComponents
 @inherits BlazorWebFormsComponents.WebFormsPageBase
 ```
 
-The `@inherits` line makes every page inherit from `WebFormsPageBase`, which provides `Page.Title`, `Page.MetaDescription`, `Page.MetaKeywords`, and `IsPostBack` — so Web Forms code-behind patterns compile unchanged. No per-page `@inject IPageService` is needed for page-level usage. Individual pages can override with their own `@inherits` if needed.
+The `@inherits` line gives every page `Page.Title`, `Page.MetaDescription`, `IsPostBack`, `Session`, `Server`, `Response`, `Request`, and `Cache` — so Web Forms code-behind compiles unchanged.
 
-> **Note:** The `@using static` import lets you write `InteractiveServer` as shorthand in `App.razor`. Do **not** add `@rendermode InteractiveServer` as a line in `_Imports.razor` — `@rendermode` is a directive attribute that belongs on component instances, not a standalone directive.
+> **Note:** `@rendermode InteractiveServer` is a directive attribute for component instances, NOT a standalone line in `_Imports.razor`.
 
-> **Note:** `@inject IPageService` is still valid for non-page components (e.g., a shared header component) that need access to page metadata. `WebFormsPageBase` only applies to routable pages.
-
-### Step 2b: Configure Render Mode in `App.razor`
-
-The `dotnet new blazor --interactivity Server` template generates `App.razor` with render mode already set. Verify it contains:
-
-```razor
-<HeadOutlet @rendermode="InteractiveServer" />
-...
-<Routes @rendermode="InteractiveServer" />
-```
-
-This enables global server interactivity for all pages. See [ASP.NET Core Blazor render modes](https://learn.microsoft.com/aspnet/core/blazor/components/render-modes) for per-page alternatives.
-
-### Step 3: Register BWFC Services and Add Page Component to Layout
-
-In `Program.cs`:
-
+**`Program.cs`:**
 ```csharp
 builder.Services.AddBlazorWebFormsComponents();
 
-// After building the app, enable the ConfigurationManager shim:
 var app = builder.Build();
 app.UseConfigurationManagerShim();
 ```
 
-In your layout file (`MainLayout.razor`), add the `<Page />` render component once. This subscribes to `IPageService` and emits `<PageTitle>` and `<meta>` tags:
+**`App.razor`** — render mode and BWFC script:
+```razor
+<HeadOutlet @rendermode="InteractiveServer" />
+<Routes @rendermode="InteractiveServer" />
+<script src="_content/Fritz.BlazorWebFormsComponents/js/Basepage.js"></script>
+```
 
+**Layout** (`MainLayout.razor`):
 ```razor
 @inherits LayoutComponentBase
 
 <BlazorWebFormsComponents.Page />
 
-<header>
-    <!-- ... -->
-</header>
-<main>
-    @Body
-</main>
+<header><!-- ... --></header>
+<main>@Body</main>
 ```
 
-> **Important:** `WebFormsPageBase` provides the code-behind API (`Page.Title`, `IsPostBack`). The `<BlazorWebFormsComponents.Page />` component does the rendering (`<PageTitle>`, `<meta>` tags). Both are required.
+> **Important:** `WebFormsPageBase` provides the code-behind API. The `<BlazorWebFormsComponents.Page />` component renders `<PageTitle>` and `<meta>` tags. Both are required.
 
-### Step 4: Add BWFC JavaScript
+### Available Shims
 
-In `App.razor` or the host page `<head>`:
+| Shim | Web Forms API | Blazor Implementation | Setup |
+|------|--------------|----------------------|-------|
+| **ConfigurationManager** | `ConfigurationManager.AppSettings["key"]`, `.ConnectionStrings["name"]` | Reads from `IConfiguration` | `app.UseConfigurationManagerShim()` |
+| **SessionShim** | `Session["key"]` indexer | In-memory per-circuit scoped service | `builder.Services.AddSessionShim()` |
+| **ServerShim** | `Server.MapPath()`, `Server.HtmlEncode()`, `Server.UrlEncode()` | Wraps `IWebHostEnvironment` + `WebUtility` | Auto-registered by `AddBlazorWebFormsComponents()` |
+| **CacheShim** | `Cache["key"]` indexer, `Cache.Insert()`, `Cache.Remove()` | Wraps `IMemoryCache` | Auto-registered by `AddBlazorWebFormsComponents()` |
+| **ResponseShim** | `Response.Redirect()`, `Response.Cookies` | Wraps `NavigationManager` + `HttpContext` | Via `WebFormsPageBase.Response` |
+| **RequestShim** | `Request.QueryString`, `Request.Cookies`, `Request.Url` | Wraps `NavigationManager` + `HttpContext` | Via `WebFormsPageBase.Request` |
+| **ViewStateDictionary** | `ViewState["key"]` indexer | Per-component in-memory dictionary | Via `WebFormsPageBase.ViewState` |
+| **BundleConfig/RouteConfig** | `BundleTable.Bundles.Add()`, `RouteTable.Routes.MapPageRoute()` | No-op stubs | Compile-only — no setup needed |
 
-```html
-<script src="_content/Fritz.BlazorWebFormsComponents/js/Basepage.js"></script>
-```
-
----
-
-## Phase 1 Compile-Compatibility Shims
-
-BWFC ships several **compile-compatibility shims** that let migrated Web Forms business logic (BLL/DAL) and `App_Start` files compile without modification. These are no-op or thin-wrapper implementations — they exist to eliminate build errors, not to replicate runtime behavior.
-
-### ConfigurationManager Shim
-
-BWFC provides `ConfigurationManager.AppSettings["key"]` and `ConfigurationManager.ConnectionStrings["name"]` so that BLL/DAL code referencing `System.Configuration.ConfigurationManager` compiles unchanged.
-
-**How it works:**
-- `AppSettings["key"]` reads from `IConfiguration["AppSettings:{key}"]`, falling back to `IConfiguration[key]`
-- `ConnectionStrings["name"]` reads from `IConfiguration.GetConnectionString(name)` and wraps the result in a `ConnectionStringSettings` object (with `.Name`, `.ConnectionString`, `.ProviderName` properties)
-- Returns `null` for missing keys (same behavior as the Web Forms original)
-
-**Setup in Program.cs:**
-
-```csharp
-var app = builder.Build();
-app.UseConfigurationManagerShim();   // ← one-line initialization
-```
-
-The `UseConfigurationManagerShim()` extension method calls `ConfigurationManager.Initialize(app.Configuration)` internally.
-
-**Before/After — BLL code unchanged:**
-
-```csharp
-// This code compiles in BOTH Web Forms and Blazor (with the shim):
-public static class SiteSettings
-{
-    public static string SiteName =>
-        ConfigurationManager.AppSettings["SiteName"];
-
-    public static string DefaultConnection =>
-        ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString;
-}
-```
-
-**appsettings.json mapping:** Place Web Forms `appSettings` values under an `AppSettings` section in `appsettings.json`:
-
+**appsettings.json mapping** (from `web.config`):
 ```json
 {
   "AppSettings": {
@@ -150,326 +462,56 @@ public static class SiteSettings
 }
 ```
 
-> **Tip:** The L1 script detects connection strings from `Web.config` and scaffolds them into the `Program.cs` template. Create `appsettings.json` with the `AppSettings` and `ConnectionStrings` sections mapped from the original `Web.config` `<appSettings>` and `<connectionStrings>` elements.
+### Component Reference
 
-### BundleConfig and RouteConfig Stubs
-
-BWFC provides no-op shim types in the `System.Web.Optimization` and `System.Web.Routing` namespaces so that `App_Start/BundleConfig.cs` and `RouteConfig.cs` files compile without modification:
-
-- **`BundleTable.Bundles`** → returns a no-op `BundleCollection` (`.Add()` does nothing)
-- **`ScriptBundle`** / **`StyleBundle`** → constructors accept virtual paths, `.Include()` returns `this`
-- **`RouteTable.Routes`** → returns a no-op `RouteCollection` (`.MapPageRoute()`, `.Ignore()` do nothing)
-
-**What this means for migration:**
-- `App_Start/BundleConfig.cs` and `RouteConfig.cs` can be copied into the Blazor project as-is — they compile and run as no-ops
-- Bundling is not needed in Blazor — use `<link>` and `<script>` tags in `App.razor` instead (the L1 script auto-detects CSS/JS files and scaffolds them)
-- Routing is handled by `@page` directives and ASP.NET Core endpoint routing
-
-The L1 script automatically retains `using System.Web.Optimization;` and `using System.Web.Routing;` references (as comments with guidance) when these namespaces are detected in code-behind files.
-
-### IsPostBack Guard Unwrapping
-
-The L1 script (`bwfc-migrate.ps1`) automatically processes `if (!IsPostBack) { ... }` guards in code-behind files:
-
-**Simple guards (no `else` clause):** The guard is unwrapped — the `if` statement is removed and the body is extracted and dedented. A comment is left:
-```csharp
-// Before (Web Forms):
-protected void Page_Load(object sender, EventArgs e)
-{
-    if (!IsPostBack)
-    {
-        LoadCategories();
-        BindGrid();
-    }
-}
-
-// After (L1 output):
-protected void Page_Load(object sender, EventArgs e)
-{
-    // BWFC: IsPostBack guard unwrapped — Blazor re-renders on every state change
-    LoadCategories();
-    BindGrid();
-}
-```
-
-**Complex guards (with `else` clause):** A TODO comment is added for manual review:
-```csharp
-// TODO: BWFC — IsPostBack guard with else clause. In Blazor, OnInitializedAsync runs once (no postback).
-// Review: move 'if' body to OnInitializedAsync and 'else' body to an event handler or remove.
-if (!IsPostBack)
-{
-    LoadInitialData();
-}
-else
-{
-    ProcessPostBackData();
-}
-```
-
-**Why this matters:** Blazor has no postback concept. `OnInitializedAsync` runs once (equivalent to first load). The guard is unnecessary and removing it reduces visual noise in migrated code. `WebFormsPageBase.IsPostBack` still compiles if left in (always returns `false`), but unwrapping makes the intent clearer.
-
-### `.aspx` URL Cleanup in Code-Behind
-
-The L1 script rewrites `.aspx` URL string literals in code-behind files:
-
-| Before | After |
-|--------|-------|
-| `"~/Products.aspx?id=5"` | `"/Products?id=5"` |
-| `"~/Products.aspx"` | `"/Products"` |
-| `NavigationManager.NavigateTo("Products.aspx?q=search")` | `NavigationManager.NavigateTo("/Products?q=search")` |
-| `NavigationManager.NavigateTo("Products.aspx")` | `NavigationManager.NavigateTo("/Products")` |
-
-The cleanup handles four patterns: tilde-prefixed with/without query strings, and relative references in `NavigateTo()` calls with/without query strings.
+See **[CONTROL-REFERENCE.md](CONTROL-REFERENCE.md)** for the full translation table of 58 BWFC components across 6 categories.
 
 ---
 
-## Phase 2: Just Make It Run
-
-Phase 2 transforms convert compile-compatible code into **functionally correct Blazor code** — bridging the gap between "it compiles" (Phase 1) and "it runs." These are Layer 2 (Copilot-assisted) transforms.
-
-### Session Shim
-
-BWFC provides `SessionShim`, a scoped service that emulates `Session["key"]` access in migrated pages. Code-behind that reads/writes `Session["CartId"]` or similar patterns works without rewriting.
-
-**How it works:**
-- `SessionShim` implements dictionary-style `this[string key]` indexer
-- Registered as a scoped service — state is per-circuit (Blazor Server)
-- Migrated pages that inherit `WebFormsPageBase` get automatic access via a `Session` property
-
-**Setup in Program.cs:**
-
-```csharp
-builder.Services.AddSessionShim();
-```
-
-**Before/After — code-behind unchanged:**
-
-```csharp
-// This code works in BOTH Web Forms and Blazor (with SessionShim):
-Session["CartId"] = cartId;
-var id = Session["CartId"]?.ToString();
-```
-
-> **Note:** `SessionShim` is an in-memory per-circuit store. It does NOT persist across browser refreshes or reconnections. For durable state, migrate to a scoped DI service with server-side persistence.
-
-### Page Lifecycle Transforms
-
-Phase 2 converts Web Forms page lifecycle methods to their Blazor equivalents. These transforms run after Phase 1 has already unwrapped `IsPostBack` guards.
-
-| Web Forms Method | Blazor Method | Notes |
-|---|---|---|
-| `Page_Load(object sender, EventArgs e)` | `protected override async Task OnInitializedAsync()` | Primary init — runs once on first render |
-| `Page_Init(object sender, EventArgs e)` | `protected override void OnInitialized()` | Sync init — for non-async setup |
-| `Page_PreRender(object sender, EventArgs e)` | `protected override async Task OnAfterRenderAsync(bool firstRender)` | Post-render logic — guard with `if (firstRender)` when appropriate |
-
-```csharp
-// Before (Phase 1 output — compiles but uses Web Forms signatures):
-protected void Page_Load(object sender, EventArgs e)
-{
-    products = GetProducts();
-}
-
-protected void Page_Init(object sender, EventArgs e)
-{
-    theme = "Default";
-}
-
-protected void Page_PreRender(object sender, EventArgs e)
-{
-    lblCount.Text = products.Count.ToString();
-}
-
-// After (Phase 2 — Blazor lifecycle):
-protected override async Task OnInitializedAsync()
-{
-    products = await GetProductsAsync();
-}
-
-protected override void OnInitialized()
-{
-    theme = "Default";
-}
-
-protected override async Task OnAfterRenderAsync(bool firstRender)
-{
-    if (firstRender)
-    {
-        lblCount.Text = products.Count.ToString();
-        StateHasChanged();
-    }
-}
-```
-
-### Event Handler Signature Cleanup
-
-Phase 2 strips **standard** `EventArgs` parameters from event handlers but **preserves specialized** EventArgs types that carry data.
-
-**Rule:** If the handler signature uses `EventArgs` (the base class), remove both `object sender` and `EventArgs e`. If it uses a specialized type (`CommandEventArgs`, `GridViewEditEventArgs`, etc.), keep the specialized parameter.
-
-| Before (Web Forms) | After (Blazor) | Why |
-|---|---|---|
-| `void Btn_Click(object sender, EventArgs e)` | `void Btn_Click()` | `EventArgs` carries no data — strip both params |
-| `void Grid_RowCommand(object sender, GridViewCommandEventArgs e)` | `void Grid_RowCommand(CommandEventArgs e)` | Specialized args carry `CommandName`/`CommandArgument` — keep |
-| `void Ddl_Changed(object sender, EventArgs e)` | `void Ddl_Changed()` | Standard `EventArgs` — strip |
-
-```csharp
-// Standard EventArgs — strip both parameters:
-// Before:
-protected void SubmitBtn_Click(object sender, EventArgs e)
-{
-    NavigationManager.NavigateTo("/Confirmation");
-}
-// After:
-private void SubmitBtn_Click()
-{
-    NavigationManager.NavigateTo("/Confirmation");
-}
-
-// Specialized EventArgs — keep the BWFC equivalent:
-// Before:
-protected void CartGrid_RowCommand(object sender, GridViewCommandEventArgs e)
-{
-    var productId = e.CommandArgument.ToString();
-}
-// After:
-private void CartGrid_RowCommand(CommandEventArgs e)
-{
-    var productId = e.CommandArgument.ToString();
-}
-```
-
----
-
-## Migration Pipeline — MANDATORY
-
-> ⚠️ **CRITICAL: The migration pipeline is a two-layer automated sequence. Both layers MUST run. Do NOT make any manual code fixes between Layer 1 and Layer 2.**
-> The migration pipeline measures script quality. Manual fixes between layers corrupt the measurement. If Layer 1 output has issues, those issues should be fixed in the script, not patched by hand.
-
-The migration pipeline has **two mandatory layers** that run in strict sequence:
-
-| Step | Layer | Executor | Description |
-|------|-------|----------|-------------|
-| 1 | **Layer 1: Mechanical** | **Automated script** (`bwfc-migrate.ps1`) | Tag transforms, expression conversion, file renaming, scaffolding |
-| 2 | **Layer 2: Structural** | **Copilot-assisted** (this skill) | Data binding, lifecycle, templates, layouts |
-| 3 | Build & verify | Copilot | `dotnet build`, fix any remaining compile errors |
-| 4 | Report | Copilot | Document results |
-
-### Layer 1 — Run the Migration Script
-
-**You MUST run Layer 1 as a PowerShell script. Do NOT apply Layer 1 transforms manually.**
-
-```powershell
-.\migration-toolkit\scripts\bwfc-migrate.ps1 -Path "<source-webforms-project>" -Output "<blazor-output-dir>"
-```
-
-- `-Path` — path to the source Web Forms project directory (containing `.aspx`, `.ascx`, `.master` files)
-- `-Output` — path to the target Blazor project directory (will be created if it doesn't exist)
-- Layer 1 typically completes in 1–2 seconds and processes 30+ files
-- The script performs ALL mechanical transforms: `asp:` prefix removal, `runat="server"` removal, expression conversion, URL rewriting, file renaming, scaffold generation (`.csproj`, `Program.cs`, `_Imports.razor`, `App.razor`, etc.)
-
-**What Layer 1 handles:**
-
-- Remove all `asp:` tag prefixes
-- Remove all `runat="server"` attributes
-- Convert expressions: `<%: expr %>` → `@(expr)`, `<%# Item.X %>` → `@context.X`
-- Convert URLs: `~/path` → `/path`
-- Rename files: `.aspx` → `.razor`, `.ascx` → `.razor`, `.master` → `.razor`
-- Remove `<asp:Content>` wrappers
-- Convert `<%@ Page %>` directives to `@page "/route"`
-- Replace `<form runat="server">` with `<div>` (preserves CSS block formatting context)
-- LoginView preservation(keeps BWFC LoginView, does NOT rewrite as AuthorizeView)
-- Master page → MainLayout.razor conversion
-- Scaffold generation (csproj, Program.cs, _Imports.razor, App.razor)
-- **IsPostBack guard unwrapping** — `if (!IsPostBack) { ... }` blocks are auto-unwrapped (body extracted, guard removed). Complex guards with `else` clauses get TODO comments for manual review.
-- **`.aspx` URL cleanup** — string literals like `"~/Products.aspx?id=5"` are rewritten to `"/Products?id=5"` in code-behind files. Handles tilde-prefixed and relative `.aspx` references.
-- **`using` retention for BWFC shims** — `using System.Configuration;`, `using System.Web.Optimization;`, and `using System.Web.Routing;` are preserved (commented with guidance) because BWFC provides compile-compatible shims for `ConfigurationManager`, `BundleTable`/`BundleConfig`, and `RouteTable`/`RouteConfig`.
-
-### Layer 2 — Copilot Transforms
-
-**After Layer 1 completes, immediately proceed to Layer 2. Do NOT fix, edit, or clean up any Layer 1 output first.**
-
-> ⚠️ **MANDATORY — READ BEFORE STARTING LAYER 2:** Open and read **all three** child documents in this skill's directory. They contain the detailed patterns, examples, and control translation tables needed for every transform below. Without them you will miss critical migration details.
->
-> - **`CODE-TRANSFORMS.md`** — Code-behind lifecycle mapping (`Page_Load` → `OnInitializedAsync`, `Page_PreRender` → `OnParametersSetAsync`), event handler conversion, navigation patterns, data binding migration (SelectMethod delegates, template binding with `Context="Item"`), query string / route parameter conversion, and Master Page → Layout conversion with complete before/after examples.
-> - **`CONTROL-REFERENCE.md`** — Control translation tables for all 58 BWFC components across 6 categories (Simple, Form, Validation, Data, Navigation, AJAX), structural/infrastructure components (`WebFormsPage`, `Page`, `NamingContainer`, `MasterPage`, `Content`, `ContentPlaceHolder`, `EmptyLayout`), `DataBinder.Eval` compatibility shim, theming infrastructure, and custom control base classes (`WebControl`, `CompositeControl`, `HtmlTextWriter`).
-> - **`AJAX-TOOLKIT.md`** — Ajax Control Toolkit extender migration (14 supported components), installation, Layer 1 automation, Layer 2 manual work (ServiceMethod wiring for AutoCompleteExtender, TargetControlID verification), before/after examples, and troubleshooting.
-
-Layer 2 is where Copilot applies structural transforms to every generated `.razor` and `.razor.cs` file. Work through each file and apply ALL of the following:
-
-> **⚠️ MANDATORY: SelectMethod MUST be preserved as a delegate.** When the original Web Forms markup has `SelectMethod="MethodName"`, the migrated Blazor markup MUST have `SelectMethod="@service.MethodName"` (or explicit lambda). Do NOT convert to `Items=` binding — this is the #1 recurring migration error.
-
-- Preserve `SelectMethod` — convert string method name to `SelectHandler<ItemType>` delegate (e.g., `SelectMethod="@productService.GetProducts"` if signature matches, or `SelectMethod="@((maxRows, startRow, sort, out total) => service.GetProducts(maxRows, startRow, sort, out total))"` for explicit wiring). BWFC's `DataBoundComponent.OnAfterRenderAsync` automatically calls the delegate to populate `Items`.
-- Preserve `ItemType` attribute — BWFC data controls use `ItemType` (matches Web Forms `DataBoundControl.ItemType`). Do NOT change to `TItem` or any other name.
-- Add `Context="Item"` to `<ItemTemplate>` elements
-- Migrate code-behind: `Page_Load` → `OnInitializedAsync`
-- Convert `Response.Redirect` → `NavigationManager.NavigateTo`
-- Wire `EditForm` where form validation is needed
-- Convert Master Page → Blazor Layout
-- Ensure null-safe collection access when using `Items` (for `DataSource`-originating data only): `Items="@(_products ?? new())"`
-- When `SelectMethod` is set, `Items` is auto-populated by the BWFC framework — do NOT also set `Items`
-- **Database provider:** Verify the L1-detected provider from the `[DatabaseProvider]` review item. Use the detected EF Core package and connection string. Do NOT substitute providers (e.g., do not use SQLite when the original used SQL Server).
-- Add `@inject` directives for required services (NavigationManager, DbContext, etc.)
-- Convert `Session["key"]` → scoped DI service patterns
-
-### Pipeline Rules
-
-1. **Run Layer 1 first** — always via the script, never manually
-2. **Run Layer 2 immediately after** — no fixes between layers
-3. **Build** — run `dotnet build` and fix compile errors
-4. **Report** — document what was migrated and any issues
-
-## Migration Workflow
-
-This skill covers **Layers 1 and 2** of the three-layer pipeline. Use the related skills for Layer 3.
-
-| Layer | What It Handles | Skill |
-|-------|----------------|-------|
-| **Layer 1: Mechanical** | Tag prefixes, `runat`, expressions, URLs, file renaming | ✅ This skill (automated via `bwfc-migrate.ps1`) |
-| **Layer 2: Structural** | Data binding, code-behind lifecycle, templates, layouts | ✅ This skill (Copilot-assisted) |
-| **Layer 3: Architecture** | State management, data access, auth, middleware | `/bwfc-data-migration`, `/bwfc-identity-migration` |
-
----
-
-## Page Migration Rules
-
-### File Conversion
-
-| Web Forms | Blazor |
-|-----------|--------|
-| `MyPage.aspx` | `MyPage.razor` |
-| `MyPage.aspx.cs` | `MyPage.razor.cs` (partial class) or `@code { }` block |
-| `MyControl.ascx` | `MyControl.razor` |
-| `MyControl.ascx.cs` | `MyControl.razor.cs` |
-| `Site.Master` | `MainLayout.razor` |
-| `Site.Master.cs` | `MainLayout.razor.cs` |
-
-### Directive Conversion
-
-| Web Forms Directive | Blazor Equivalent |
-|--------------------|-------------------|
-| `<%@ Page Title="X" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" CodeBehind="Y.aspx.cs" Inherits="NS.Y" %>` | `@page "/route"` |
-| `<%@ Master Language="C#" ... %>` | (remove — layouts don't need directives) |
-| `<%@ Control Language="C#" ... %>` | (remove — components don't need directives) |
-| `<%@ Register TagPrefix="uc" TagName="X" Src="~/Controls/X.ascx" %>` | `@using MyApp.Components` (if needed) |
-| `<%@ Import Namespace="X" %>` | `@using X` |
-
-**Drop entirely** (no Blazor equivalent): `AutoEventWireup`, `CodeBehind`/`CodeFile`, `Inherits`, `EnableViewState`/`ViewStateMode`, `MasterPageFile`, `ValidateRequest`, `MaintainScrollPositionOnPostBack`, `ClientIDMode`, `EnableTheming`, `SkinID`
+## Common Patterns
 
 ### Expression Conversion
 
 | Web Forms Expression | Blazor Equivalent | Notes |
 |---------------------|-------------------|-------|
 | `<%: expression %>` | `@(expression)` | HTML-encoded output |
-| `<%= expression %>` | `@(expression)` | Blazor always HTML-encodes |
+| `<%= expression %>` | `@(expression)` | Blazor always encodes |
 | `<%# Item.Property %>` | `@context.Property` | Inside data-bound templates |
 | `<%#: Item.Property %>` | `@context.Property` | Same — Blazor always encodes |
 | `<%# Eval("Property") %>` | `@context.Property` | Direct property access |
 | `<%# Bind("Property") %>` | `@bind-Value="context.Property"` | Two-way binding |
-| `<%# string.Format("{0:C}", Item.Price) %>` | `@context.Price.ToString("C")` | Format in code |
 | `<%$ RouteValue:id %>` | `@Id` (with `[Parameter]`) | Route parameters |
 | `<%-- comment --%>` | `@* comment *@` | Razor comments |
-| `<% if (condition) { %>` | `@if (condition) {` | Control flow |
+| `<% if (cond) { %>` | `@if (cond) {` | Control flow |
 | `<% foreach (var x in items) { %>` | `@foreach (var x in items) {` | Loops |
+
+### File Conversion
+
+| Web Forms | Blazor |
+|-----------|--------|
+| `MyPage.aspx` + `.aspx.cs` | `MyPage.razor` + `.razor.cs` |
+| `MyControl.ascx` + `.ascx.cs` | `MyControl.razor` + `.razor.cs` |
+| `Site.Master` + `.Master.cs` | `MainLayout.razor` + `.razor.cs` |
+
+### Directive Conversion
+
+| Web Forms Directive | Blazor Equivalent |
+|--------------------|-------------------|
+| `<%@ Page Title="X" ... %>` | `@page "/route"` |
+| `<%@ Master ... %>` | (remove — layouts don't need directives) |
+| `<%@ Control ... %>` | (remove — components don't need directives) |
+| `<%@ Register TagPrefix="uc" Src="~/X.ascx" %>` | `@using MyApp.Components` |
+| `<%@ Import Namespace="X" %>` | `@using X` |
+
+**Drop entirely:** `AutoEventWireup`, `CodeBehind`, `Inherits`, `EnableViewState`, `MasterPageFile`, `ValidateRequest`, `ClientIDMode`, `EnableTheming`, `SkinID`
+
+### Content/Layout Conversion
+
+| Web Forms | Blazor |
+|-----------|--------|
+| `<asp:Content ContentPlaceHolderID="MainContent">` | (remove — page body IS the content) |
+| `<asp:Content ContentPlaceHolderID="HeadContent">` | `<HeadContent>` ... `</HeadContent>` |
+| `<asp:ContentPlaceHolder ID="MainContent" />` | `@Body` (in layout) |
 
 ### Route URL Conversion
 
@@ -477,42 +519,50 @@ This skill covers **Layers 1 and 2** of the three-layer pipeline. Use the relate
 |-----------|--------|
 | `href="~/Products"` | `href="/Products"` |
 | `NavigateUrl="~/Products/<%: Item.ID %>"` | `NavigateUrl="@($"/Products/{context.ID}")"` |
-| `<%: GetRouteUrl("ProductRoute", new { id = Item.ID }) %>` | `@($"/Products/{context.ID}")` or use BWFC's `GetRouteUrlHelper` extension (see below) |
+| `GetRouteUrl("Route", new { id = Item.ID })` | `@($"/Products/{context.ID}")` or `GetRouteUrlHelper` |
 | `Response.Redirect("~/Products")` | `NavigationManager.NavigateTo("/Products")` |
 
-> **BWFC GetRouteUrlHelper:** BWFC provides a `GetRouteUrlHelper` extension method on `BaseWebFormsComponent` that wraps ASP.NET Core's `LinkGenerator`. Inside any BWFC component, you can call `this.GetRouteUrl("RouteName", new { id = item.ID })` directly — no manual URL construction needed. Register routes via ASP.NET Core's routing system and the helper maps them automatically.
+### Master Page → Blazor Layout
 
-### Content/Layout Conversion
+```razor
+@* Before: <%@ Master Language="C#" CodeBehind="Site.master.cs" %> *@
+@* After: *@
+@inherits LayoutComponentBase
 
-| Web Forms | Blazor |
-|-----------|--------|
-| `<asp:Content ContentPlaceHolderID="MainContent" runat="server">` | (remove — page body IS the content) |
-| `<asp:Content ContentPlaceHolderID="HeadContent" runat="server">` | `<HeadContent>` ... `</HeadContent>` |
-| `<asp:ContentPlaceHolder ID="MainContent" runat="server" />` | `@Body` (in layout) |
+<BlazorWebFormsComponents.Page />
 
-### Form Wrapper
+<header>
+    <nav><Menu ... /></nav>
+</header>
+<main>@Body</main>
+<footer>© @DateTime.Now.Year</footer>
+```
 
-- **Replace the `<form runat="server">` wrapper with `<div>`** (preserves the `id` attribute and CSS block formatting context — many Web Forms stylesheets use `position: relative` offsets that depend on this wrapper as the containing block)
-- For forms that need validation, use `<EditForm Model="@model">` instead
+**Key changes:**
+- `<form runat="server">` → `<div>` (preserves CSS block formatting context)
+- `<asp:ContentPlaceHolder ID="MainContent">` → `@Body`
+- `<asp:ScriptManager>` → `<ScriptManager />` (renders nothing)
+- CSS `<link>` from master `<head>` → `App.razor` `<head>` section
 
+> **Tip:** Use `<WebFormsPage>@Body</WebFormsPage>` as the layout wrapper for NamingContainer, theming, and head rendering in one component.
+
+---
 
 ## Reference Documents
 
-Detailed control mappings and code transformation patterns are in child documents:
-
-- **[CONTROL-REFERENCE.md](CONTROL-REFERENCE.md)**  Control translation tables (Simple, Form, Validation, Data, Navigation, AJAX controls), component coverage summary (58 components), structural components, theming, and custom control base classes.
-- **[CODE-TRANSFORMS.md](CODE-TRANSFORMS.md)**  Code-behind lifecycle mapping, event handler conversion, navigation patterns, data binding migration (SelectMethod, template binding), and Master Page to Layout conversion.
-- **[AJAX-TOOLKIT.md](AJAX-TOOLKIT.md)**  Ajax Control Toolkit extender migration (14 supported components), installation, Layer 1 automation, and Layer 2 manual work (ServiceMethod wiring, TargetControlID verification).
+- **[CONTROL-REFERENCE.md](CONTROL-REFERENCE.md)** — 58 component translation tables, structural components, theming, custom control base classes
+- **[CODE-TRANSFORMS.md](CODE-TRANSFORMS.md)** — Lifecycle mapping, event handlers, data binding, navigation, Master Page → Layout
+- **[AJAX-TOOLKIT.md](AJAX-TOOLKIT.md)** — Ajax Control Toolkit extender migration (14 components)
 
 ---
 
 ## Common Gotchas
 
 ### No ViewState
-Replace `ViewState["key"]` with component fields.
+Replace `ViewState["key"]` with component fields. `ViewStateDictionary` shim available for compile-compat.
 
 ### No PostBack
-`if (!IsPostBack)` → The L1 script auto-unwraps simple guards (extracts body, removes the `if`). Complex guards (with `else`) get TODO comments. If any remain, they work AS-IS with `WebFormsPageBase` (always enters the block). `if (IsPostBack)` (without `!`) → **dead code** in Blazor; flag for manual review and move logic to event handlers.
+L1 auto-unwraps simple `if (!IsPostBack)` guards. Complex guards (with `else`) get TODO comments. `if (IsPostBack)` (without `!`) → **dead code** in Blazor; move logic to event handlers.
 
 ### No DataSource Controls
 `SqlDataSource`, `ObjectDataSource`, `EntityDataSource` → injected services. See `/bwfc-data-migration`.
@@ -528,20 +578,45 @@ Add `Context="Item"` on template elements:
 </ItemTemplate>
 ```
 
-### `runat="server"` on HTML Elements
-Remove `runat="server"` from plain HTML elements. Use `@ref` if programmatic access needed.
-
 ### Event Handler Signatures
 ```csharp
 // Web Forms: protected void Btn_Click(object sender, EventArgs e) { }
 // Blazor:    private void Btn_Click() { }
 ```
+L1 auto-strips standard `EventArgs`. Specialized types (`CommandEventArgs`, etc.) are preserved.
 
 ### `TextMode="MultiLine"` Casing
 BWFC uses `Multiline` (lowercase 'l'), not `MultiLine`. Silent failure if wrong.
 
-### ScriptManager/ScriptManagerProxy Are No-Ops
-Include during migration to prevent errors, remove when stable.
+### ScriptManager/ScriptManagerProxy
+No-ops in BWFC. Include during migration to prevent errors, remove when stable.
+
+### `runat="server"` on HTML Elements
+L1 removes these. Use `@ref` if programmatic access is needed.
+
+---
+
+## Troubleshooting
+
+### L1 Tool Issues
+
+| Problem | Solution |
+|---------|----------|
+| `webforms-to-blazor` not found | Run `dotnet tool install -g Fritz.WebFormsToBlazor` |
+| Tool version mismatch | Run `dotnet tool update -g Fritz.WebFormsToBlazor` |
+| Output directory not empty | Use `--overwrite` flag |
+| Need to preview changes first | Use `--dry-run` flag |
+| Missing scaffolding files | Don't use `--skip-scaffold` unless you have an existing Blazor project |
+
+### L2 Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| `SelectMethod` not firing | Ensure it's a delegate reference (`@service.Method`), not a string |
+| `Items` always empty | Check that `SelectMethod` signature matches `SelectHandler<T>` delegate |
+| Template binding errors | Add `Context="Item"` to `<ItemTemplate>` elements |
+| Session data lost on refresh | `SessionShim` is per-circuit; use persistent storage for critical data |
+| Infinite render loop | Guard `OnAfterRenderAsync` with `if (firstRender)`, call `StateHasChanged()` only when needed |
 
 ---
 
@@ -550,30 +625,33 @@ Include during migration to prevent errors, remove when stable.
 ```markdown
 ## Page: [PageName.aspx] → [PageName.razor]
 
-### Layer 1 — Mechanical
+### L1 — CLI Tool (automated)
+- [ ] `webforms-to-blazor migrate` or `convert` executed
+- [ ] Migration report reviewed
 - [ ] File renamed (.aspx → .razor)
-- [ ] <%@ Page %> → @page "/route"
+- [ ] Directives converted
 - [ ] asp: prefixes removed
 - [ ] runat="server" removed
 - [ ] Expressions converted
-- [ ] URLs converted (~/ → /)
-- [ ] <asp:Content> wrappers removed
-- [ ] <form runat="server"> replaced with <div>
-- [ ] IsPostBack guards unwrapped (simple) or TODO'd (complex)
-- [ ] .aspx URL literals cleaned up in code-behind
-- [ ] ConfigurationManager / BundleConfig / RouteConfig usings retained for BWFC shims
+- [ ] URLs converted
+- [ ] Content wrappers removed
+- [ ] IsPostBack guards unwrapped/TODO'd
+- [ ] .aspx URL literals cleaned up
 
-### Layer 2 — Structural
+### L2 — Copilot Transforms (per TODO category)
+- [ ] TODO(bwfc-session-state) items resolved
+- [ ] TODO(bwfc-viewstate) items resolved
+- [ ] TODO(bwfc-page-lifecycle) items resolved
+- [ ] TODO(bwfc-data-migration) items resolved or delegated
+- [ ] TODO(bwfc-identity-migration) items resolved or delegated
+- [ ] TODO(bwfc-manual) items documented
 - [ ] SelectMethod string → SelectHandler delegate
-- [ ] ItemType preserved (strip namespace prefix only)
-- [ ] Data loading in OnInitializedAsync
-- [ ] Event handlers converted
-- [ ] Template Context="Item" added
-- [ ] Navigation calls converted
+- [ ] Template Context="Item" verified
+- [ ] @inject directives added
 
 ### Verification
-- [ ] Builds without errors
-- [ ] Renders correctly
+- [ ] `dotnet build` succeeds
+- [ ] Page renders correctly
 - [ ] Interactive features work
 - [ ] No browser console errors
 ```

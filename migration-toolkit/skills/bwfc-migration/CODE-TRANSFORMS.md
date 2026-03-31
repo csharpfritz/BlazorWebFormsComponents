@@ -15,7 +15,7 @@ Patterns for migrating Web Forms code-behind, data binding, and master pages to 
 | `Page_Load(object sender, EventArgs e)` | `protected override async Task OnInitializedAsync()` | First load |
 | `Page_PreRender(...)` | `protected override async Task OnParametersSetAsync()` | Before each render |
 | `Page_Init(...)` | `protected override void OnInitialized()` | Sync initialization |
-| `if (!IsPostBack)` | **L1 auto-unwraps** simple guards; works unchanged via `WebFormsPageBase` if left in | Always enters the block — correct for first-render code |
+| `if (!IsPostBack)` | **L1 CLI auto-unwraps** simple guards; works unchanged via `WebFormsPageBase` if left in | Always enters the block — correct for first-render code |
 | `if (IsPostBack)` (without `!`) | **Dead code — flag for manual review** | Never enters the block in Blazor; move logic to event handlers |
 
 ```csharp
@@ -46,7 +46,7 @@ protected override async Task OnInitializedAsync()
 
 #### IsPostBack Guard Handling (L1 Automated)
 
-The L1 script (`bwfc-migrate.ps1`) applies `Remove-IsPostBackGuards` to every code-behind file:
+The L1 CLI tool (`webforms-to-blazor`) applies `IsPostBackTransform` to every code-behind file:
 
 **Simple guards** (no `else` clause): The `if (!IsPostBack)` / `if (!Page.IsPostBack)` / `if (!this.IsPostBack)` / `if (IsPostBack == false)` wrapper is removed and the body is extracted and dedented. A comment replaces the guard:
 
@@ -71,7 +71,7 @@ else
 }
 ```
 
-**Single-statement guards** (no braces): Flagged with a TODO comment — the script does not attempt to parse braceless `if` statements.
+**Single-statement guards** (no braces): Flagged with a TODO comment — the tool does not attempt to parse braceless `if` statements.
 
 **Layer 2 action:** After L1, convert `Page_Load` → `OnInitializedAsync` and move the unwrapped body into the async method. For complex guards, move the `if` body into `OnInitializedAsync` and the `else` body into event handlers or remove it.
 
@@ -101,7 +101,7 @@ private void SubmitBtn_Click()
 
 ### `.aspx` URL Cleanup (L1 Automated)
 
-The L1 script automatically rewrites `.aspx` URL string literals in code-behind files. This runs after `Response.Redirect` → `NavigationManager.NavigateTo` conversion.
+The L1 CLI tool (`webforms-to-blazor`) automatically rewrites `.aspx` URL string literals in code-behind files. This runs after `Response.Redirect` → `NavigationManager.NavigateTo` conversion.
 
 | Pattern | Before | After |
 |---------|--------|-------|
