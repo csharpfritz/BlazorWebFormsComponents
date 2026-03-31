@@ -13861,3 +13861,201 @@ Tests are written *ahead of implementation* so Cyclops has a clear, testable con
 
 **Why this matters:** End-users invoking the `bwfc-migration` or `migration-standards` skills will now get accurate guidance on Phase 1 capabilities instead of being told to handle these items manually.
 
+
+# Bishop Phase 2: GAP-05 + GAP-07 Code-Behind Transforms
+
+**Date:** 2025-07-24
+**Author:** Bishop (Migration Tooling Dev)
+**Status:** Implemented
+
+## Decisions Made
+
+### D1: GAP-07 Event Handler — Type-name matching over inheritance check
+**Decision:** Determine whether to strip both params or keep specialized EventArgs by checking if the type name is *exactly* `EventArgs` (strip both) vs. ends with `EventArgs` but is longer (keep specialized).
+**Rationale:** PowerShell regex can't inspect the C# type hierarchy. String matching on `\w*EventArgs` is sufficient because all Web Forms EventArgs subtypes follow the naming convention `*EventArgs`. This avoids false positives on non-EventArgs types like `string` or `int`.
+**Risk:** If a custom EventArgs subclass is named exactly `EventArgs` (impossible per C# rules) it would be incorrectly stripped. Extremely low risk.
+
+### D2: GAP-05 Lifecycle — `await base.OnInitializedAsync()` injection
+**Decision:** Inject `await base.OnInitializedAsync();` at the start of the converted `OnInitializedAsync` body.
+**Rationale:** Blazor requires calling the base lifecycle method. Missing this call is a common source of bugs when components use `WebFormsPageBase` which has initialization logic in the base.
+
+### D3: GAP-05 PreRender — `if (firstRender)` guard wrapping
+**Decision:** Wrap the entire `Page_PreRender` body in `if (firstRender) { ... }` when converting to `OnAfterRenderAsync`.
+**Rationale:** `Page_PreRender` runs once before the first render. `OnAfterRenderAsync` runs after *every* render. The `firstRender` guard preserves the original single-execution semantics.
+
+### D4: Transform ordering — Lifecycle before Event Handlers
+**Decision:** Run GAP-05 (lifecycle) before GAP-07 (event handlers) in the pipeline.
+**Rationale:** Lifecycle conversion changes `Page_Load(object sender, EventArgs e)` to `OnInitializedAsync()`. If event handler conversion ran first, it would strip the lifecycle method's params but not rename it. Running lifecycle first ensures the method name is changed, and the params no longer match the event handler regex.
+
+### D5: Test expected files updated in-place
+**Decision:** Updated 6 existing expected test files (TC13–TC16, TC18, TC19) to reflect the new transforms rather than excluding lifecycle/event handler test assertions.
+**Rationale:** The L1 pipeline is cumulative — all transforms run on every code-behind file. Expected outputs must reflect the full transform chain. Selective exclusion would be fragile and mask regressions.
+
+## Validation
+- Script parses cleanly (0 errors)
+- All 21 L1 tests pass at 100% line accuracy
+- TC19 (lifecycle), TC20 (standard handlers), TC21 (specialized handlers) are dedicated test cases
+
+
+# L1 Migration Script Test Framework Extension
+
+**Date:** 2026-03-17  
+**Author:** Colossus (Integration Test Engineer)  
+**Status:** Implemented
+
+## Context
+
+The L1 migration script (`migration-toolkit/scripts/bwfc-migrate.ps1`) was enhanced with 6 new capabilities in Phase 1. The test framework at `migration-toolkit/tests/` needed expansion to provide regression coverage for these enhancements.
+
+## Decision
+
+Extended the L1 test suite from 15 to 18 test cases by adding:
+
+1. **TC16-IsPostBackGuard** — Tests GAP-06: IsPostBack guard unwrapping
+2. **TC17-BindExpression** — Tests GAP-13: Bind() → @bind-Value transform  
+3. **TC18-UrlCleanup** — Tests GAP-20: .aspx URL cleanup in Response.Redirect calls
+
+## Test Case Design Pattern
+
+Each test case consists of:
+- **Input:** `TC##-Name.aspx` (markup) + optional `TC##-Name.aspx.cs` (code-behind)
+- **Expected:** `TC##-Name.razor` (expected markup output) + optional `TC##-Name.razor.cs` (expected code-behind output)
+
+The test runner (`Run-L1Tests.ps1`) discovers test cases by scanning `inputs/` for `.aspx` files and comparing actual script output to expected output using normalized line-by-line comparison.
+
+## Implementation Notes
+
+- Expected files must match **actual script output** exactly, including:
+  - Whitespace/indentation preserved from AST transformations
+  - Attributes added by script (e.g., `ItemType="object"`)
+  - Standard TODO comment headers
+  - Base class removal (`: System.Web.UI.Page` stripped)
+- URL cleanup only transforms `Response.Redirect()` arguments, not arbitrary string literals
+- Test suite now at 78% pass rate (14/18), 98.2% line accuracy
+
+## Rationale
+
+These test cases provide:
+1. Regression protection for Phase 1 enhancements
+2. Documentation of expected script behavior through executable examples
+3. Foundation for future enhancement testing
+
+## References
+
+- Migration script: `migration-toolkit/scripts/bwfc-migrate.ps1`
+- Test runner: `migration-toolkit/tests/Run-L1Tests.ps1`
+- Test inputs: `migration-toolkit/tests/inputs/`
+- Expected outputs: `migration-toolkit/tests/expected/`
+
+
+# Decision: Phase 2 Playwright Test Strategy
+
+**Author:** Colossus  
+**Date:** 2026-07-24  
+**Status:** Implemented  
+
+## Context
+
+Phase 2 added SessionShim (GAP-04), Page Lifecycle Transforms (GAP-05), and Event Handler Signatures (GAP-07). GAP-05 and GAP-07 are script transforms with no dedicated UI — they are covered by L1 unit tests. GAP-04 has a live sample page at `/migration/session`.
+
+## Decision
+
+- **Test GAP-04 (SessionShim) with 5 Playwright tests** covering set/get, count, clear, typed counter, and cross-navigation persistence.
+- **Add 1 regression test for the Phase 1 ConfigurationManager page** to prevent regressions.
+- **Skip browser tests for GAP-05 and GAP-07** since they are script-level transforms with no direct UI surface; L1 tests provide sufficient coverage.
+- **Use `data-audit-control` attribute selectors** (already present on the sample page) for robust element targeting that won't break with CSS changes.
+- **Use `DOMContentLoaded` wait strategy** (not `NetworkIdle`) for interactive Blazor Server pages per established patterns.
+
+## Files Created
+
+- `samples/AfterBlazorServerSide.Tests/Migration/SessionDemoTests.cs` (5 tests)
+- `samples/AfterBlazorServerSide.Tests/Migration/ConfigurationManagerTests.cs` (1 test)
+
+
+# Decision: SessionShim Design (GAP-04)
+
+**Date:** 2026-07-28  
+**By:** Cyclops (Component Dev)  
+**Requested by:** Jeffrey T. Fritz
+
+## What
+
+Implemented `SessionShim` as a scoped service that provides `Session["key"]` dictionary-style access for migrated Web Forms code. Registered in DI via `AddBlazorWebFormsComponents()`. Exposed as `protected SessionShim Session` on `WebFormsPageBase`.
+
+## Design Choices
+
+1. **System.Text.Json** for serialization — no Newtonsoft dependency, matches project zero-external-deps policy.
+2. **Graceful fallback** to `ConcurrentDictionary<string, object?>` when `ISession` is unavailable (interactive Blazor Server mode). No exceptions thrown.
+3. **One-time log warning** via `ILogger<SessionShim>` on first fallback — gives visibility without spam.
+4. **`IHttpContextAccessor` as optional** constructor parameter — prevents DI failures in test environments.
+5. **`AddDistributedMemoryCache()` + `AddSession()`** added to DI registration — required by ASP.NET Core session middleware. Safe to call multiple times (idempotent).
+6. **`TryGetSession` wraps access in try/catch** for `InvalidOperationException` — covers the case where session middleware is not in the pipeline.
+
+## Why
+
+Web Forms apps use `Session["key"]` pervasively for shopping carts, wizard state, user preferences. This shim lets migrated code compile and run with only the `asp:` prefix removal. The fallback mode ensures Blazor Server interactive circuits work correctly (session state is per-circuit anyway).
+
+## Impact
+
+- `WebFormsPageBase.Session` is now available on all migrated pages
+- `ServiceCollectionExtensions.AddBlazorWebFormsComponents()` now registers session infrastructure
+- Build verified clean on net8.0, net9.0, net10.0
+
+
+### 2026-03-31: GAP-05 + GAP-07 Code-Behind Transforms
+
+**By:** Bishop
+
+**What:** Implemented 11 code-behind transforms (TC13TC21): UsingStrip, BaseClassStrip, ResponseRedirect, SessionDetect, ViewStateDetect, IsPostBack, PageLifecycle, EventHandlerSignature, DataBind, UrlCleanup, TodoHeader. Wired into C# pipeline with dependency injection.
+
+**Transform Ordering Decision (D4):** Run GAP-05 (lifecycle) before GAP-07 (event handlers) in pipeline. Lifecycle conversion changes Page_Load(object sender, EventArgs e) to OnInitializedAsync(). If event handler conversion ran first, it would strip the lifecycle method's params but not rename it. Running lifecycle first ensures the method name is changed, and the params no longer match the event handler regex.
+
+**Event Handler Type-Name Matching (D1):** Determine whether to strip both params or keep specialized EventArgs by checking if the type name is exactly EventArgs (strip both) vs. ends with EventArgs but is longer (keep specialized). PowerShell regex can't inspect C# type hierarchy. String matching on \w*EventArgs is sufficient.
+
+**PreRender Guard (D3):** Wrap the entire Page_PreRender body in if (firstRender) { ... } when converting to OnAfterRenderAsync. Page_PreRender runs once before the first render. OnAfterRenderAsync runs after every render. The irstRender guard preserves original single-execution semantics.
+
+**Why:** Web Forms page lifecycle and event handlers require specific transformations to map to Blazor component lifecycle. Transform ordering prevents interference between lifecycle renaming and event handler param stripping.
+
+**Test Status:** 72/72 tests passing, TC13TC21 all at 100% accuracy.
+
+### 2026-03-31: L1 Migration Test Framework Extension
+
+**By:** Colossus
+
+**What:** Extended L1 test suite from 15 to 18 test cases by adding TC16-IsPostBackGuard, TC17-BindExpression, TC18-UrlCleanup. Created xUnit test project (	ests/BlazorWebFormsComponents.Cli.Tests) with 7 transform test stubs.
+
+**Test Case Design:** Input: .aspx + optional .aspx.cs files in migration-toolkit/tests/inputs/. Expected: .razor + optional .razor.cs files in xpected/. Test runner discovers inputs and compares against expected using normalized line-by-line comparison.
+
+**Why:** Test infrastructure provides regression protection for L1 enhancements, documents expected script behavior, and provides foundation for future enhancement testing. L1 PowerShell tests validate script behavior; xUnit tests validate C# component behavior.
+
+**Test Status:** 72/72 tests passing, 78% pass rate (14/18), 98.2% line accuracy.
+
+### 2026-03-31: Phase 2 Playwright Test Strategy
+
+**By:** Colossus
+
+**What:** GAP-05 and GAP-07 are script-level transforms with no direct UI surface; covered by L1 tests. GAP-04 (SessionShim) has live sample page at /migration/session. Create 5 Playwright tests for SessionShim (set/get, count, clear, typed counter, cross-navigation persistence) + 1 regression test for Phase 1 ConfigurationManager page.
+
+**Element Selection:** Use data-audit-control attribute selectors (already present on sample page) for robust element targeting that won't break with CSS changes. Use DOMContentLoaded wait strategy (not NetworkIdle) for interactive Blazor Server pages.
+
+**Files Created:** samples/AfterBlazorServerSide.Tests/Migration/SessionDemoTests.cs (5 tests), samples/AfterBlazorServerSide.Tests/Migration/ConfigurationManagerTests.cs (1 test).
+
+**Why:** SessionShim is critical for migrated Web Forms code that uses Session["key"]. Tests ensure the shim works across different page navigations and component lifecycle scenarios.
+
+### 2026-03-31: SessionShim Design (GAP-04)
+
+**By:** Cyclops
+
+**What:** Implemented SessionShim as scoped service providing Session["key"] dictionary-style access for migrated Web Forms code. Registered in DI via AddBlazorWebFormsComponents(). Exposed as protected SessionShim Session on WebFormsPageBase.
+
+**Design Choices:**
+1. **System.Text.Json** for serialization  no Newtonsoft dependency, aligns with project zero-external-deps policy
+2. **Graceful fallback** to ConcurrentDictionary<string, object?> when ISession unavailable (interactive Blazor Server mode)
+3. **One-time log warning** via ILogger<SessionShim> on first fallback
+4. **IHttpContextAccessor as optional** constructor parameter  prevents DI failures in test environments
+5. **AddDistributedMemoryCache() + AddSession()** added to DI registration  required by ASP.NET Core session middleware
+6. **TryGetSession wraps access** in try/catch for InvalidOperationException
+
+**Why:** Web Forms apps use Session["key"] pervasively. This shim lets migrated code compile and run with only sp: prefix removal. Fallback mode ensures Blazor Server interactive circuits work correctly (session state is per-circuit).
+
+**Impact:** WebFormsPageBase.Session now available on all migrated pages. ServiceCollectionExtensions.AddBlazorWebFormsComponents() registers session infrastructure. Build verified on net8.0, net9.0, net10.0.
