@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,8 @@ public abstract class WebFormsPageBase : ComponentBase
 [Inject] private IHttpContextAccessor _httpContextAccessor { get; set; } = null!;
 [Inject] private ILogger<WebFormsPageBase> _logger { get; set; } = null!;
 [Inject] private SessionShim _sessionShim { get; set; } = null!;
+[Inject] private IWebHostEnvironment _webHostEnvironment { get; set; } = null!;
+[Inject] private CacheShim _cacheShim { get; set; } = null!;
 
 /// <summary>
 /// Provides dictionary-style <c>Session["key"]</c> access, emulating
@@ -119,6 +122,48 @@ protected ResponseShim Response
 /// </summary>
 protected RequestShim Request
 => new(_httpContextAccessor.HttpContext, _navigationManager, _logger);
+
+/// <summary>
+/// Compatibility shim for Web Forms <c>Server</c> object.
+/// Supports <c>Server.MapPath()</c>, <c>Server.HtmlEncode()</c>,
+/// <c>Server.UrlEncode()</c>, etc.
+/// </summary>
+protected ServerShim Server => new(_webHostEnvironment);
+
+/// <summary>
+/// Compatibility shim for Web Forms <c>Cache</c> object
+/// (<c>Page.Cache</c> / <c>HttpRuntime.Cache</c>).
+/// Provides dictionary-style <c>Cache["key"]</c> access backed by
+/// ASP.NET Core <see cref="Microsoft.Extensions.Caching.Memory.IMemoryCache"/>.
+/// </summary>
+protected CacheShim Cache => _cacheShim;
+
+/// <summary>
+/// Resolves a relative URL to an application-absolute URL.
+/// Equivalent to <c>Page.ResolveUrl("~/images/logo.png")</c> in Web Forms.
+/// Strips <c>~/</c> prefix and <c>.aspx</c> extensions.
+/// </summary>
+protected string ResolveUrl(string relativeUrl)
+{
+    if (string.IsNullOrEmpty(relativeUrl))
+        return relativeUrl;
+
+    if (relativeUrl.StartsWith("~/", StringComparison.Ordinal))
+        relativeUrl = relativeUrl[1..]; // ~/foo → /foo
+
+    // Strip .aspx extension for Blazor routing
+    if (relativeUrl.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase))
+        relativeUrl = relativeUrl[..^5];
+
+    return relativeUrl;
+}
+
+/// <summary>
+/// Resolves a URL relative to this page's location.
+/// Equivalent to <c>Page.ResolveClientUrl()</c> in Web Forms.
+/// For Blazor, this behaves the same as <see cref="ResolveUrl"/>.
+/// </summary>
+protected string ResolveClientUrl(string relativeUrl) => ResolveUrl(relativeUrl);
 
 /// <summary>
 /// Dictionary-based state storage emulating ASP.NET Web Forms ViewState.
