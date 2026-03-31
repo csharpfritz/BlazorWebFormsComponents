@@ -186,6 +186,16 @@ public static class ComponentCatalog
             Keywords: new[] { "ajax", "script", "proxy", "migration" }),
         new("Substitution", "Migration Helpers", "/ControlSamples/Substitution", "Post-cache dynamic content substitution",
             Keywords: new[] { "cache", "dynamic", "callback", "substitution" }),
+        new("Server Utilities", "Migration Helpers", "/migration/server-mappath", "ServerShim providing MapPath, HtmlEncode, UrlEncode, and ResolveUrl",
+            Keywords: new[] { "server", "mappath", "htmlencode", "urlencode", "resolveurl", "migration", "shim" }),
+        new("Cache", "Migration Helpers", "/migration/cache", "CacheShim providing Web Forms-compatible Cache[\"key\"] access backed by IMemoryCache",
+            Keywords: new[] { "cache", "memorycache", "insert", "remove", "expiration", "migration", "shim" }),
+        new("Request", "Migration Helpers", "/migration/request", "RequestShim providing QueryString, Url, and Cookies with SSR fallback",
+            Keywords: new[] { "request", "querystring", "url", "cookies", "httpcontext", "migration", "shim" }),
+        new("Response.Redirect", "Migration Helpers", "/migration/response-redirect", "ResponseShim providing Redirect with automatic ~/  and .aspx stripping",
+            Keywords: new[] { "response", "redirect", "navigation", "tilde", "aspx", "migration", "shim" }),
+        new("IsPostBack", "Migration Helpers", "/migration/ispostback", "IsPostBack status, guard pattern, and IsHttpContextAvailable check",
+            Keywords: new[] { "ispostback", "postback", "guard", "httpcontext", "lifecycle", "migration", "shim" }),
 
         // Cross-Cutting / Base Properties
         new("BaseProperties", "Utility", "/ControlSamples/BaseProperties", "AccessKey, ToolTip, BackColor, ForeColor and other base class properties",
