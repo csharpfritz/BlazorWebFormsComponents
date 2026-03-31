@@ -145,3 +145,26 @@ Updated all 12 LoginStatus bUnit tests: replaced manual `Mock<AuthenticationStat
 
  Team update (2026-03-06): WebFormsPageBase is the canonical base class for all migrated pages (not ComponentBase). All agents must use WebFormsPageBase  decided by Jeffrey T. Fritz
  Team update (2026-03-06): LoginView is a native BWFC component  do NOT convert to AuthorizeView. Strip asp: prefix only  decided by Jeffrey T. Fritz
+
+
+### CLI Scaffolding + Pipeline Integration Tests (2026-03-31)
+
+**54 tests across 3 new files** covering scaffolding output, config transforms, and full pipeline E2E.
+
+**Test Files Created:**
+1. ScaffoldingTests.cs - 24 tests: ProjectScaffolder (csproj content, Program.cs content, _Imports.razor usings, App.razor structure, Routes.razor, launchSettings, identity detection via Account/Login.aspx, Models folder detection, all file keys), GlobalUsingsGenerator (standard usings, identity conditional, header comment), ShimGenerator (WebFormsShims content, IdentityShims content, conditional write via WriteAsync).
+2. ConfigTransformTests.cs - 14 tests: WebConfigTransformer (valid JSON output, Logging/AllowedHosts sections, appSettings keys/values/empty values, connectionStrings names/values, built-in connection string filtering, combined sections, null for no web.config, null for empty config, error on invalid XML, key-less entries ignored, case-insensitive file discovery).
+3. PipelineIntegrationTests.cs - 16 tests: full MigrationPipeline E2E (razor file creation, BWFC component output, code-behind generation, dry-run no-output, scaffold file generation on disk, SkipScaffold flag contract, config to appsettings.json on disk, SourceScanner file discovery + code-behind detection, DatabaseProviderDetector from Web.config, full E2E with scaffold+config+transforms+shims, identity shim generation, MigrationReport JSON serialization, report file write, null report path no-op).
+
+**Updated TestHelpers.cs** with CreateTempProjectDir() and CleanupTempDir() utility methods.
+
+**Key Finding:** MigrationPipeline.ExecuteAsync was updated by Bishop to require full constructor (OutputWriter, ProjectScaffolder, etc.) - lightweight constructor sets these to null!. Integration tests must use the full constructor with all dependencies wired. Used reflection to extract transform lists from lightweight pipeline for reuse.
+
+**Pass/Fail:** All 126 tests pass (72 existing + 54 new), 0 failures, 0 skipped.
+
+**Patterns Established:**
+- IDisposable for temp directory cleanup in each test class
+- Full pipeline construction via reflection bridge from CreateDefaultPipeline() transform lists
+- SkipScaffold = true for transform-only integration tests; omit for full E2E
+- Inline web.config/aspx strings as test data (no external files needed)
+- CreateTempProjectDir() with boolean flags for optional features (code-behind, identity, web.config)
