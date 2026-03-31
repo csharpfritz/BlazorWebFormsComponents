@@ -102,6 +102,49 @@ public static class TestHelpers
     }
 
     /// <summary>
+    /// Creates a temp directory with sample Web Forms files for integration tests.
+    /// Returns the path to the temp directory. Caller is responsible for cleanup.
+    /// </summary>
+    public static string CreateTempProjectDir(string? suffix = null)
+    {
+        var dirName = $"bwfc-test-{suffix ?? Guid.NewGuid().ToString("N")}";
+        var tempDir = Path.Combine(Path.GetTempPath(), dirName);
+        if (Directory.Exists(tempDir))
+            Directory.Delete(tempDir, recursive: true);
+        Directory.CreateDirectory(tempDir);
+
+        File.WriteAllText(Path.Combine(tempDir, "Default.aspx"), """
+            <%@ Page Title="Home" Language="C#" AutoEventWireup="true" %>
+            <asp:Content ID="Body" ContentPlaceHolderID="MainContent" runat="server">
+                <asp:Label ID="Label1" runat="server" Text="Hello" />
+            </asp:Content>
+            """);
+
+        File.WriteAllText(Path.Combine(tempDir, "Web.config"), """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <appSettings>
+                <add key="TestKey" value="TestValue" />
+              </appSettings>
+            </configuration>
+            """);
+
+        return tempDir;
+    }
+
+    /// <summary>
+    /// Cleans up a temp directory created by CreateTempProjectDir.
+    /// </summary>
+    public static void CleanupTempDir(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            try { Directory.Delete(path, recursive: true); }
+            catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>
     /// Creates a fully configured MigrationPipeline with all markup and code-behind
     /// transforms registered in the canonical order.
     /// </summary>
