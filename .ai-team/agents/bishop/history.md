@@ -138,3 +138,31 @@ Ported all 10 code-behind transforms from PowerShell regex patterns to C# classe
 - **TodoHeader as standalone transform (Order 10):** Splitting the TODO header into its own transform class keeps Session/ViewState detect transforms cleaner — they find the marker and insert after it.
 - **Test discovery was previously placeholder:** The old tests only verified input ≠ expected. Wiring real pipeline exposed TC20/TC21 markup mismatches from EventWiringTransform `@` prefix.
 - **All 72 tests pass:** 21 markup + 8 code-behind + 4 infrastructure + 39 unit tests.
+
+### Phase 4: Scaffolding, Config Transforms, and Full Pipeline Wiring (Bishop)
+
+Ported scaffolding, config transforms, and OutputWriter from bwfc-migrate.ps1 to C#. Wired the full `migrate` command pipeline.
+
+#### New Files (9 total)
+| File | Purpose |
+|------|---------|
+| `Config/DatabaseProviderDetector.cs` | 3-pass DB provider detection from Web.config (providerName → conn string pattern → EntityClient inner) |
+| `Config/WebConfigTransformer.cs` | Parses Web.config appSettings + connectionStrings → appsettings.json (XDocument/LINQ to XML) |
+| `Io/OutputWriter.cs` | Centralized file writer: dry-run support, UTF-8 no BOM, directory creation, file tracking |
+| `Scaffolding/ProjectScaffolder.cs` | Generates .csproj, Program.cs, _Imports.razor, App.razor, Routes.razor, launchSettings.json |
+| `Scaffolding/GlobalUsingsGenerator.cs` | Generates GlobalUsings.cs with Blazor infrastructure + conditional Identity usings |
+| `Scaffolding/ShimGenerator.cs` | Generates WebFormsShims.cs + conditional IdentityShims.cs |
+
+#### Pipeline Changes
+- `MigrationPipeline.ExecuteAsync()` now runs: scaffold → config → per-file transforms → report
+- `MigrationReport` enhanced: JSON serialization (`--report`), console summary, manual items tracking
+- `Program.cs` DI wires all new services: ProjectScaffolder, GlobalUsingsGenerator, ShimGenerator, WebConfigTransformer, DatabaseProviderDetector, OutputWriter
+- 2-param constructor preserved on `MigrationPipeline` for backward-compatible test usage
+
+#### Key Patterns
+- **ProjectScaffolder detects HasModels/HasIdentity** from source directory structure (Models/, Account/, Login.aspx, Register.aspx) — adjusts .csproj packages and Program.cs boilerplate accordingly
+- **WebConfigTransformer skips built-in connection names** (LocalSqlServer, LocalMySqlServer) — matches PS behavior
+- **DatabaseProviderDetector maps 4 providers:** SqlClient→SqlServer, SQLite→Sqlite, Npgsql→PostgreSQL, MySql→MySql
+- **OutputWriter respects dry-run** — logs what would be written without touching disk
+- **All templates are string literals** — no external template files, matching PS approach
+- **Build clean:** 0 errors for both CLI and test projects
