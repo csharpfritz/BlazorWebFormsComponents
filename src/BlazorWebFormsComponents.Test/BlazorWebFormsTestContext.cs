@@ -1,9 +1,12 @@
 using Bunit;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
+using System.IO;
 using Xunit.Abstractions;
 
 namespace BlazorWebFormsComponents.Test;
@@ -31,9 +34,13 @@ public abstract class BlazorWebFormsTestContext : BunitContext
         // This is required because the base component calls this on first render
         JSInterop.SetupVoid("bwfc.Page.OnAfterRender");
 
-        // Register required services for BaseWebFormsComponent
+        // Register required services for BaseWebFormsComponent and WebFormsPageBase
         Services.AddSingleton<LinkGenerator>(new Mock<LinkGenerator>().Object);
         Services.AddSingleton<IHttpContextAccessor>(new Mock<IHttpContextAccessor>().Object);
+        Services.AddSingleton<IWebHostEnvironment>(CreateMockWebHostEnvironment());
+        Services.AddMemoryCache();
+        Services.AddScoped<CacheShim>();
+        Services.AddScoped<ServerShim>();
 
         // Always register logging so ILogger<T> is resolvable.
         // Add xUnit output sink when a test output helper is provided.
@@ -42,5 +49,13 @@ public abstract class BlazorWebFormsTestContext : BunitContext
             if (outputHelper != null)
                 builder.AddXUnit(outputHelper);
         });
+    }
+
+    private static IWebHostEnvironment CreateMockWebHostEnvironment()
+    {
+        var mock = new Mock<IWebHostEnvironment>();
+        mock.Setup(e => e.WebRootPath).Returns(Path.Combine(Path.GetTempPath(), "wwwroot"));
+        mock.Setup(e => e.ContentRootPath).Returns(Path.GetTempPath());
+        return mock.Object;
     }
 }
