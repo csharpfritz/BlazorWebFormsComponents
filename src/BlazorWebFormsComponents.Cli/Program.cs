@@ -1,6 +1,8 @@
 using System.CommandLine;
+using BlazorWebFormsComponents.Cli.Config;
 using BlazorWebFormsComponents.Cli.Io;
 using BlazorWebFormsComponents.Cli.Pipeline;
+using BlazorWebFormsComponents.Cli.Scaffolding;
 using BlazorWebFormsComponents.Cli.Transforms;
 using BlazorWebFormsComponents.Cli.Transforms.CodeBehind;
 using BlazorWebFormsComponents.Cli.Transforms.Directives;
@@ -59,9 +61,21 @@ class Program
         services.AddSingleton<ICodeBehindTransform, DataBindTransform>();
         services.AddSingleton<ICodeBehindTransform, UrlCleanupTransform>();
 
+        // Scaffolding
+        services.AddSingleton<ProjectScaffolder>();
+        services.AddSingleton<GlobalUsingsGenerator>();
+        services.AddSingleton<ShimGenerator>();
+
+        // Config
+        services.AddSingleton<DatabaseProviderDetector>();
+        services.AddSingleton<WebConfigTransformer>();
+
+        // I/O
+        services.AddSingleton<OutputWriter>();
+        services.AddSingleton<SourceScanner>();
+
         // Pipeline
         services.AddSingleton<MigrationPipeline>();
-        services.AddSingleton<SourceScanner>();
 
         return services.BuildServiceProvider();
     }
@@ -149,14 +163,10 @@ class Program
 
                 var migrationReport = await pipeline.ExecuteAsync(context);
 
-                Console.WriteLine($"\nMigration complete: {migrationReport.FilesProcessed} processed, {migrationReport.FilesWritten} written.");
+                migrationReport.PrintSummary();
+
                 if (migrationReport.Errors.Count > 0)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    foreach (var err in migrationReport.Errors)
-                        Console.Error.WriteLine($"  Error: {err}");
-                    Console.ResetColor();
-                }
+                    Environment.Exit(1);
             }
             catch (Exception ex)
             {
@@ -237,11 +247,28 @@ class Program
 
                 var result = pipeline.TransformMarkup(markupContent, metadata);
 
+                // Code-behind transform for convert command
+                var codeBehindPath = input + ".cs";
+                string? codeBehind = null;
+                if (File.Exists(codeBehindPath))
+                {
+                    metadata.CodeBehindContent = await File.ReadAllTextAsync(codeBehindPath);
+                    codeBehind = pipeline.TransformCodeBehind(metadata.CodeBehindContent, metadata);
+                }
+
                 Directory.CreateDirectory(outputDir);
                 await File.WriteAllTextAsync(outputPath, result);
 
+                if (codeBehind != null)
+                {
+                    var codeOutputPath = outputPath + ".cs";
+                    await File.WriteAllTextAsync(codeOutputPath, codeBehind);
+                }
+
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine($"✓ {Path.GetFileName(input)} → {razorName}");
+                if (codeBehind != null)
+                    Console.WriteLine($"✓ {Path.GetFileName(codeBehindPath)} → {razorName}.cs");
                 Console.ResetColor();
             }
             catch (Exception ex)
