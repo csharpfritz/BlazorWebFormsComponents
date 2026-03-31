@@ -14,7 +14,7 @@
     <PackageOutputPath>./nupkg</PackageOutputPath>
     
     <!-- Package Metadata -->
-    <PackageId>WebformsToBlazor.Cli</PackageId>
+    <PackageId>Fritz.WebFormsToBlazor</PackageId>
     <Authors>Jeffrey T. Fritz</Authors>
     <Description>A command-line tool to convert ASP.NET Web Forms user controls (.ascx) to Blazor Razor components, with assistance from GitHub Copilot SDK</Description>
     <Copyright>Copyright Jeffrey T. Fritz 2019-2026</Copyright>
@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

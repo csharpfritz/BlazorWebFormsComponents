@@ -1,5 +1,10 @@
 using System.CommandLine;
-using BlazorWebFormsComponents.Cli.Services;
+using BlazorWebFormsComponents.Cli.Io;
+using BlazorWebFormsComponents.Cli.Pipeline;
+using BlazorWebFormsComponents.Cli.Transforms;
+using BlazorWebFormsComponents.Cli.Transforms.Directives;
+using BlazorWebFormsComponents.Cli.Transforms.Markup;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BlazorWebFormsComponents.Cli;
 
@@ -7,49 +12,137 @@ class Program
 {
     static async Task<int> Main(string[] args)
     {
-        var rootCommand = new RootCommand("WebForms to Blazor - Convert ASP.NET Web Forms user controls (.ascx) to Blazor Razor components")
+        var rootCommand = new RootCommand("WebForms to Blazor - Convert ASP.NET Web Forms projects to Blazor using BWFC")
         {
             Name = "webforms-to-blazor"
         };
 
+        rootCommand.AddCommand(BuildMigrateCommand());
+        rootCommand.AddCommand(BuildConvertCommand());
+
+        return await rootCommand.InvokeAsync(args);
+    }
+
+    private static ServiceProvider BuildServiceProvider()
+    {
+        var services = new ServiceCollection();
+
+        // Register markup transforms in order
+        services.AddSingleton<IMarkupTransform, PageDirectiveTransform>();
+        services.AddSingleton<IMarkupTransform, MasterDirectiveTransform>();
+        services.AddSingleton<IMarkupTransform, ControlDirectiveTransform>();
+        services.AddSingleton<IMarkupTransform, ImportDirectiveTransform>();
+        services.AddSingleton<IMarkupTransform, RegisterDirectiveTransform>();
+        services.AddSingleton<IMarkupTransform, ContentWrapperTransform>();
+        services.AddSingleton<IMarkupTransform, FormWrapperTransform>();
+        services.AddSingleton<IMarkupTransform, ExpressionTransform>();
+        services.AddSingleton<IMarkupTransform, AjaxToolkitPrefixTransform>();
+        services.AddSingleton<IMarkupTransform, AspPrefixTransform>();
+        services.AddSingleton<IMarkupTransform, AttributeStripTransform>();
+        services.AddSingleton<IMarkupTransform, EventWiringTransform>();
+        services.AddSingleton<IMarkupTransform, UrlReferenceTransform>();
+        services.AddSingleton<IMarkupTransform, TemplatePlaceholderTransform>();
+        services.AddSingleton<IMarkupTransform, AttributeNormalizeTransform>();
+        services.AddSingleton<IMarkupTransform, DataSourceIdTransform>();
+
+        // Pipeline
+        services.AddSingleton<MigrationPipeline>();
+        services.AddSingleton<SourceScanner>();
+
+        return services.BuildServiceProvider();
+    }
+
+    private static Command BuildMigrateCommand()
+    {
+        var migrateCommand = new Command("migrate", "Full project migration from Web Forms to Blazor");
+
         var inputOption = new Option<string>(
-            aliases: new[] { "--input", "-i" },
-            description: "Path to .ascx file or directory containing .ascx files to convert")
-        {
-            IsRequired = true
-        };
+            aliases: ["--input", "-i"],
+            description: "Source Web Forms project root (required)")
+        { IsRequired = true };
 
         var outputOption = new Option<string>(
-            aliases: new[] { "--output", "-o" },
-            description: "Output directory for converted Razor components (defaults to input directory)");
+            aliases: ["--output", "-o"],
+            description: "Output Blazor project directory (required)")
+        { IsRequired = true };
 
-        var recursiveOption = new Option<bool>(
-            aliases: new[] { "--recursive", "-r" },
-            description: "Recursively process all .ascx files in subdirectories",
+        var skipScaffoldOption = new Option<bool>(
+            name: "--skip-scaffold",
+            description: "Skip .csproj, Program.cs, _Imports.razor generation",
+            getDefaultValue: () => false);
+
+        var dryRunOption = new Option<bool>(
+            name: "--dry-run",
+            description: "Show transforms without writing files",
+            getDefaultValue: () => false);
+
+        var verboseOption = new Option<bool>(
+            aliases: ["--verbose", "-v"],
+            description: "Detailed per-file transform log",
             getDefaultValue: () => false);
 
         var overwriteOption = new Option<bool>(
-            aliases: new[] { "--overwrite", "-f" },
-            description: "Overwrite existing .razor files without prompting",
+            name: "--overwrite",
+            description: "Overwrite existing files in output directory",
             getDefaultValue: () => false);
 
-        var aiOption = new Option<bool>(
-            aliases: new[] { "--use-ai" },
-            description: "Use GitHub Copilot/OpenAI for enhanced conversion (requires GITHUB_TOKEN or OPENAI_API_KEY environment variable)",
+        var useAiOption = new Option<bool>(
+            name: "--use-ai",
+            description: "Enable L2 AI-powered transforms via Copilot",
             getDefaultValue: () => false);
 
-        rootCommand.AddOption(inputOption);
-        rootCommand.AddOption(outputOption);
-        rootCommand.AddOption(recursiveOption);
-        rootCommand.AddOption(overwriteOption);
-        rootCommand.AddOption(aiOption);
+        var reportOption = new Option<string?>(
+            name: "--report",
+            description: "Write JSON migration report to file");
 
-        rootCommand.SetHandler(async (input, output, recursive, overwrite, useAi) =>
+        migrateCommand.AddOption(inputOption);
+        migrateCommand.AddOption(outputOption);
+        migrateCommand.AddOption(skipScaffoldOption);
+        migrateCommand.AddOption(dryRunOption);
+        migrateCommand.AddOption(verboseOption);
+        migrateCommand.AddOption(overwriteOption);
+        migrateCommand.AddOption(useAiOption);
+        migrateCommand.AddOption(reportOption);
+
+        migrateCommand.SetHandler(async (input, output, skipScaffold, dryRun, verbose, overwrite, useAi, report) =>
         {
             try
             {
-                var converter = new AscxToRazorConverter(useAi);
-                await converter.ConvertAsync(input, output, recursive, overwrite);
+                using var sp = BuildServiceProvider();
+                var scanner = sp.GetRequiredService<SourceScanner>();
+                var pipeline = sp.GetRequiredService<MigrationPipeline>();
+
+                var context = new MigrationContext
+                {
+                    SourcePath = input,
+                    OutputPath = output,
+                    Options = new MigrationOptions
+                    {
+                        SkipScaffold = skipScaffold,
+                        DryRun = dryRun,
+                        Verbose = verbose,
+                        Overwrite = overwrite,
+                        UseAi = useAi,
+                        ReportPath = report
+                    }
+                };
+
+                context.SourceFiles = scanner.Scan(input, output);
+
+                Console.WriteLine($"Found {context.SourceFiles.Count} Web Forms file(s) to migrate...");
+                if (dryRun)
+                    Console.WriteLine("(dry-run mode — no files will be written)");
+
+                var migrationReport = await pipeline.ExecuteAsync(context);
+
+                Console.WriteLine($"\nMigration complete: {migrationReport.FilesProcessed} processed, {migrationReport.FilesWritten} written.");
+                if (migrationReport.Errors.Count > 0)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    foreach (var err in migrationReport.Errors)
+                        Console.Error.WriteLine($"  Error: {err}");
+                    Console.ResetColor();
+                }
             }
             catch (Exception ex)
             {
@@ -58,8 +151,95 @@ class Program
                 Console.ResetColor();
                 Environment.Exit(1);
             }
-        }, inputOption, outputOption, recursiveOption, overwriteOption, aiOption);
+        }, inputOption, outputOption, skipScaffoldOption, dryRunOption, verboseOption, overwriteOption, useAiOption, reportOption);
 
-        return await rootCommand.InvokeAsync(args);
+        return migrateCommand;
+    }
+
+    private static Command BuildConvertCommand()
+    {
+        var convertCommand = new Command("convert", "Single file conversion from Web Forms to Blazor");
+
+        var inputOption = new Option<string>(
+            aliases: ["--input", "-i"],
+            description: ".aspx, .ascx, or .master file (required)")
+        { IsRequired = true };
+
+        var outputOption = new Option<string?>(
+            aliases: ["--output", "-o"],
+            description: "Output directory (default: same directory)");
+
+        var overwriteOption = new Option<bool>(
+            name: "--overwrite",
+            description: "Overwrite existing .razor file",
+            getDefaultValue: () => false);
+
+        var useAiOption = new Option<bool>(
+            name: "--use-ai",
+            description: "Enable AI-powered transforms",
+            getDefaultValue: () => false);
+
+        convertCommand.AddOption(inputOption);
+        convertCommand.AddOption(outputOption);
+        convertCommand.AddOption(overwriteOption);
+        convertCommand.AddOption(useAiOption);
+
+        convertCommand.SetHandler(async (input, output, overwrite, useAi) =>
+        {
+            try
+            {
+                if (!File.Exists(input))
+                    throw new FileNotFoundException($"Input file not found: {input}");
+
+                var outputDir = output ?? Path.GetDirectoryName(input) ?? ".";
+                var razorName = Path.GetFileNameWithoutExtension(input) + ".razor";
+                var outputPath = Path.Combine(outputDir, razorName);
+
+                if (File.Exists(outputPath) && !overwrite)
+                {
+                    Console.Error.WriteLine($"Output file already exists: {outputPath}. Use --overwrite to replace.");
+                    Environment.Exit(1);
+                }
+
+                using var sp = BuildServiceProvider();
+                var pipeline = sp.GetRequiredService<MigrationPipeline>();
+
+                var markupContent = await File.ReadAllTextAsync(input);
+                var ext = Path.GetExtension(input).ToLowerInvariant();
+                var fileType = ext switch
+                {
+                    ".master" => FileType.Master,
+                    ".ascx" => FileType.Control,
+                    _ => FileType.Page
+                };
+
+                var metadata = new FileMetadata
+                {
+                    SourceFilePath = input,
+                    OutputFilePath = outputPath,
+                    FileType = fileType,
+                    OriginalContent = markupContent
+                };
+
+                var result = pipeline.TransformMarkup(markupContent, metadata);
+
+                Directory.CreateDirectory(outputDir);
+                await File.WriteAllTextAsync(outputPath, result);
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"✓ {Path.GetFileName(input)} → {razorName}");
+                Console.ResetColor();
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.Error.WriteLine($"Error: {ex.Message}");
+                Console.ResetColor();
+                Environment.Exit(1);
+            }
+        }, inputOption, outputOption, overwriteOption, useAiOption);
+
+        return convertCommand;
     }
 }
+
