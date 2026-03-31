@@ -453,3 +453,21 @@ Key findings: GAP-05 and GAP-07 transforms are already implemented in the L1 scr
 
 Conventions discovered: SessionShim uses Shouldly assertions + xUnit `[Fact]` (matching ViewStateDictionaryTests pattern). L1 test naming: `TC{N}-{PascalCaseName}` with sequential numbering. Expected code-behind always includes the standard 15-line TODO header.
 
+### CLI Global Tool Test Project (2026-07, feature/global-tool-port)
+
+**Created `tests/BlazorWebFormsComponents.Cli.Tests/` — xUnit test project for the webforms-to-blazor C# global tool. 72 tests, all PASS. Build: 0 errors.**
+
+**Files created (13 files, 869 insertions):**
+- `BlazorWebFormsComponents.Cli.Tests.csproj`: net10.0, xunit 2.x, Microsoft.NET.Test.Sdk 17.x, references CLI project. Key gotcha: `<Compile Remove="TestData/**/*" />` required because the TestData/inputs/*.aspx.cs files are real C# (Web Forms code-behind) that reference System.Web.UI — without exclusion they're compiled as project source and fail.
+- `TestHelpers.cs`: `NormalizeContent()` ported from Run-L1Tests.ps1 (CRLF→LF, TrimEnd per line, strip trailing blanks), `GetTestDataRoot()` with fallback directory walk, `DiscoverTestCases()` / `DiscoverCodeBehindTestCases()` auto-discovery. `CreateDefaultPipeline()` stubbed with TODO comments and full transform ordering from architecture doc.
+- `L1TransformTests.cs`: `[Theory][MemberData]` parameterized tests — 21 markup tests + 8 code-behind tests + 3 data integrity facts. Pipeline calls stubbed; currently asserts test data is loadable and input≠expected. Ready for Bishop to wire up.
+- `CliTests.cs`: 13 System.CommandLine tests — migrate/convert commands exist with correct options, analyze command does NOT exist, parse validation for valid/invalid args. Builds own RootCommand matching target architecture spec.
+- 7 TransformUnit stubs (AspPrefix, Expression, PageDirective, AttributeStrip, FormWrapper, ContentWrapper, UrlReference): 2-4 focused tests each, testing ONE transform in isolation. Each has TODO markers for real transform instantiation.
+- `Usings.cs`: `global using Xunit;`
+
+**Key learnings:**
+- TestData `.aspx.cs` files MUST be excluded from `<Compile>` — they're Web Forms code-behind with `System.Web.UI.Page` base class that can't compile on net10.0. Use `<Compile Remove>` + `<None Include>` pattern.
+- Pipeline interfaces (`IMarkupTransform`, `ICodeBehindTransform`, `FileMetadata`) don't exist yet in src/ — Bishop is building them. All pipeline-dependent code uses TODO comments so the test project compiles independently.
+- System.CommandLine tests work by reconstructing the command tree locally rather than trying to invoke Program.Main — this decouples from Bishop's refactoring of Program.cs.
+- Test case count: 21 TC* cases (TC01-TC21), of which 8 have code-behind pairs (TC13-TC16, TC18-TC21). Total 29 input files + 29 expected files = 58 TestData files.
+
