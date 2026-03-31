@@ -33,7 +33,6 @@ public class CliTests
         migrateCommand.AddOption(new Option<bool>("--dry-run", "Show transforms without writing files"));
         migrateCommand.AddOption(new Option<bool>(new[] { "--verbose", "-v" }, "Detailed per-file transform log"));
         migrateCommand.AddOption(new Option<bool>("--overwrite", "Overwrite existing files in output directory"));
-        migrateCommand.AddOption(new Option<bool>("--use-ai", "Enable L2 AI-powered transforms"));
         rootCommand.AddCommand(migrateCommand);
 
         // --- convert subcommand (target architecture) ---
@@ -41,7 +40,6 @@ public class CliTests
         convertCommand.AddOption(new Option<string>(new[] { "--input", "-i" }, "Source .aspx/.ascx/.master file") { IsRequired = true });
         convertCommand.AddOption(new Option<string>(new[] { "--output", "-o" }, "Output directory"));
         convertCommand.AddOption(new Option<bool>("--overwrite", "Overwrite existing .razor file"));
-        convertCommand.AddOption(new Option<bool>("--use-ai", "Enable AI-powered transforms"));
         rootCommand.AddCommand(convertCommand);
 
         return rootCommand;
@@ -76,7 +74,6 @@ public class CliTests
     [InlineData("--dry-run")]
     [InlineData("--verbose")]
     [InlineData("--overwrite")]
-    [InlineData("--use-ai")]
     public void MigrateCommand_AcceptsOptionalFlags(string optionName)
     {
         var root = BuildRootCommand();
@@ -109,7 +106,6 @@ public class CliTests
     [Theory]
     [InlineData("--output")]
     [InlineData("--overwrite")]
-    [InlineData("--use-ai")]
     public void ConvertCommand_AcceptsOptionalFlags(string optionName)
     {
         var root = BuildRootCommand();

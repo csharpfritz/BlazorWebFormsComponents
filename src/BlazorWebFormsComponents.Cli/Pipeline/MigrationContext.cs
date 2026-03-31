@@ -18,7 +18,6 @@ public class MigrationOptions
     public bool DryRun { get; set; }
     public bool Verbose { get; set; }
     public bool Overwrite { get; set; }
-    public bool UseAi { get; set; }
     public string? ReportPath { get; set; }
 }
 

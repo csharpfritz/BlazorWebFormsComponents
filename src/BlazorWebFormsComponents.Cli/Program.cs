@@ -114,11 +114,6 @@ class Program
             description: "Overwrite existing files in output directory",
             getDefaultValue: () => false);
 
-        var useAiOption = new Option<bool>(
-            name: "--use-ai",
-            description: "Enable L2 AI-powered transforms via Copilot",
-            getDefaultValue: () => false);
-
         var reportOption = new Option<string?>(
             name: "--report",
             description: "Write JSON migration report to file");
@@ -129,10 +124,9 @@ class Program
         migrateCommand.AddOption(dryRunOption);
         migrateCommand.AddOption(verboseOption);
         migrateCommand.AddOption(overwriteOption);
-        migrateCommand.AddOption(useAiOption);
         migrateCommand.AddOption(reportOption);
 
-        migrateCommand.SetHandler(async (input, output, skipScaffold, dryRun, verbose, overwrite, useAi, report) =>
+        migrateCommand.SetHandler(async (input, output, skipScaffold, dryRun, verbose, overwrite, report) =>
         {
             try
             {
@@ -150,7 +144,6 @@ class Program
                         DryRun = dryRun,
                         Verbose = verbose,
                         Overwrite = overwrite,
-                        UseAi = useAi,
                         ReportPath = report
                     }
                 };
@@ -175,7 +168,7 @@ class Program
                 Console.ResetColor();
                 Environment.Exit(1);
             }
-        }, inputOption, outputOption, skipScaffoldOption, dryRunOption, verboseOption, overwriteOption, useAiOption, reportOption);
+        }, inputOption, outputOption, skipScaffoldOption, dryRunOption, verboseOption, overwriteOption, reportOption);
 
         return migrateCommand;
     }
@@ -198,17 +191,11 @@ class Program
             description: "Overwrite existing .razor file",
             getDefaultValue: () => false);
 
-        var useAiOption = new Option<bool>(
-            name: "--use-ai",
-            description: "Enable AI-powered transforms",
-            getDefaultValue: () => false);
-
         convertCommand.AddOption(inputOption);
         convertCommand.AddOption(outputOption);
         convertCommand.AddOption(overwriteOption);
-        convertCommand.AddOption(useAiOption);
 
-        convertCommand.SetHandler(async (input, output, overwrite, useAi) =>
+        convertCommand.SetHandler(async (input, output, overwrite) =>
         {
             try
             {
@@ -278,7 +265,7 @@ class Program
                 Console.ResetColor();
                 Environment.Exit(1);
             }
-        }, inputOption, outputOption, overwriteOption, useAiOption);
+        }, inputOption, outputOption, overwriteOption);
 
         return convertCommand;
     }

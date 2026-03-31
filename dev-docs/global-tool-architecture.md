@@ -75,7 +75,7 @@ src/
 │   │   ├── SourceScanner.cs                  # Discovers .aspx/.ascx/.master files
 │   │   └── OutputWriter.cs                   # Writes files, respects --dry-run
 │   └── Services/
-│       └── AiAssistant.cs                    # L2 AI hook (from PR #328)
+│       └── (reserved for future services)
 ```
 
 ### Project References
@@ -309,7 +309,6 @@ Options:
   --dry-run                  Show transforms without writing files
   -v, --verbose              Detailed per-file transform log
   --overwrite                Overwrite existing files in output directory
-  --use-ai                   Enable L2 AI-powered transforms via Copilot
   --report <path>            Write JSON migration report to file
   --report-format <format>   Report format: json | markdown (default: json)
 ```
@@ -323,13 +322,12 @@ Options:
   -i, --input <file>         .aspx, .ascx, or .master file (required)
   -o, --output <path>        Output directory (default: same directory)
   --overwrite                Overwrite existing .razor file
-  --use-ai                   Enable AI-powered transforms
 ```
 
 ### Design Decisions
 
 - **Both project and single-file modes.** The `migrate` command is the primary workflow. `convert` exists for incremental migration and testing individual files. Analysis runs automatically as part of `migrate` — the pre-scan results feed into `--report` output without exposing a separate command.
-- **`--use-ai` flag** enables L2 transforms. When enabled, after L1 deterministic transforms complete, the `AiAssistant` service processes TODO comments and flagged items. It does NOT call external APIs by default — it generates structured guidance that Copilot skills can act on. If `GITHUB_TOKEN` or `OPENAI_API_KEY` is set, it can invoke AI models directly via `Microsoft.Extensions.AI`.
+- **Copilot orchestrates L2 transforms.** The CLI tool is a pure L1 deterministic engine. Items it cannot handle get structured `// TODO(bwfc-*)` comments that Copilot skills recognize and act on. Copilot calls the CLI tool (via skill-chaining), reads the migration report, and applies L2 contextual transforms. This keeps the tool self-contained with no AI dependencies while enabling the full 3-layer migration workflow.
 - **`--dry-run`** is the replacement for PowerShell's `-WhatIf`. Logs all transforms to console without writing any files.
 - **`--report`** generates a structured report (JSON by default) with pass/fail metrics, transform counts, and manual items. This enables CI integration and Copilot skill consumption.
 
@@ -463,69 +461,33 @@ Port TC13–TC25:
 
 ---
 
-## 7. AI Integration Hook
+## 7. Copilot Orchestration Model
 
 ### Architecture
 
-`AiAssistant.cs` from PR #328 is the right idea but needs expansion:
+The CLI tool is a **pure L1 deterministic engine** — no AI dependencies, no API keys, no external calls. Copilot orchestrates the migration by calling the tool and processing its output.
 
-```csharp
-public class AiAssistant
-{
-    private readonly IAiProvider? _provider;
-    
-    public AiAssistant(AiOptions options)
-    {
-        if (options.Enabled)
-            _provider = ResolveProvider(options);
-    }
-    
-    // L2 Transform: Process flagged items after L1 pipeline
-    public async Task<string> ApplyL2TransformsAsync(
-        string content, 
-        FileMetadata metadata, 
-        IReadOnlyList<ManualItem> flaggedItems)
-    {
-        if (_provider == null) return content;
-        
-        foreach (var item in flaggedItems)
-        {
-            var prompt = BuildPromptForItem(item, content, metadata);
-            var suggestion = await _provider.CompleteAsync(prompt);
-            content = ApplySuggestion(content, item, suggestion);
-        }
-        return content;
-    }
-    
-    // Generate TODO comments with structured hints for Copilot
-    public string GenerateCopilotHints(IReadOnlyList<ManualItem> items)
-    {
-        // Produces structured TODO comments that Copilot skills can parse
-        // e.g., "// TODO(bwfc-session-state): Session["CartId"] → scoped service"
-    }
-}
-```
+### How It Works
 
-### How `--use-ai` Works
-
-**Without `--use-ai` (default):** L1 transforms run. Manual items get TODO comments with structured hints. These hints use a format that BWFC Copilot skills can recognize:
+1. **Copilot invokes the CLI tool** via skill-chaining (SKILL.md files reference `webforms-to-blazor` as a CLI tool)
+2. **L1 transforms run** — deterministic regex transforms handle ~70% of conversion
+3. **Structured TODO comments** are emitted for items requiring contextual understanding:
 
 ```csharp
 // TODO(bwfc-session-state): Session["CartId"] detected — convert to scoped service
 // TODO(bwfc-identity-migration): FormsAuthentication.SignOut() → SignInManager.SignOutAsync()
 ```
 
-**With `--use-ai`:** After L1 completes, `AiAssistant` processes each flagged item:
-1. Checks for `GITHUB_TOKEN` → uses GitHub Copilot API via `Microsoft.Extensions.AI`
-2. Falls back to `OPENAI_API_KEY` → uses OpenAI directly
-3. If neither is set → emits warning, falls back to structured TODO comments
+4. **`--report` generates a migration report** (JSON) listing all flagged items with categories matching skill names
+5. **Copilot reads the report** and applies L2 transforms using the appropriate BWFC skills (session-state, identity-migration, middleware, etc.)
+6. **Developer handles L3** — irreducible manual work (~10-15%)
 
-**Skill system connection:** The tool does NOT directly invoke Copilot skills. Instead:
-1. The tool generates a `migration-report.json` with all flagged items
-2. A Copilot skill reads that report and applies L2 transforms
-3. The `--use-ai` flag enables inline AI processing as an alternative to the skill workflow
+### Benefits
 
-This keeps the tool self-contained (no dependency on the skill runtime) while enabling the skill-based workflow for developers using Copilot.
+- **Security:** No API keys stored in or passed to the CLI tool. No network calls. Pure compiled binary.
+- **Deterministic:** Same input always produces same output. Testable, auditable, CI-friendly.
+- **Composable:** Copilot can call `convert` for single files or `migrate` for full projects, then layer on contextual transforms.
+- **Offline:** Works without internet. AI enhancement is additive via Copilot, not required.
 
 ---
 

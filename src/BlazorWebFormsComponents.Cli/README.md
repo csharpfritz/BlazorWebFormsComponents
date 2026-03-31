@@ -50,7 +50,6 @@ webforms-to-blazor --input path/to/controls/
 - `-o, --output <path>`: Output directory for converted files (defaults to input directory)
 - `-r, --recursive`: Process all .ascx files in subdirectories
 - `-f, --overwrite`: Overwrite existing .razor files without prompting
-- `--use-ai`: Enable AI-assisted conversion (requires OPENAI_API_KEY or GITHUB_TOKEN environment variable)
 
 ### Examples
 
@@ -64,13 +63,6 @@ Convert to a different output directory:
 
 ```bash
 webforms-to-blazor -i ./WebFormsControls -o ./BlazorComponents -r
-```
-
-Use AI assistance for better conversion (future feature):
-
-```bash
-export OPENAI_API_KEY="your-api-key"
-webforms-to-blazor -i ./UserControls --use-ai
 ```
 
 ## What Gets Converted
