@@ -3,7 +3,7 @@ using BlazorWebFormsComponents.Cli.Pipeline;
 namespace BlazorWebFormsComponents.Cli.Transforms.Markup;
 
 /// <summary>
-/// Converts ~/ URL references to / for href, NavigateUrl, and ImageUrl attributes.
+/// Converts ~/ URL references to / for URL-bearing attributes.
 /// </summary>
 public class UrlReferenceTransform : IMarkupTransform
 {
@@ -14,7 +14,12 @@ public class UrlReferenceTransform : IMarkupTransform
     [
         ("href=\"~/", "href=\"/"),
         ("NavigateUrl=\"~/", "NavigateUrl=\"/"),
-        ("ImageUrl=\"~/", "ImageUrl=\"/")
+        ("ImageUrl=\"~/", "ImageUrl=\"/"),
+        ("src=\"~/", "src=\"/"),
+        ("BackImageUrl=\"~/", "BackImageUrl=\"/"),
+        ("PostBackUrl=\"~/", "PostBackUrl=\"/"),
+        ("DataNavigateUrlFormatString=\"~/", "DataNavigateUrlFormatString=\"/"),
+        ("HelpPageUrl=\"~/", "HelpPageUrl=\"/")
     ];
 
     public string Apply(string content, FileMetadata metadata)
