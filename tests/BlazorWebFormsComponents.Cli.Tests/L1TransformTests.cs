@@ -109,9 +109,9 @@ public class L1TransformTests
     [Fact]
     public void TestData_ContainsExpectedNumberOfTestCases()
     {
-        // Verify we have the expected 28 markup test cases (TC01–TC21 + TC23–TC29)
+        // Verify we have the expected 33 markup test cases (TC01–TC21 + TC23–TC32)
         var testCases = TestHelpers.DiscoverTestCases().ToList();
-        Assert.Equal(28, testCases.Count);
+        Assert.Equal(33, testCases.Count);
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public class L1TransformTests
                 $"Test case '{tc}' has input .aspx.cs but no expected .razor.cs");
         }
 
-        // Verify we have 11 code-behind test cases (TC13–TC16, TC18–TC21, TC26–TC27, TC29)
-        Assert.Equal(11, inputCsFiles.Count);
+        // Verify we have 12 code-behind test cases (TC13–TC16, TC18–TC21, TC26–TC27, TC29, TC31)
+        Assert.Equal(12, inputCsFiles.Count);
     }
 }
