@@ -40,6 +40,7 @@ class Program
         services.AddSingleton<IMarkupTransform, FormWrapperTransform>();
         services.AddSingleton<IMarkupTransform, ExpressionTransform>();
         services.AddSingleton<IMarkupTransform, LoginViewTransform>();
+        services.AddSingleton<IMarkupTransform, SelectMethodTransform>();
         services.AddSingleton<IMarkupTransform, AjaxToolkitPrefixTransform>();
         services.AddSingleton<IMarkupTransform, AspPrefixTransform>();
         services.AddSingleton<IMarkupTransform, AttributeStripTransform>();
@@ -54,6 +55,7 @@ class Program
         services.AddSingleton<ICodeBehindTransform, UsingStripTransform>();
         services.AddSingleton<ICodeBehindTransform, BaseClassStripTransform>();
         services.AddSingleton<ICodeBehindTransform, ResponseRedirectTransform>();
+        services.AddSingleton<ICodeBehindTransform, GetRouteUrlTransform>();
         services.AddSingleton<ICodeBehindTransform, SessionDetectTransform>();
         services.AddSingleton<ICodeBehindTransform, ViewStateDetectTransform>();
         services.AddSingleton<ICodeBehindTransform, IsPostBackTransform>();
