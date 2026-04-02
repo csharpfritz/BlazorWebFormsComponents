@@ -39,6 +39,7 @@ class Program
         services.AddSingleton<IMarkupTransform, ContentWrapperTransform>();
         services.AddSingleton<IMarkupTransform, FormWrapperTransform>();
         services.AddSingleton<IMarkupTransform, ExpressionTransform>();
+        services.AddSingleton<IMarkupTransform, LoginViewTransform>();
         services.AddSingleton<IMarkupTransform, AjaxToolkitPrefixTransform>();
         services.AddSingleton<IMarkupTransform, AspPrefixTransform>();
         services.AddSingleton<IMarkupTransform, AttributeStripTransform>();
