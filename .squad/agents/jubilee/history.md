@@ -5,6 +5,8 @@
 - **Stack:** C#, Blazor, .NET, ASP.NET Web Forms, bUnit, xUnit, MkDocs, Playwright
 - **Created:** 2026-02-10
 
+📌 Team update (2026-04-02): Phase 5 migration sample showcases complete — 5 end-to-end test cases (TC28-TC32) with realistic Web Forms patterns (ViewState, event handlers, LoginView, master pages, data controls). 328 total L1 tests (5 new samples). All samples compile and render <100ms. Ready for merge to feature/global-tool-port. — decided by Scribe
+
 ## Learnings
 
 <!--  Summarized 2026-02-27 by Scribe  covers M1M16 -->

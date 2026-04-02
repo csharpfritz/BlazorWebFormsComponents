@@ -2,6 +2,8 @@
 
 <!-- ⚠ Summarized 2026-02-28 by Scribe — entries before 2026-02-26 archived below as summaries. Full early history in history-archive.md -->
 
+📌 Team update (2026-04-02): Phase 5 L1 acceptance test expansion complete — 6 new test cases (TC24-TC29) for edge case coverage, pipeline registration fix for manual-item categorization. 322 total L1 tests (0 failures). All CLI transforms verified in integration testing. Ready for merge to feature/global-tool-port. — decided by Scribe
+
 ## Core Context
 
 Integration test engineer. Built test coverage from M1 through M19. 130+ integration tests (smoke + interaction) covering all milestone sample pages. Key patterns established: `WaitUntilState.DOMContentLoaded` for async-bound components, `Filter(HasTextString)` for specific element targeting, ISO timestamp filtering for console errors, `PressSequentiallyAsync` + Tab for Blazor Server inputs. LoginControls pages require `@using BlazorWebFormsComponents.LoginControls`. Never use external image URLs. Full early history in `history-archive.md`.

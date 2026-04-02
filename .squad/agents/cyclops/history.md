@@ -837,3 +837,60 @@ foreach (var warning in warnings) {
 - `ISession.Keys` requires `System.Linq` for `Any()`/`Count()` — must include the using.
 
 **Build:** ✅ 0 errors on net8.0;net9.0;net10.0
+
+### Phase 1B: ManualItem Structured Report Schema (G12/G13)
+
+**Summary:** Replaced flat `List<string> ManualItems` in `MigrationReport` with structured `List<ManualItem>` using a C# record that carries file, line, category (bwfc-* slug), description, and severity. This enables Copilot L2 orchestration to parse manual items programmatically.
+
+**Files changed:**
+- `src/BlazorWebFormsComponents.Cli/Pipeline/ManualItem.cs` — new record type
+- `src/BlazorWebFormsComponents.Cli/Pipeline/MigrationReport.cs` — `List<ManualItem>`, `AddManualItem()` convenience method, camelCase JSON serialization
+- `src/BlazorWebFormsComponents.Cli/Pipeline/MigrationPipeline.cs` — updated sole call site to use `AddManualItem`
+- `tests/BlazorWebFormsComponents.Cli.Tests/PipelineIntegrationTests.cs` — updated assertions for structured ManualItem and camelCase JSON
+
+**Technical decisions:**
+- `ManualItem` is a positional record: `ManualItem(File, Line, Category, Description, Severity)`
+- JSON uses `JsonNamingPolicy.CamelCase` for consistent API-friendly output
+- `AddManualItem` defaults severity to `"medium"` for convenience
+- Category values follow bwfc-* slug convention (bwfc-session-state, bwfc-general, etc.)
+
+**Build:** ✅ 0 errors, 124 tests pass
+
+### Phase 3A G17: ConfigurationManagerShim Verification (2026-07)
+
+**Task:** Verify ConfigurationManager shim (Gap G17) — already implemented in Phase 1.
+
+**Status:** Shim already exists at `src/BlazorWebFormsComponents/ConfigurationManager.cs` with full test coverage at `src/BlazorWebFormsComponents.Test/ConfigurationManagerTests.cs` (9 tests, all passing).
+
+**API surface:**
+- `ConfigurationManager.AppSettings["key"]` → reads `AppSettings:{key}` with fallback to `{key}` from `IConfiguration`
+- `ConfigurationManager.ConnectionStrings["name"]` → returns `ConnectionStringSettings` via `IConfiguration.GetConnectionString()`
+- `ConfigurationManager.Initialize(IConfiguration)` → static binding, called via `app.UseConfigurationManagerShim()`
+- Supporting types: `AppSettingsCollection`, `ConnectionStringSettingsCollection`, `ConnectionStringSettings`
+
+**Key pattern:** Static class (like Web Forms original), initialized once at startup. Lives in `BlazorWebFormsComponents` namespace so `.targets` global using shadows `System.Configuration.ConfigurationManager`.
+
+### Phase 1A: TODO Comment Convention Standardization (2026-04-02)
+
+**Summary:** Standardized all emitted TODO comments across 8 CLI transform/scaffolding files to use the `TODO(bwfc-{category}):` prefix format. This enables Copilot L2 skill matching by providing a parseable, consistent pattern.
+
+**Convention:**
+- C# output (.razor.cs): `// TODO(bwfc-{category}): {description}`
+- C# inline (within expressions): `/* TODO(bwfc-{category}): {description} */`
+- Razor output (.razor): `@* TODO(bwfc-{category}): {description} *@`
+
+**Category slugs:** bwfc-general, bwfc-lifecycle, bwfc-ispostback, bwfc-viewstate, bwfc-session-state, bwfc-navigation, bwfc-datasource, bwfc-identity, bwfc-ajax-toolkit, bwfc-expression, bwfc-master-page, bwfc-login-view, bwfc-select-method, bwfc-route-url.
+
+**Files changed (transforms):**
+- TodoHeaderTransform.cs  11-item checklist header now uses category-prefixed TODOs
+- PageLifecycleTransform.cs  3 TODOs  `bwfc-lifecycle`
+- IsPostBackTransform.cs  3 TODOs  `bwfc-ispostback` (inline `/* */` converted to `//` on own line)
+- ResponseRedirectTransform.cs  3 TODOs  `bwfc-navigation` (inline expression TODOs stay `/* */`)
+- AjaxToolkitPrefixTransform.cs  2 TODOs  `bwfc-ajax-toolkit`
+- DataSourceIdTransform.cs  2 TODOs  `bwfc-datasource`
+- ShimGenerator.cs  1 TODO  `bwfc-identity`
+- ProjectScaffolder.cs  5 TODOs  `bwfc-datasource`, `bwfc-identity`, `bwfc-session-state`, `bwfc-general`
+
+**Files changed (test expectations):** 18 expected output files updated across tests/ and migration-toolkit/tests/.
+
+**Build:** 0 errors. **Tests:** 124/124 pass.

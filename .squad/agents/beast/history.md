@@ -6,6 +6,8 @@
 - **Created:** 2026-02-10
 
 
+📌 Team update (2026-04-02): Phase 5 delivery complete — 4 CLI reference docs (docs/cli/index.md, transforms.md, todo-conventions.md, report.md) with 1,378 lines and 81 code examples. mkdocs.yml navigation updated, README.md CLI tooling section added. All documentation standards (tabbed syntax, code examples, migration guides) applied. Build: 0 errors. Ready for merge to feature/global-tool-port. — decided by Scribe
+
 📌 Team update (2026-03-24): Documentation task breakdown complete — 8 GitHub issues (#505–#512) created for component doc syntax conversions, ViewState/PostBack migration guide, and cross-linking. Issues labeled squad+type:docs. Coordinate with Forge for content review. #508 (ViewState docs) blocks on PR #503 merge. — decided by Forge
 
 📌 Team update (2026-03-17): HttpHandlerBase implementation complete (7 files in Handlers/). Returns IEndpointConventionBuilder; Session markers added; build passes 0 errors. — decided by Cyclops

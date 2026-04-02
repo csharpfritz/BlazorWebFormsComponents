@@ -14059,3 +14059,71 @@ Web Forms apps use `Session["key"]` pervasively for shopping carts, wizard state
 **Why:** Web Forms apps use Session["key"] pervasively. This shim lets migrated code compile and run with only sp: prefix removal. Fallback mode ensures Blazor Server interactive circuits work correctly (session state is per-circuit).
 
 **Impact:** WebFormsPageBase.Session now available on all migrated pages. ServiceCollectionExtensions.AddBlazorWebFormsComponents() registers session infrastructure. Build verified on net8.0, net9.0, net10.0.
+
+### 2026-04-02: Standardized TODO Comment Convention
+
+**By:** Cyclops (Component Dev)  
+**Date:** 2026-07-23  
+**Status:** Implemented (Phase 1A)  
+**Addresses:** G15 (CLI Gap Analysis)
+
+**What:** All emitted TODOs now use the `TODO(bwfc-{category}):` prefix across C# and Razor contexts:
+- C# line comment: `// TODO(bwfc-{category}): {description}`
+- C# inline: `/* TODO(bwfc-{category}): {description} */`
+- Razor comment: `@* TODO(bwfc-{category}): {description} *@`
+
+**Category Slugs:** bwfc-general, bwfc-lifecycle, bwfc-ispostback, bwfc-viewstate, bwfc-session-state, bwfc-navigation, bwfc-datasource, bwfc-identity, bwfc-ajax-toolkit, bwfc-expression, bwfc-master-page, bwfc-login-view, bwfc-select-method, bwfc-route-url
+
+**Why:** Copilot L2 skills can now use regex `TODO\(bwfc-(\w+)\):` to find and categorize all migration items. The `bwfc-` prefix avoids collision with developer's own TODOs. Impact: 8 transform/scaffolding source files and 18 test expected files updated. Build and all 124 CLI tests pass.
+
+### 2026-04-02: ManualItem Structured Report Schema
+
+**By:** Cyclops (Component Dev)  
+**Date:** 2026-07-25  
+**Status:** Implemented  
+**Addresses:** G12/G13 from cli-gap-analysis.md
+
+**What:** Introduced a `ManualItem` positional record to replace flat `List<string>` for `MigrationReport.ManualItems`:
+
+```csharp
+public record ManualItem(
+    string File,
+    int Line,
+    string Category,    // bwfc-* slug
+    string Description,
+    string Severity      // "high", "medium", "low"
+);
+```
+
+Added `AddManualItem(file, line, category, description, severity = "medium")` convenience method. JSON output uses camelCase naming.
+
+**Valid Categories:** bwfc-session-state, bwfc-viewstate, bwfc-identity, bwfc-datasource, bwfc-ispostback, bwfc-lifecycle, bwfc-ajax-toolkit, bwfc-navigation, bwfc-route-url, bwfc-expression, bwfc-master-page, bwfc-login-view, bwfc-select-method, bwfc-general
+
+**Why:** Copilot L2 skills can now parse `MigrationReport.ManualItems` to find items by file, category, or severity. Flat strings were unparseable. Build: 0 errors. Tests: 124 passed, 0 failed.
+
+### 2026-04-02: ConfigurationManagerShim — Already Implemented
+
+**By:** Cyclops  
+**Date:** 2026-07 (retrospective)  
+**Status:** Already Implemented during Phase 1  
+**Addresses:** G17 from cli-gap-analysis.md
+
+**What:** ConfigurationManagerShim was already implemented during Phase 1 Library Shims work. No new code required.
+
+**Location:**
+- Shim: `src/BlazorWebFormsComponents/ConfigurationManager.cs`
+- Tests: `src/BlazorWebFormsComponents.Test/ConfigurationManagerTests.cs` (9 tests, all passing)
+- DI Registration: `ServiceCollectionExtensions.UseConfigurationManagerShim(this WebApplication app)`
+
+**API Surface:**
+| Web Forms Pattern | Shim Equivalent |
+|---|---|
+| `ConfigurationManager.AppSettings["key"]` | Reads `AppSettings:{key}` then falls back to `{key}` from `IConfiguration` |
+| `ConfigurationManager.ConnectionStrings["name"]` | Returns `ConnectionStringSettings` via `IConfiguration.GetConnectionString()` |
+
+**Supporting Types:**
+- `AppSettingsCollection` — indexer wrapping `IConfiguration` with AppSettings prefix fallback
+- `ConnectionStringSettingsCollection` — indexer returning `ConnectionStringSettings` objects
+- `ConnectionStringSettings` — value class with `Name`, `ConnectionString`, `ProviderName`
+
+**Why:** Web Forms ConfigurationManager usage is common in migrated code. Static class matches Web Forms API. Namespace `BlazorWebFormsComponents` enables `.targets` global using to shadow `System.Configuration.ConfigurationManager`. Graceful null return if not initialized at startup.
