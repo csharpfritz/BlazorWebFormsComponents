@@ -80,8 +80,11 @@ public static class TestHelpers
     public static IEnumerable<string> DiscoverTestCases()
     {
         var inputDir = Path.Combine(GetTestDataRoot(), "inputs");
-        return Directory.GetFiles(inputDir, "*.aspx")
-            .Select(f => Path.GetFileNameWithoutExtension(f))
+        var aspxFiles = Directory.GetFiles(inputDir, "*.aspx")
+            .Select(f => Path.GetFileNameWithoutExtension(f));
+        var masterFiles = Directory.GetFiles(inputDir, "*.master")
+            .Select(f => Path.GetFileNameWithoutExtension(f));
+        return aspxFiles.Concat(masterFiles)
             .OrderBy(name => name)
             .Distinct();
     }
@@ -159,11 +162,16 @@ public static class TestHelpers
             // Order 200-210: Imports & Registers
             new ImportDirectiveTransform(),
             new RegisterDirectiveTransform(),
+            // Order 250: Master page layout conversion
+            new MasterPageTransform(),
             // Order 300-310: Content/Form wrappers
             new ContentWrapperTransform(),
             new FormWrapperTransform(),
             // Order 500: Expressions
             new ExpressionTransform(),
+            // Order 510-520: Semantic controls
+            new LoginViewTransform(),
+            new SelectMethodTransform(),
             // Order 600-610: Prefix stripping (Ajax before Asp)
             new AjaxToolkitPrefixTransform(),
             new AspPrefixTransform(),
@@ -183,6 +191,7 @@ public static class TestHelpers
             new UsingStripTransform(),
             new BaseClassStripTransform(),
             new ResponseRedirectTransform(),
+            new GetRouteUrlTransform(),
             new SessionDetectTransform(),
             new ViewStateDetectTransform(),
             new IsPostBackTransform(),

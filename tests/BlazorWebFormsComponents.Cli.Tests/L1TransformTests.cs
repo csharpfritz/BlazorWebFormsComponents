@@ -38,8 +38,11 @@ public class L1TransformTests
     [MemberData(nameof(GetMarkupTestCases))]
     public void L1Transform_ProducesExpectedMarkup(string testCaseName)
     {
-        // Arrange
+        // Arrange — determine input file (could be .aspx or .master)
         var inputPath = Path.Combine(TestDataRoot, "inputs", $"{testCaseName}.aspx");
+        if (!File.Exists(inputPath))
+            inputPath = Path.Combine(TestDataRoot, "inputs", $"{testCaseName}.master");
+
         var expectedPath = Path.Combine(TestDataRoot, "expected", $"{testCaseName}.razor");
 
         Assert.True(File.Exists(inputPath), $"Input file not found: {inputPath}");
@@ -59,7 +62,9 @@ public class L1TransformTests
         var metadata = new FileMetadata
         {
             SourceFilePath = inputPath,
-            OutputFilePath = inputPath.Replace(".aspx", ".razor"),
+            OutputFilePath = ext == ".master"
+                ? inputPath.Replace(".master", ".razor")
+                : inputPath.Replace(".aspx", ".razor"),
             FileType = fileType,
             OriginalContent = input
         };
@@ -104,9 +109,9 @@ public class L1TransformTests
     [Fact]
     public void TestData_ContainsExpectedNumberOfTestCases()
     {
-        // Verify we have the expected 21 markup test cases (TC01–TC21)
+        // Verify we have the expected 28 markup test cases (TC01–TC21 + TC23–TC29)
         var testCases = TestHelpers.DiscoverTestCases().ToList();
-        Assert.Equal(21, testCases.Count);
+        Assert.Equal(28, testCases.Count);
     }
 
     [Fact]
@@ -138,7 +143,7 @@ public class L1TransformTests
                 $"Test case '{tc}' has input .aspx.cs but no expected .razor.cs");
         }
 
-        // Verify we have 8 code-behind test cases (TC13–TC16, TC18–TC21)
-        Assert.Equal(8, inputCsFiles.Count);
+        // Verify we have 11 code-behind test cases (TC13–TC16, TC18–TC21, TC26–TC27, TC29)
+        Assert.Equal(11, inputCsFiles.Count);
     }
 }
