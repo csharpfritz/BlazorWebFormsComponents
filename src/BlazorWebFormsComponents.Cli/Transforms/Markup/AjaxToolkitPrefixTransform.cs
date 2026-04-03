@@ -62,11 +62,11 @@ public class AjaxToolkitPrefixTransform : IMarkupTransform
 
         // 3. Unknown self-closing → TODO
         content = UnknownSelfRegex.Replace(content,
-            "@* TODO: Convert ajaxToolkit:$1 — no BWFC equivalent yet *@");
+            "@* TODO(bwfc-ajax-toolkit): Convert ajaxToolkit:$1 — no BWFC equivalent yet *@");
 
         // 4. Unknown block → TODO
         content = UnknownBlockRegex.Replace(content,
-            "@* TODO: Convert ajaxToolkit:$1 — no BWFC equivalent yet *@");
+            "@* TODO(bwfc-ajax-toolkit): Convert ajaxToolkit:$1 — no BWFC equivalent yet *@");
 
         return content;
     }

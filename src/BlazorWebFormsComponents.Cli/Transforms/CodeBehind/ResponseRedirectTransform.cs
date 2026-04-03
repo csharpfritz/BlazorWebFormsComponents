@@ -66,21 +66,21 @@ public class ResponseRedirectTransform : ICodeBehindTransform
         // Pattern 3: expression with endResponse bool
         if (RedirectExprBoolRegex.IsMatch(content))
         {
-            content = RedirectExprBoolRegex.Replace(content, "NavigationManager.NavigateTo($1) /* TODO: Verify navigation target */");
+            content = RedirectExprBoolRegex.Replace(content, "NavigationManager.NavigateTo($1) /* TODO(bwfc-navigation): Verify navigation target */");
             hasRedirectConversion = true;
         }
 
         // Pattern 4: remaining expression URLs
         if (RedirectExprRegex.IsMatch(content))
         {
-            content = RedirectExprRegex.Replace(content, "NavigationManager.NavigateTo($1) /* TODO: Verify navigation target */");
+            content = RedirectExprRegex.Replace(content, "NavigationManager.NavigateTo($1) /* TODO(bwfc-navigation): Verify navigation target */");
             hasRedirectConversion = true;
         }
 
         // Inject [Inject] NavigationManager if conversions were made
         if (hasRedirectConversion && ClassOpenRegex.IsMatch(content))
         {
-            var injectLine = "\n    [Inject] private NavigationManager NavigationManager { get; set; } // TODO: Add @using Microsoft.AspNetCore.Components to _Imports.razor if needed\n";
+            var injectLine = "\n    [Inject] private NavigationManager NavigationManager { get; set; } // TODO(bwfc-navigation): Add @using Microsoft.AspNetCore.Components to _Imports.razor if needed\n";
             content = ClassOpenRegex.Replace(content, "$1" + injectLine, 1);
         }
 

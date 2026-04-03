@@ -134,14 +134,14 @@ public class ProjectScaffolder
         {
             identityServiceBlock = $@"
 
-// TODO: Configure database connection (use AddDbContextFactory — do NOT also register AddDbContext to avoid DI conflicts)
+// TODO(bwfc-datasource): Configure database connection (use AddDbContextFactory — do NOT also register AddDbContext to avoid DI conflicts)
 {dbContextLine}
 
-// TODO: Configure Identity
+// TODO(bwfc-identity): Configure Identity
 // builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = false)
 //     .AddEntityFrameworkStores<ProductContext>();
 
-// TODO: Configure session for cart/state management
+// TODO(bwfc-session-state): Configure session for cart/state management
 // builder.Services.AddDistributedMemoryCache();
 // builder.Services.AddSession();
 // builder.Services.AddHttpContextAccessor();
@@ -150,7 +150,7 @@ public class ProjectScaffolder
 
             identityMiddlewareBlock = @"
 
-// TODO: Add middleware in the pipeline
+// TODO(bwfc-general): Add middleware in the pipeline
 // app.UseSession();
 // app.UseAuthentication();
 // app.UseAuthorization();
@@ -160,12 +160,12 @@ public class ProjectScaffolder
         {
             identityServiceBlock = $@"
 
-// TODO: Configure database connection (use AddDbContextFactory — do NOT also register AddDbContext to avoid DI conflicts)
+// TODO(bwfc-datasource): Configure database connection (use AddDbContextFactory — do NOT also register AddDbContext to avoid DI conflicts)
 {dbContextLine}
 ";
         }
 
-        return $@"// TODO: Review and adjust this generated Program.cs for your application needs.
+        return $@"// TODO(bwfc-general): Review and adjust this generated Program.cs for your application needs.
 using BlazorWebFormsComponents;
 
 var builder = WebApplication.CreateBuilder(args);

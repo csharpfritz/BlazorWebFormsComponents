@@ -65,6 +65,11 @@ nav:
   - Home: README.md
   - Component Health Dashboard: dashboard.md
   - Themes and Skins: themes-and-skins.md
+  - CLI Tool:
+    - Overview: cli/index.md
+    - Transform Reference: cli/transforms.md
+    - TODO Categories: cli/todo-conventions.md
+    - Report Format: cli/report.md
   - Editor Controls:
     - AdRotator: EditorControls/AdRotator.md
     - BulletedList: EditorControls/BulletedList.md

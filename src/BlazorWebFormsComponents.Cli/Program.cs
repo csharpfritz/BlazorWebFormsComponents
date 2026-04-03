@@ -36,6 +36,7 @@ class Program
         services.AddSingleton<IMarkupTransform, ControlDirectiveTransform>();
         services.AddSingleton<IMarkupTransform, ImportDirectiveTransform>();
         services.AddSingleton<IMarkupTransform, RegisterDirectiveTransform>();
+        services.AddSingleton<IMarkupTransform, MasterPageTransform>();
         services.AddSingleton<IMarkupTransform, ContentWrapperTransform>();
         services.AddSingleton<IMarkupTransform, FormWrapperTransform>();
         services.AddSingleton<IMarkupTransform, ExpressionTransform>();

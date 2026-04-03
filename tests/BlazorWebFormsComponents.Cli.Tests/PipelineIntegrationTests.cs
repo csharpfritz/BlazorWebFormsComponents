@@ -488,14 +488,24 @@ public class PipelineIntegrationTests : IDisposable
             ScaffoldFilesGenerated = 6
         };
         report.Warnings.Add("Test warning");
-        report.ManualItems.Add("TODO item");
+        report.AddManualItem("Default.aspx", 10, "bwfc-general", "TODO item");
 
         var json = report.ToJson();
 
         var doc = System.Text.Json.JsonDocument.Parse(json);
-        Assert.Equal(5, doc.RootElement.GetProperty("FilesProcessed").GetInt32());
-        Assert.Equal(10, doc.RootElement.GetProperty("FilesWritten").GetInt32());
-        Assert.Equal(1, doc.RootElement.GetProperty("WarningCount").GetInt32());
+        Assert.Equal(5, doc.RootElement.GetProperty("filesProcessed").GetInt32());
+        Assert.Equal(10, doc.RootElement.GetProperty("filesWritten").GetInt32());
+        Assert.Equal(1, doc.RootElement.GetProperty("warningCount").GetInt32());
+        Assert.Equal(1, doc.RootElement.GetProperty("manualItemCount").GetInt32());
+
+        var manualItems = doc.RootElement.GetProperty("manualItems");
+        Assert.Equal(1, manualItems.GetArrayLength());
+        var item = manualItems[0];
+        Assert.Equal("Default.aspx", item.GetProperty("file").GetString());
+        Assert.Equal(10, item.GetProperty("line").GetInt32());
+        Assert.Equal("bwfc-general", item.GetProperty("category").GetString());
+        Assert.Equal("TODO item", item.GetProperty("description").GetString());
+        Assert.Equal("medium", item.GetProperty("severity").GetString());
     }
 
     [Fact]
@@ -512,7 +522,7 @@ public class PipelineIntegrationTests : IDisposable
 
         Assert.True(File.Exists(reportPath));
         var content = File.ReadAllText(reportPath);
-        Assert.Contains("FilesProcessed", content);
+        Assert.Contains("filesProcessed", content);
     }
 
     [Fact]

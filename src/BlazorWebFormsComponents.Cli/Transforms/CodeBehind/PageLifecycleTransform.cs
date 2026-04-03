@@ -54,7 +54,7 @@ public class PageLifecycleTransform : ICodeBehindTransform
 
         if (bracePos < content.Length && content[bracePos] == '{')
         {
-            var injection = $"\n{indent}    // TODO: Review lifecycle conversion — verify async behavior\n{indent}    await base.OnInitializedAsync();\n";
+            var injection = $"\n{indent}    // TODO(bwfc-lifecycle): Review lifecycle conversion — verify async behavior\n{indent}    await base.OnInitializedAsync();\n";
             content = content[..(bracePos + 1)] + injection + content[(bracePos + 1)..];
         }
 
@@ -80,7 +80,7 @@ public class PageLifecycleTransform : ICodeBehindTransform
 
         if (bracePos < content.Length && content[bracePos] == '{')
         {
-            var injection = $"\n{indent}    // TODO: Review lifecycle conversion — verify async behavior\n";
+            var injection = $"\n{indent}    // TODO(bwfc-lifecycle): Review lifecycle conversion — verify async behavior\n";
             content = content[..(bracePos + 1)] + injection + content[(bracePos + 1)..];
         }
 
@@ -123,7 +123,7 @@ public class PageLifecycleTransform : ICodeBehindTransform
                 var bodyIndent = indent + "    ";
 
                 // Build wrapped body with firstRender guard
-                var newBody = $"\n{bodyIndent}// TODO: Review lifecycle conversion — verify async behavior";
+                var newBody = $"\n{bodyIndent}// TODO(bwfc-lifecycle): Review lifecycle conversion — verify async behavior";
                 newBody += $"\n{bodyIndent}if (firstRender)";
                 newBody += $"\n{bodyIndent}{{";
 

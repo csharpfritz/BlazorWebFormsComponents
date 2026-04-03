@@ -34,6 +34,31 @@ This is not for everyone, not everyone needs to migrate their application.  They
 
 Portions of the [original .NET Framework](https://github.com/microsoft/referencesource) are contributed to this project under their MIT license.
 
+## Migration CLI Tool
+
+The **`webforms-to-blazor` CLI tool** automates the first phase of Web Forms to Blazor migration. It applies deterministic transforms to your markup and code-behind, removing boilerplate and converting patterns:
+
+```bash
+# Full project migration
+dotnet tool install --global Fritz.WebFormsToBlazor
+webforms-to-blazor migrate --input ./MyWebFormsProject --output ./MyBlazorProject --scaffold
+
+# Or convert individual files
+webforms-to-blazor convert --input ProductCard.ascx --output ProductCard.razor
+```
+
+**What it does:**
+- Converts directives: `<%@ Page %>` → `@page`, `<%@ Control %>` → `@inherits`
+- Removes `asp:` prefixes: `<asp:Button>` → `<Button>`
+- Converts expressions: `<%: Model.Name %>` → `@(Model.Name)`
+- Detects patterns: Injects TODO comments for Copilot L2 automation
+- Scaffolds projects: Generates Program.cs, shims, and services
+
+**See the [CLI Tool Documentation](docs/cli/index.md) for:**
+- [Transform Reference](docs/cli/transforms.md) — All 33 transforms with before/after examples
+- [TODO Categories](docs/cli/todo-conventions.md) — Understand migration guidance comments
+- [Report Schema](docs/cli/report.md) — Interpret the migration report
+
 ## Blazor Components for Controls
 
 There are a significant number of controls in ASP.NET Web Forms, and we will focus on creating components in the following order:

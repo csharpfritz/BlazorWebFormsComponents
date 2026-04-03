@@ -148,7 +148,12 @@ public class MigrationPipeline
             if (configResult.ConnectionStringNames.Count > 0)
             {
                 var connList = string.Join(", ", configResult.ConnectionStringNames);
-                report.ManualItems.Add($"ConnectionStrings extracted from Web.config — verify for target environment: {connList}");
+                report.AddManualItem(
+                    "Web.config",
+                    0,
+                    "bwfc-general",
+                    $"ConnectionStrings extracted from Web.config — verify for target environment: {connList}",
+                    "medium");
             }
         }
     }

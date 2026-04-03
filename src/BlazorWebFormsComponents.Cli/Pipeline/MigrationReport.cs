@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace BlazorWebFormsComponents.Cli.Pipeline;
 
@@ -7,6 +8,13 @@ namespace BlazorWebFormsComponents.Cli.Pipeline;
 /// </summary>
 public class MigrationReport
 {
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
     public int FilesProcessed { get; set; }
     public int FilesWritten { get; set; }
     public int TransformsApplied { get; set; }
@@ -14,15 +22,22 @@ public class MigrationReport
     public int StaticFilesCopied { get; set; }
     public List<string> Errors { get; } = [];
     public List<string> Warnings { get; } = [];
-    public List<string> ManualItems { get; } = [];
+    public List<ManualItem> ManualItems { get; } = [];
     public List<string> GeneratedFiles { get; } = [];
+
+    /// <summary>
+    /// Add a structured manual-intervention item to the report.
+    /// </summary>
+    public void AddManualItem(string file, int line, string category, string description, string severity = "medium")
+    {
+        ManualItems.Add(new ManualItem(file, line, category, description, severity));
+    }
 
     /// <summary>
     /// Serialize the report to JSON for the --report flag.
     /// </summary>
     public string ToJson()
     {
-        var options = new JsonSerializerOptions { WriteIndented = true };
         return JsonSerializer.Serialize(new
         {
             FilesProcessed,
@@ -37,7 +52,7 @@ public class MigrationReport
             Warnings,
             ManualItems,
             GeneratedFiles
-        }, options);
+        }, s_jsonOptions);
     }
 
     /// <summary>
