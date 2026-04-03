@@ -1113,3 +1113,20 @@ This wave establishes **documentation patterns** that will guide future control 
 - mkdocs.yml navigation nesting signals cognitive importance: placing Phase 1 after "Getting Started" (discovery) tells developers "start here before deeper migration"
 - Cross-linking to Azure/AWS/ASP.NET docs increases doc value without duplicating content (readers can self-serve on secrets management, logging, etc.)
 
+
+### CLI Capability Writeup  Transform Inventory & Before/After Example (2026-04-03)
+
+**Task:** Produce a shareable CLI capability summary for the user covering all implemented transforms.
+
+**Delivered:** Inline chat response (not committed to repo)
+
+**Contents:**
+- Full inventory of all 31 CLI transforms with one-line descriptions, grouped by pipeline stage (Directives, Expressions, Tag Prefixes, Attributes, Normalization, Scaffolding)
+- Before/after ASPX  Razor example: realistic .aspx fragment (Page directive, MasterPageFile, asp:Button, asp:Label, Eval() binding, runat="server")  fully migrated .razor output
+- CLI usage synopsis: wfc-migrate migrate --input ./src --output ./out --report migration-report.json
+- Coverage callouts: what the tool handles automatically vs. what lands in ManualItem/TODO comments
+
+**Learnings:**
+- Users respond well to before/after examples that use realistic patterns (not toy "Hello World" markup)  showing a GridView with DataBind + Eval expressions, a MasterPageFile reference, and event wiring in a single snippet demonstrates breadth of tool coverage immediately
+- Transform inventory is most digestible when grouped by pipeline stage (matches mental model of "what gets processed when") rather than alphabetically
+- Always mention the --report flag when summarizing CLI capability: the JSON report is the bridge between automated migration and manual follow-up work

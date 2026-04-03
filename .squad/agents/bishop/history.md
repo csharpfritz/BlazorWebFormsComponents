@@ -180,3 +180,20 @@ TC19 (lifecycle) and TC20/TC21 (event handlers) are dedicated test cases for the
 3. Expression transforms must be ordered: Bind() before Eval() before encoded/unencoded, with comments first.
 4. DataSourceId transform runs last (820) because it matches bare control names (asp: prefix already stripped).
 5. ContentWrapperTransform strips asp:Content open+close tags using horizontal-whitespace-only patterns to avoid consuming indentation on the next line.
+
+### MasterPageTransform + GetRouteUrlTransform + ManualItem + TC12–TC23 (2026-04-03)
+
+**Commit:** `6824cbdc` on `feature/global-tool-port` — 41 files
+
+**MasterPageTransform:** Rewrites `<%@ MasterPageFile="~/Site.Master" %>` directive into Blazor `@layout SiteMaster` reference. Handles filename → class name conversion (strip extension, PascalCase).
+
+**GetRouteUrlTransform:** Converts `GetRouteUrl("routeName", new { key = val })` calls to Blazor `NavigationManager.GetUriWithQueryParameters()` equivalents. Registered in pipeline at Order 750 (after UrlReference, before normalization).
+
+**ManualItem model:** Structured record for migration report entries flagged for manual developer review. Fields: `Category` (slug), `File`, `Line`, `Message`, `Severity`. Enables typed JSON output in migration report rather than raw strings.
+
+**TC12–TC23 test data:** 12 new acceptance test input/expected-output pairs covering: MasterPage directives, GetRouteUrl calls, ManualItem annotation injection, ViewState attributes, ContentPlaceHolder, LoginView, Cache directives, SelectMethod, ValidationSummary, and mixed-transform scenarios.
+
+**Key learnings:**
+1. Master page filename → layout class name conversion must strip `~/`, directory path, and `.Master` extension, then PascalCase — a single regex replacement handles the common case but a helper method is cleaner for edge cases (spaces, hyphens).
+2. GetRouteUrl route-parameter extraction uses named capture groups to map `new { k = v }` anonymous objects; iteration order of anonymous-object properties must be preserved (C# doesn't guarantee it at runtime, but test data uses single-param routes to avoid ordering issues).
+3. ManualItem severity enum (`Info`, `Warning`, `Error`) maps to exit code: any `Error`-level item causes non-zero CLI exit, enabling CI gate integration.
