@@ -59,7 +59,23 @@ webforms-to-blazor convert --input ProductCard.ascx --output ProductCard.razor
 - [TODO Categories](docs/cli/todo-conventions.md) — Understand migration guidance comments
 - [Report Schema](docs/cli/report.md) — Interpret the migration report
 
+## JavaScript Migration & ClientScript Support
+
+Migrating JavaScript from Web Forms' `Page.ClientScript` and `ScriptManager` to Blazor's `IJSRuntime` is crucial for any real Web Forms application. **[ClientScript Migration Guide](docs/Migration/ClientScriptMigrationGuide.md)** covers:
+
+- Converting `RegisterStartupScript()` to `OnAfterRenderAsync()`
+- Migrating script includes and inline blocks
+- Replacing postback event patterns with Blazor events
+- Handling form validation with `EditContext`
+- ScriptManager patterns and their Blazor equivalents
+
+**Diagnostic Rules** help identify patterns that need migration:
+- **[BWFC022](docs/Analyzers/BWFC022.md)** — Page.ClientScript usage
+- **[BWFC023](docs/Analyzers/BWFC023.md)** — IPostBackEventHandler implementation
+- **[BWFC024](docs/Analyzers/BWFC024.md)** — ScriptManager code-behind methods
+
 ## Blazor Components for Controls
+
 
 There are a significant number of controls in ASP.NET Web Forms, and we will focus on creating components in the following order:
 

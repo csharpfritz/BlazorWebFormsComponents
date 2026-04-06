@@ -63,6 +63,7 @@ class Program
         services.AddSingleton<ICodeBehindTransform, PageLifecycleTransform>();
         services.AddSingleton<ICodeBehindTransform, EventHandlerSignatureTransform>();
         services.AddSingleton<ICodeBehindTransform, DataBindTransform>();
+        services.AddSingleton<ICodeBehindTransform, ClientScriptTransform>();
         services.AddSingleton<ICodeBehindTransform, UrlCleanupTransform>();
 
         // Scaffolding

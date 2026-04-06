@@ -198,6 +198,7 @@ public static class TestHelpers
             new PageLifecycleTransform(),
             new EventHandlerSignatureTransform(),
             new DataBindTransform(),
+            new ClientScriptTransform(),
             new UrlCleanupTransform(),
         };
 
