@@ -894,3 +894,24 @@ foreach (var warning in warnings) {
 **Files changed (test expectations):** 18 expected output files updated across tests/ and migration-toolkit/tests/.
 
 **Build:** 0 errors. **Tests:** 124/124 pass.
+
+### ClientScript Analyzer Enhancement — Phase 1 (2026-07-30)
+
+**Summary:** Enhanced BWFC022, BWFC023 with pattern-specific TODO guidance and created new BWFC024 (ScriptManagerUsageAnalyzer). Phase 1 of the approved ClientScript Migration Strategy from PRD.
+
+**BWFC022 changes:**
+- Parameterized MessageFormat: `"Page.ClientScript{0} is not available in Blazor. {1}"`
+- Added `GetMethodSpecificGuidance()` that inspects the parent `MemberAccessExpressionSyntax` to determine which ClientScript method is called
+- 5 specific patterns: RegisterStartupScript → IJSRuntime/OnAfterRenderAsync, RegisterClientScriptInclude → layout script tag, RegisterClientScriptBlock → InvokeVoidAsync, GetPostBackEventReference → @onclick/EventCallback, fallback → generic IJSRuntime
+
+**BWFC023 changes:**
+- Enhanced message with 3-step migration path: remove interface, replace RaisePostBackEvent with EventCallback<T>, use @onclick handlers
+
+**BWFC024 (new):**
+- Detects ScriptManager.{GetCurrent, SetFocus, RegisterStartupScript, RegisterClientScriptBlock, RegisterAsyncPostBackControl} static calls
+- Method-specific guidance for each pattern (ElementReference/FocusAsync for SetFocus, remove for RegisterAsyncPostBackControl, etc.)
+- Instance methods on local variables correctly NOT flagged (e.g. `sm.RegisterAsyncPostBackControl`)
+
+**Tests:** 172 analyzer tests pass (was 159). 13 new tests added across BWFC022/023/024.
+
+**Key technical decision:** Used parameterized `MessageFormat` with `{0}/{1}` args rather than separate DiagnosticDescriptor per method. Keeps single BWFC022 ID for all Page.ClientScript patterns, differentiated by message content. Existing tests without `.WithMessage()` continue to pass; new tests verify exact messages.
