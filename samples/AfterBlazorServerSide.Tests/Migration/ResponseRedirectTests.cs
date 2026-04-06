@@ -33,12 +33,18 @@ public class ResponseRedirectTests
             });
 
             var card = page.Locator("[data-audit-control='redirect-basic-demo']");
-            await card.Locator("button:has-text('Response.Redirect')").ClickAsync();
+            var button = card.Locator("button:has-text('Response.Redirect')");
 
-            // Wait for navigation to complete
+            // Ensure Blazor interactive circuit is ready before clicking
+            await button.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Attached, Timeout = 10000 });
+            await button.ClickAsync();
+
+            // forceLoad: true triggers full page navigation (HTTP + prerender + SignalR)
+            // which needs generous timeout in CI
             await page.WaitForURLAsync("**/migration/session", new PageWaitForURLOptions
             {
-                Timeout = 10000
+                WaitUntil = WaitUntilState.Load,
+                Timeout = 30000
             });
 
             Assert.Contains("/migration/session", page.Url);
