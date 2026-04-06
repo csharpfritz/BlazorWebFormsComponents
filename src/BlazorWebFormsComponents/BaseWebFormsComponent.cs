@@ -369,6 +369,28 @@ namespace BlazorWebFormsComponents
 			}
 		}
 
+		private ClientScriptShim _clientScript;
+		private bool _clientScriptResolved;
+
+		/// <summary>
+		/// Provides access to client script registration methods, emulating
+		/// <c>Page.ClientScript</c> from ASP.NET Web Forms.
+		/// Scripts are queued and automatically flushed via IJSRuntime
+		/// in OnAfterRenderAsync.
+		/// </summary>
+		public ClientScriptShim ClientScript
+		{
+			get
+			{
+				if (!_clientScriptResolved)
+				{
+					_clientScript = ServiceProvider?.GetService(typeof(ClientScriptShim)) as ClientScriptShim;
+					_clientScriptResolved = true;
+				}
+				return _clientScript;
+			}
+		}
+
 		protected override void OnParametersSet()
 		{
 			base.OnParametersSet();
@@ -555,6 +577,12 @@ namespace BlazorWebFormsComponents
 			{
 				await OnUnload.InvokeAsync(EventArgs.Empty);
 				_UnloadTriggered = true;
+			}
+
+			// Auto-flush any queued ClientScript registrations
+			if (_clientScriptResolved && _clientScript != null)
+			{
+				await _clientScript.FlushAsync(JsRuntime);
 			}
 
 			if (firstRender)

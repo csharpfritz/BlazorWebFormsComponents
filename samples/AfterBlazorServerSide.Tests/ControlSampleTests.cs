@@ -241,6 +241,7 @@ public class ControlSampleTests
     [InlineData("/ControlSamples/UpdateProgress")]
     [InlineData("/ControlSamples/ScriptManager")]
     [InlineData("/ControlSamples/Substitution")]
+    [InlineData("/ControlSamples/ClientScript")]
     public async Task AjaxControl_Loads_WithoutErrors(string path)
     {
         await VerifyPageLoadsWithoutErrors(path);

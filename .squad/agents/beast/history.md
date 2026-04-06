@@ -1190,3 +1190,63 @@ This wave establishes **documentation patterns** that will guide future control 
 - Common mistakes section essential for developer success: re-render guards, module caching, async timing prevent migration frustration
 - UpdatePanel/ScriptManager patterns have no Blazor equivalents; must be completely rewritten — make this clear early
 - Real-world examples (jQuery plugins, pickers, form validation) ground abstract guidance in concrete scenarios developers face
+
+## Learnings
+
+### Strangler Fig Pattern Documentation (2026 by Beast)
+
+**Session Task:** Create comprehensive Strangler Fig migration pattern documentation to frame BWFC's migration strategy around incremental, side-by-side Web Forms → Blazor migration.
+
+**Deliverables:**
+
+1. **New Guide: `docs/Migration/StranglerFigPattern.md` (12.1K, 280+ lines)**
+   - What Is the Strangler Fig Pattern: Biological metaphor + software definition
+   - How BWFC Enables Strangler Fig: 4-step journey (Instrument → Strangle → Zero-Rewrite → Modernize)
+   - Step 1: Instrument with BWFC package + Roslyn analyzers (BWFC022/023/024) — purely syntactic, no System.Web required
+   - Step 2: L1 mechanical transforms + CLI (webforms-to-blazor) + analyzer guidance
+   - Step 3: Zero-rewrite shims (ClientScriptShim, SessionShim, CacheShim, ServerShim) with detailed queue-and-flush explanation
+   - Step 4: Optional modernization path (Phase 2 refactoring to IJSRuntime, ISession, IMemoryCache)
+   - Visual progression diagram: Legacy 100% → Mixed parallel → Blazor dominant → Modernized native (4-phase journey)
+   - Why it works: Zero downtime, parallel velocity, reversible migration
+   - E-commerce example: 6-week incremental migration (Product Search → Cart → Accounts)
+   - Comparison table: Big Bang vs Strangler Fig vs Parallel Development
+
+2. **Updated Existing Docs to Cross-Link:**
+   - **`docs/Migration/ClientScriptMigrationGuide.md`** (after recommended shim section, line 102)
+     - Added "Strangler Fig Pattern Context" section explaining how ClientScript fits into incremental migration
+     - Link to StranglerFigPattern.md for full guide
+   
+   - **`docs/Migration/Strategies.md`** (after intro, before Readiness Planning)
+     - Added "The Strangler Fig Pattern: Migration Philosophy" section (5 key principles)
+     - Link to detailed StranglerFigPattern.md guide
+   
+   - **`docs/Migration/readme.md`** (after Step 0, new "Migration Philosophy" section)
+     - Added section explaining Strangler Fig approach
+     - Lists 4 key benefits (migrate 1 page at a time, keep both running, use shims, modernize at pace)
+     - Link to StranglerFigPattern.md
+
+3. **Navigation Updates: `mkdocs.yml`**
+   - Added "Strangler Fig Pattern: Migration/StranglerFigPattern.md" to Migration nav (line 192, right after Getting Started)
+   - Strategic placement: guides developers to philosophy BEFORE diving into mechanics (Phase 1, Phase 2, Strategies)
+
+**Key Technical Details Included:**
+- ✅ Roslyn analyzers are purely syntactic (match patterns like `IsClientScriptAccess()`, no type resolution needed)
+- ✅ ClientScriptShim uses queue-and-flush pattern: Register* → OnAfterRenderAsync → FlushAsync → IJSRuntime.InvokeVoidAsync("eval", ...)
+- ✅ Shims are production-ready from day 1; modernization is optional
+- ✅ L1 CLI handles directive changes, markup conversion, code-behind pattern transforms
+- ✅ Zero-rewrite philosophy: same API surface, modern implementation underneath
+
+**Documentation Style Applied:**
+- ✅ Empathetic, practical tone for experienced Web Forms developers
+- ✅ Real-world example (e-commerce site migration over 6 weeks)
+- ✅ Multiple visualization formats: narrative, visual progression diagram, comparison table
+- ✅ Clear section hierarchy with actionable next steps
+- ✅ Cross-references to 7 related guides (readiness, strategies, automatedmigration, analyzers, clientscript, session, lifecycle)
+
+**Learnings:**
+- Strangler Fig pattern is the *philosophical foundation* of BWFC — analyzers, CLI, shims all exist to support it
+- Developers need permission to migrate incrementally, not all-at-once — framing as "both systems run in parallel" reduces risk perception significantly
+- Visual progression (4-phase journey) more memorable than prose alone; developers can self-identify which phase they're in
+- Shim philosophy ("zero-rewrite") is the defining characteristic of BWFC; must be stated clearly and repeatedly
+- Real-world example reduces abstract pattern to concrete steps — 6-week timeline with specific pages makes it believable
+- Placement in nav right after "Getting Started" signals that philosophy comes before mechanics; guides readers toward informed decision-making

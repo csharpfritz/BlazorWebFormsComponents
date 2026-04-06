@@ -166,3 +166,34 @@ Ported scaffolding, config transforms, and OutputWriter from bwfc-migrate.ps1 to
 - **OutputWriter respects dry-run** — logs what would be written without touching disk
 - **All templates are string literals** — no external template files, matching PS approach
 - **Build clean:** 0 errors for both CLI and test projects
+
+### Phase 5: ClientScriptTransform — Phase 1 of PRD ClientScript Migration (Bishop)
+
+Added `ClientScriptTransform.cs` (Order 850) to the code-behind pipeline. Handles 6 ClientScript/ScriptManager patterns:
+
+#### Automatable (transforms to IJSRuntime skeleton):
+| Pattern | Action |
+|---------|--------|
+| `RegisterStartupScript()` with inline script | → `await JS.InvokeVoidAsync("eval", ...)` + TODO to refactor eval |
+| `RegisterClientScriptInclude()` with URL | → `// TODO: Add <script src="url"/> to _Host.cshtml or App.razor` |
+| `ScriptManager.RegisterStartupScript()` | → Same as RegisterStartupScript |
+
+#### Non-automatable (TODO markers):
+| Pattern | TODO |
+|---------|------|
+| `GetPostBackEventReference()` | Replace __doPostBack with @onclick or EventCallback |
+| `RegisterClientScriptBlock()` | Move script block to IJSRuntime or .js file |
+| `ScriptManager.GetCurrent()` | No Blazor equivalent — use IJSRuntime directly |
+
+#### Infrastructure:
+- Injects `[Inject] private IJSRuntime JS { get; set; }` when startup script conversions are made
+- Registered in `Program.cs` and `TestHelpers.CreateDefaultPipeline()`
+- Test data: TC33-ClientScript (input .aspx/.aspx.cs + expected .razor/.razor.cs)
+- Updated L1TransformTests counts: 34 markup, 13 code-behind
+- **All 330 tests pass** (0 failures, 0 regressions)
+
+#### Key Regex Learnings:
+- `[^)]*` fails inside method calls with nested parens (e.g., `this.GetType()`)
+- `[^;]*` fails when string args contain semicolons (e.g., `"<script>var x = 1;</script>"`)
+- **Safe pattern:** `(?:"[^"]*"|[^"])*?` — alternates quoted strings and non-quote chars, handles both issues
+
