@@ -76,7 +76,7 @@ public class IsPostBackTests
             // Verify init count
             var initCountText = await strongElements.Nth(1).TextContentAsync();
             Assert.NotNull(initCountText);
-            Assert.Equal("1", initCountText!.Trim());
+            Assert.Equal("1 time(s)", initCountText!.Trim());
         }
         finally
         {
@@ -109,7 +109,7 @@ public class IsPostBackTests
             // Init count should still be 1 (guard prevented re-init)
             var initCountText = await card.Locator("strong").Nth(1).TextContentAsync();
             Assert.NotNull(initCountText);
-            Assert.Equal("1", initCountText!.Trim());
+            Assert.Equal("1 time(s)", initCountText!.Trim());
         }
         finally
         {

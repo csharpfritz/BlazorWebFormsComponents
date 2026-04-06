@@ -63,10 +63,9 @@ public class RequestShim
 	{
 		get
 		{
-			if (_httpContext != null)
-				return _httpContext.Request.Query;
-
-			// Fallback: parse query string from NavigationManager.Uri
+			// Always parse from NavigationManager — it has the correct page URL
+			// with query parameters. HttpContext.Request.Query in interactive mode
+			// returns the SignalR connection's query params, not the page's.
 			var uri = new Uri(_nav.Uri);
 			var parsed = QueryHelpers.ParseQuery(uri.Query);
 			return new QueryCollection(parsed);
@@ -82,12 +81,9 @@ public class RequestShim
 	{
 		get
 		{
-			if (_httpContext != null)
-			{
-				var req = _httpContext.Request;
-				return new Uri($"{req.Scheme}://{req.Host}{req.PathBase}{req.Path}{req.QueryString}");
-			}
-
+			// Always prefer NavigationManager — it has the correct page URL.
+			// HttpContext.Request in Blazor Server interactive mode shows the
+			// SignalR connection URL (/_blazor), not the page URL.
 			return new Uri(_nav.Uri);
 		}
 	}
