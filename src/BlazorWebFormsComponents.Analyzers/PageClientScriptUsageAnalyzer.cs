@@ -7,8 +7,8 @@ using System.Collections.Immutable;
 namespace BlazorWebFormsComponents.Analyzers
 {
     /// <summary>
-    /// Analyzer that detects Page.ClientScript usage patterns.
-    /// Page.ClientScript is not available in Blazor; use IJSRuntime instead.
+    /// Analyzer that detects Page.ClientScript usage patterns and provides
+    /// method-specific migration guidance for Blazor.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public class PageClientScriptUsageAnalyzer : DiagnosticAnalyzer
@@ -16,9 +16,15 @@ namespace BlazorWebFormsComponents.Analyzers
         public const string DiagnosticId = "BWFC022";
 
         private static readonly LocalizableString Title = "Page.ClientScript usage detected";
-        private static readonly LocalizableString MessageFormat = "Page.ClientScript is not available in Blazor. Use IJSRuntime for JavaScript interop.";
+        private static readonly LocalizableString MessageFormat = "Page.ClientScript{0} is not available in Blazor. {1}";
         private static readonly LocalizableString Description = "Page.ClientScript methods like RegisterStartupScript and GetPostBackEventReference are not available in Blazor. Use IJSRuntime for JavaScript interop.";
         private const string Category = "Migration";
+
+        internal const string FallbackGuidance = "Use IJSRuntime for JavaScript interop.";
+        internal const string RegisterStartupScriptGuidance = "Use IJSRuntime.InvokeAsync in OnAfterRenderAsync(firstRender: true).";
+        internal const string RegisterClientScriptIncludeGuidance = "Add <script src='...'/> to your layout or use IJSRuntime.";
+        internal const string RegisterClientScriptBlockGuidance = "Use IJSRuntime.InvokeVoidAsync to execute script blocks.";
+        internal const string GetPostBackEventReferenceGuidance = "Use @onclick or EventCallback<T> instead of postback events.";
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             DiagnosticId,
@@ -45,20 +51,38 @@ namespace BlazorWebFormsComponents.Analyzers
             if (!IsClientScriptAccess(memberAccess))
                 return;
 
-            // Report at the Page.ClientScript location
-            var diagnostic = Diagnostic.Create(Rule, memberAccess.GetLocation());
+            var (methodSuffix, guidance) = GetMethodSpecificGuidance(memberAccess);
+            var diagnostic = Diagnostic.Create(Rule, memberAccess.GetLocation(), methodSuffix, guidance);
             context.ReportDiagnostic(diagnostic);
+        }
+
+        private static (string methodSuffix, string guidance) GetMethodSpecificGuidance(MemberAccessExpressionSyntax clientScriptAccess)
+        {
+            // Check if Page.ClientScript is followed by a specific method call
+            if (clientScriptAccess.Parent is MemberAccessExpressionSyntax outerAccess)
+            {
+                var methodName = outerAccess.Name.Identifier.Text;
+                switch (methodName)
+                {
+                    case "RegisterStartupScript":
+                        return (".RegisterStartupScript()", RegisterStartupScriptGuidance);
+                    case "RegisterClientScriptInclude":
+                        return (".RegisterClientScriptInclude()", RegisterClientScriptIncludeGuidance);
+                    case "RegisterClientScriptBlock":
+                        return (".RegisterClientScriptBlock()", RegisterClientScriptBlockGuidance);
+                    case "GetPostBackEventReference":
+                        return (".GetPostBackEventReference()", GetPostBackEventReferenceGuidance);
+                }
+            }
+
+            return ("", FallbackGuidance);
         }
 
         private static bool IsClientScriptAccess(MemberAccessExpressionSyntax memberAccess)
         {
-            // We're looking for patterns where "ClientScript" is accessed on "Page"
-            // e.g., Page.ClientScript.RegisterStartupScript(...)
-
             if (memberAccess.Name.Identifier.Text != "ClientScript")
                 return false;
 
-            // Check that the expression is "Page" or "this.Page"
             if (memberAccess.Expression is IdentifierNameSyntax identifier)
                 return identifier.Identifier.Text == "Page";
 

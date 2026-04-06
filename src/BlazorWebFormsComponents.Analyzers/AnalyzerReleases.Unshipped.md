@@ -14,6 +14,7 @@ BWFC013 | Usage    | Warning  | ResponseObjectUsageAnalyzer
 BWFC014 | Usage    | Warning  | RequestObjectUsageAnalyzer
 BWFC020 | Migration | Info     | ViewStatePropertyPatternAnalyzer
 BWFC021 | Migration | Warning  | FindControlUsageAnalyzer
-BWFC022 | Migration | Warning  | PageClientScriptUsageAnalyzer
-BWFC023 | Migration | Warning  | IPostBackEventHandlerUsageAnalyzer
+BWFC022 | Migration | Warning  | PageClientScriptUsageAnalyzer (enhanced with method-specific guidance)
+BWFC023 | Migration | Warning  | IPostBackEventHandlerUsageAnalyzer (enhanced with EventCallback migration guidance)
+BWFC024 | Migration | Warning  | ScriptManagerUsageAnalyzer
 BWFC025 | Usage    | Warning  | NonSerializableViewStateAnalyzer

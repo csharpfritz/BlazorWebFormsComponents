@@ -17,8 +17,8 @@ namespace BlazorWebFormsComponents.Analyzers
         public const string DiagnosticId = "BWFC023";
 
         private static readonly LocalizableString Title = "IPostBackEventHandler implementation detected";
-        private static readonly LocalizableString MessageFormat = "IPostBackEventHandler is not available in Blazor. Use EventCallback<T> for event handling.";
-        private static readonly LocalizableString Description = "IPostBackEventHandler is a Web Forms interface not available in Blazor. Use EventCallback<T> for event handling patterns.";
+        private static readonly LocalizableString MessageFormat = "IPostBackEventHandler is not available in Blazor. Remove the interface, replace RaisePostBackEvent with EventCallback<T> parameters, and use @onclick handlers for user interactions.";
+        private static readonly LocalizableString Description = "IPostBackEventHandler is a Web Forms interface not available in Blazor. Remove the interface implementation, convert RaisePostBackEvent logic into component methods, and expose events via EventCallback<T> parameters with @onclick handlers.";
         private const string Category = "Migration";
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
