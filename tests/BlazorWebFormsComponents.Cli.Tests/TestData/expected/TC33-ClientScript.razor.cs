@@ -20,7 +20,7 @@ namespace MyApp
 {
     public partial class TC33_ClientScript
     {
-    [Inject] private IJSRuntime JS { get; set; } // TODO(bwfc-general): Add @using Microsoft.JSInterop to _Imports.razor if needed
+    // TODO(bwfc-general): ClientScript calls preserved — uses ClientScriptShim. Inject @inject ClientScriptShim ClientScript if not using BaseWebFormsComponent.
 
         protected override async Task OnInitializedAsync()
         {
@@ -28,22 +28,26 @@ namespace MyApp
             await base.OnInitializedAsync();
 
             // Pattern 1: RegisterStartupScript with inline script
-            // TODO(bwfc-general): Review and refactor eval() usage — move script to a .js file and call via IJSRuntime
-            await JS.InvokeVoidAsync("eval", @"$(function() { console.log('ready'); });");
+            ClientScript.RegisterStartupScript(
+                this.GetType(),
+                "InitializeUI",
+                "$(function() { console.log('ready'); });",
+                true);
 
             // Pattern 2: RegisterClientScriptInclude with URL
-            // TODO(bwfc-general): Add <script src="Scripts/jquery-ui.min.js"/> to _Host.cshtml or App.razor
+            ClientScript.RegisterClientScriptInclude(
+                "jqueryUI",
+                ResolveUrl("~/Scripts/jquery-ui.min.js"));
 
             // Pattern 3: GetPostBackEventReference
             // TODO(bwfc-general): Replace __doPostBack with @onclick or EventCallback. See ClientScriptMigrationGuide.md
             // Original: var postbackRef = Page.ClientScript.GetPostBackEventReference(btnSubmit, "validate");
 
             // Pattern 4: RegisterClientScriptBlock
-            // TODO(bwfc-general): Move script block to IJSRuntime.InvokeVoidAsync or a .js file. See ClientScriptMigrationGuide.md
+            ClientScript.RegisterClientScriptBlock(this.GetType(), "block1", "<script>var x = 1;</script>");
 
             // Pattern 5: ScriptManager.RegisterStartupScript
-            // TODO(bwfc-general): Review and refactor eval() usage — move script to a .js file and call via IJSRuntime
-            await JS.InvokeVoidAsync("eval", @"alert('hello');");
+            ClientScript.RegisterStartupScript(this.GetType(), "smScript", "alert('hello');", true);
 
             // Pattern 6: ScriptManager.GetCurrent
             // TODO(bwfc-general): ScriptManager.GetCurrent() has no Blazor equivalent. Use IJSRuntime directly.

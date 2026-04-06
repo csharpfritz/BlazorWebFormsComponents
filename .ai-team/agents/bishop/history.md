@@ -197,3 +197,20 @@ Added `ClientScriptTransform.cs` (Order 850) to the code-behind pipeline. Handle
 - `[^;]*` fails when string args contain semicolons (e.g., `"<script>var x = 1;</script>"`)
 - **Safe pattern:** `(?:"[^"]*"|[^"])*?` — alternates quoted strings and non-quote chars, handles both issues
 
+### ClientScriptTransform: Switched to Shim-Preserving Mode (Bishop)
+
+- **Date:** 2026-07-31
+- **What changed:** `ClientScriptTransform.cs` (Order 850) no longer rewrites ClientScript calls to IJSRuntime skeletons. Instead, it preserves calls for use with `ClientScriptShim`.
+- **Shim-compatible patterns (prefix stripping, calls preserved):**
+  - `Page.ClientScript.RegisterStartupScript(...)` → `ClientScript.RegisterStartupScript(...)` (strip prefix)
+  - `Page.ClientScript.RegisterClientScriptInclude(...)` → `ClientScript.RegisterClientScriptInclude(...)` (strip prefix)
+  - `Page.ClientScript.RegisterClientScriptBlock(...)` → `ClientScript.RegisterClientScriptBlock(...)` (strip prefix, shim now supports this)
+  - `ScriptManager.RegisterStartupScript(control, type, key, script, bool)` → `ClientScript.RegisterStartupScript(type, key, script, bool)` (drops first param)
+- **Still TODO-marked (no shim support):**
+  - `GetPostBackEventReference(...)` → TODO with @onclick/EventCallback guidance (shim throws NotSupportedException)
+  - `ScriptManager.GetCurrent(...)` → TODO with IJSRuntime guidance (no shim equivalent)
+- **Removed:** IJSRuntime `[Inject]` injection logic. Replaced with single-line `ClientScriptShim` dependency comment at class level.
+- **Key principle:** Jeff's directive — "Zero-rewrite shim approach is PRECISELY what we should be building." CLI preserves Web Forms API calls instead of rewriting them.
+- **Tests:** All 349 tests pass (same count as before), updated 20 unit test assertions + TC33 expected output file.
+- **Regex approach:** Single `PageOrThisPrefixRegex` with lookahead handles all three shim-compatible methods in one pass. Much simpler than the old per-pattern regexes with inline script extraction.
+

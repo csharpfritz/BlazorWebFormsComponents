@@ -4,9 +4,9 @@ using BlazorWebFormsComponents.Cli.Transforms.CodeBehind;
 namespace BlazorWebFormsComponents.Cli.Tests.TransformUnit;
 
 /// <summary>
-/// Unit tests for ClientScriptTransform — detects Page.ClientScript and ScriptManager
-/// code-behind patterns and transforms automatable cases to IJSRuntime skeletons,
-/// or emits TODO markers for manual migration.
+/// Unit tests for ClientScriptTransform — strips Page./this. prefixes from ClientScript
+/// calls so they work with the ClientScriptShim, converts ScriptManager.RegisterStartupScript
+/// to ClientScript calls, and emits TODO markers for unsupported patterns.
 ///
 /// Covers TC36 (startup scripts), TC37 (script includes/blocks), TC38 (postback references).
 /// </summary>
@@ -25,7 +25,7 @@ public class ClientScriptTransformTests
     #region TC36 — RegisterStartupScript
 
     [Fact]
-    public void TC36_RegisterStartupScript_ConvertsToJSInterop()
+    public void TC36_RegisterStartupScript_StripsPagePrefix()
     {
         var input = @"namespace MyApp
 {
@@ -39,13 +39,13 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("JS.InvokeVoidAsync(\"eval\"", result);
-        Assert.Contains("alert('ready');", result);
-        Assert.DoesNotContain("RegisterStartupScript", result);
+        Assert.Contains("ClientScript.RegisterStartupScript", result);
+        Assert.DoesNotContain("Page.ClientScript", result);
+        Assert.DoesNotContain("JS.InvokeVoidAsync", result);
     }
 
     [Fact]
-    public void TC36_RegisterStartupScript_InjectsTodoReviewComment()
+    public void TC36_RegisterStartupScript_AddsShimTodoComment()
     {
         var input = @"namespace MyApp
 {
@@ -60,11 +60,11 @@ public class ClientScriptTransformTests
         var result = _transform.Apply(input, TestMetadata(input));
 
         Assert.Contains("TODO(bwfc-general)", result);
-        Assert.Contains("eval()", result);
+        Assert.Contains("ClientScriptShim", result);
     }
 
     [Fact]
-    public void TC36_RegisterStartupScript_InjectsIJSRuntimeProperty()
+    public void TC36_RegisterStartupScript_NoIJSRuntimeInjection()
     {
         var input = @"namespace MyApp
 {
@@ -78,11 +78,12 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("[Inject] private IJSRuntime JS { get; set; }", result);
+        Assert.DoesNotContain("[Inject] private IJSRuntime JS", result);
+        Assert.Contains("ClientScriptShim", result);
     }
 
     [Fact]
-    public void TC36_ClientScriptWithoutPage_RegisterStartupScript_ConvertsToJSInterop()
+    public void TC36_ClientScriptWithoutPagePrefix_PreservedUnchanged()
     {
         var input = @"namespace MyApp
 {
@@ -96,12 +97,13 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("JS.InvokeVoidAsync(\"eval\"", result);
-        Assert.DoesNotContain("RegisterStartupScript", result);
+        Assert.Contains("ClientScript.RegisterStartupScript", result);
+        Assert.DoesNotContain("JS.InvokeVoidAsync", result);
+        Assert.Contains("ClientScriptShim", result);
     }
 
     [Fact]
-    public void TC36_ScriptManagerRegisterStartupScript_ConvertsToJSInterop()
+    public void TC36_ScriptManagerRegisterStartupScript_ConvertedToClientScript()
     {
         var input = @"namespace MyApp
 {
@@ -115,13 +117,13 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("JS.InvokeVoidAsync(\"eval\"", result);
-        Assert.Contains("alert('hello');", result);
+        Assert.Contains("ClientScript.RegisterStartupScript(this.GetType()", result);
         Assert.DoesNotContain("ScriptManager.RegisterStartupScript", result);
+        Assert.DoesNotContain("JS.InvokeVoidAsync", result);
     }
 
     [Fact]
-    public void TC36_MultipleStartupScripts_AllConverted()
+    public void TC36_MultipleStartupScripts_AllPreserved()
     {
         var input = @"namespace MyApp
 {
@@ -138,7 +140,8 @@ public class ClientScriptTransformTests
 
         Assert.Contains("alert('a');", result);
         Assert.Contains("alert('b');", result);
-        Assert.DoesNotContain("RegisterStartupScript", result);
+        Assert.Contains("ClientScript.RegisterStartupScript", result);
+        Assert.DoesNotContain("Page.ClientScript", result);
     }
 
     #endregion
@@ -146,7 +149,7 @@ public class ClientScriptTransformTests
     #region TC37 — RegisterClientScriptInclude and RegisterClientScriptBlock
 
     [Fact]
-    public void TC37_RegisterClientScriptInclude_EmitsTodoWithScriptTag()
+    public void TC37_RegisterClientScriptInclude_PreservedWithPrefixStripped()
     {
         var input = @"namespace MyApp
 {
@@ -160,14 +163,13 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("TODO(bwfc-general)", result);
-        Assert.Contains("<script src=", result);
-        Assert.Contains("Scripts/jquery-ui.min.js", result);
-        Assert.DoesNotContain("RegisterClientScriptInclude", result);
+        Assert.Contains("ClientScript.RegisterClientScriptInclude", result);
+        Assert.DoesNotContain("Page.ClientScript", result);
+        Assert.Contains("ClientScriptShim", result);
     }
 
     [Fact]
-    public void TC37_RegisterClientScriptInclude_StripsResolveUrlTildePrefix()
+    public void TC37_RegisterClientScriptInclude_PreservesResolveUrl()
     {
         var input = @"namespace MyApp
 {
@@ -181,13 +183,13 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        // Should strip ~/ prefix
-        Assert.Contains("lib/custom.js", result);
-        Assert.DoesNotContain("~/lib/custom.js", result);
+        Assert.Contains("ClientScript.RegisterClientScriptInclude", result);
+        Assert.Contains("ResolveUrl", result);
+        Assert.DoesNotContain("Page.ClientScript", result);
     }
 
     [Fact]
-    public void TC37_RegisterClientScriptBlock_EmitsTodo()
+    public void TC37_RegisterClientScriptBlock_PreservedWithPrefixStripped()
     {
         var input = @"namespace MyApp
 {
@@ -201,13 +203,13 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("TODO(bwfc-general)", result);
-        Assert.Contains("Move script block to IJSRuntime", result);
-        Assert.DoesNotContain("RegisterClientScriptBlock", result);
+        Assert.Contains("ClientScript.RegisterClientScriptBlock", result);
+        Assert.DoesNotContain("Page.ClientScript", result);
+        Assert.Contains("ClientScriptShim", result);
     }
 
     [Fact]
-    public void TC37_RegisterClientScriptBlock_MentionsMigrationGuide()
+    public void TC37_RegisterClientScriptBlock_NoLongerEmitsMigrationGuideTodo()
     {
         var input = @"namespace MyApp
 {
@@ -221,7 +223,8 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("ClientScriptMigrationGuide.md", result);
+        Assert.DoesNotContain("Move script block to IJSRuntime", result);
+        Assert.Contains("ClientScript.RegisterClientScriptBlock", result);
     }
 
     #endregion
@@ -330,18 +333,22 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        // Startup scripts converted
-        Assert.Contains("JS.InvokeVoidAsync", result);
-        // Include → TODO with script tag
-        Assert.Contains("<script src=", result);
+        // Startup scripts preserved with prefix stripped
+        Assert.Contains("ClientScript.RegisterStartupScript", result);
+        Assert.DoesNotContain("Page.ClientScript.RegisterStartupScript", result);
+        // Include preserved with prefix stripped
+        Assert.Contains("ClientScript.RegisterClientScriptInclude", result);
+        // Script block preserved with prefix stripped
+        Assert.Contains("ClientScript.RegisterClientScriptBlock", result);
+        // ScriptManager.RegisterStartupScript → ClientScript.RegisterStartupScript
+        Assert.DoesNotContain("ScriptManager.RegisterStartupScript", result);
         // Postback → TODO with EventCallback
         Assert.Contains("@onclick", result);
-        // Block → TODO
-        Assert.Contains("Move script block to IJSRuntime", result);
         // ScriptManager.GetCurrent → TODO
         Assert.Contains("ScriptManager.GetCurrent() has no Blazor equivalent", result);
-        // IJSRuntime injected
-        Assert.Contains("[Inject] private IJSRuntime JS", result);
+        // ClientScriptShim comment injected (not IJSRuntime)
+        Assert.Contains("ClientScriptShim", result);
+        Assert.DoesNotContain("[Inject] private IJSRuntime JS", result);
     }
 
     [Fact]
@@ -360,7 +367,7 @@ public class ClientScriptTransformTests
     }
 
     [Fact]
-    public void DoesNotInjectIJSRuntime_WhenNoStartupScripts()
+    public void DoesNotAddShimComment_WhenOnlyPostbackRef()
     {
         var input = @"namespace MyApp
 {
@@ -374,17 +381,17 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.DoesNotContain("[Inject] private IJSRuntime JS", result);
+        Assert.DoesNotContain("ClientScriptShim", result);
     }
 
     [Fact]
-    public void DoesNotDuplicateIJSRuntime_WhenAlreadyPresent()
+    public void DoesNotDuplicateShimComment_WhenAlreadyPresent()
     {
         var input = @"namespace MyApp
 {
     public partial class MyPage
     {
-    [Inject] private IJSRuntime JS { get; set; }
+    // TODO(bwfc-general): ClientScript calls preserved — uses ClientScriptShim. Inject @inject ClientScriptShim ClientScript if not using BaseWebFormsComponent.
         void Page_Load()
         {
             Page.ClientScript.RegisterStartupScript(this.GetType(), ""key"", ""alert('a');"", true);
@@ -393,8 +400,8 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        var injectCount = result.Split("[Inject] private IJSRuntime JS").Length - 1;
-        Assert.Equal(1, injectCount);
+        var shimCount = result.Split("ClientScript calls preserved").Length - 1;
+        Assert.Equal(1, shimCount);
     }
 
     [Fact]
