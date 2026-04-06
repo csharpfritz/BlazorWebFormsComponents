@@ -4,6 +4,71 @@
 
 <!-- Decisions are appended below by the Scribe after merging from .ai-team/decisions/inbox/ -->
 
+### 2026-07-30: ClientScript Migration Strategy & Roadmap
+
+**By:** Beast (Technical Writer)
+
+**Status:** APPROVED (pending implementation)
+
+**Requested by:** Jeffrey T. Fritz
+
+**Affects:** Forge (CLI), Cyclops (Analyzers), Jubilee (Samples)
+
+**Summary:** BWFC will support migration of `Page.ClientScript` and `ScriptManager` JavaScript patterns from Web Forms to Blazor through a combination of:
+
+1. **Analyzer improvements** — BWFC022/023/024 with clear TODO guidance
+2. **Safe CLI transforms** — Simple pattern detection for startup scripts and includes (deterministic only)
+3. **Comprehensive documentation** — `ClientScriptMigrationGuide.md` with examples and lifecycle constraints
+4. **Deliberate non-goals** — Do NOT attempt `__doPostBack` emulation or UpdatePanel async postback support
+
+**Key principle:** Prefer `IJSRuntime` over wrapper shims. Emit clear TODO guidance for ambiguous patterns. Document the why, not just the what.
+
+**Rationale:** From Forge's CLI Gap Analysis (§1.2), `ClientScript` / `RegisterClientScriptBlock` is flagged as **HIGH impact** — any app with JavaScript integration fails to migrate without support. Approximately **80% of real Web Forms applications** use `ClientScript` for at least one pattern (startup scripts, form validation, or dynamic script includes). Current state: code compiles but fails at runtime (no `Page.ClientScript` property). Developers have no guidance on how to migrate.
+
+**Design decisions:**
+
+1. **BWFC022 / BWFC023 / BWFC024 Analyzers** — Enhance existing analyzers with pattern-specific TODO guidance (Warning level, not Info/Error)
+2. **CLI Transforms (Selective Automation)** — Only automate deterministic patterns: `RegisterStartupScript()` with literal inline script, `RegisterClientScriptInclude()` with static URL. Emit TODO for ambiguous patterns (postback validation, dynamic script, GetPostBackEventReference, etc.)
+3. **ScriptManager Component Behavior** — Keep structural stub as-is (allows old markup to parse). Component parameters accepted but ignored. No runtime behavior emulation.
+4. **UpdatePanel Component Behavior** — Keep as CSS-compatible wrapper (renders as `<div>`). No attempt to replicate async postback semantics.
+5. **Documentation: ClientScriptMigrationGuide.md** — New file (~1,200–1,500 lines) covering startup scripts, script includes, form validation, event handlers, ScriptManager code-behind, dynamic script generation, common pitfalls, examples
+6. **Non-Goals (Explicit Scope Boundaries):**
+   - ❌ Do NOT emulate `__doPostBack()` — Web Forms' postback event validation. Blazor component model is fundamentally different.
+   - ❌ Do NOT replicate UpdatePanel async postback semantics — Would require architectural changes to Blazor; defeats purpose of using Blazor.
+   - ❌ Do NOT auto-transform complex validation scripts — Form validation in Web Forms is postback-driven; Blazor uses `EditContext`. Developer must understand difference and rewrite.
+   - ❌ Do NOT promise full `ScriptManager` API surface — Only commonly-used methods documented.
+   - ❌ Do NOT create wrapper shims for every Web Forms `ClientScript` method — Maintainability risk; direct `IJSRuntime` usage is clearer.
+
+7. **Test Coverage** — 8 test cases (TC36–TC42) covering startup scripts, includes, postback references, ScriptManager methods, IPostBackEventHandler, validation patterns
+
+**Implementation Roadmap:**
+
+- **Phase 1 (P1, 2 weeks):** Core diagnostics & basic transforms — BWFC022/023/024 analyzers, CLI transforms, TC36/TC37/TC38, ClientScriptMigrationGuide.md, analyzer reference pages, mkdocs.yml updates
+- **Phase 2 (P2, 1 week):** Enhanced guidance & samples — Sample page (ClientScriptExample.razor), common pitfalls section, TC39–TC42, updated ScriptManager/UpdatePanel docs
+- **Phase 3 (P3, 2 weeks, optional):** Runtime helpers — Minimal internal helper/registry for startup scripts (key-based deduplication, first-render flushing). NOT a full compatibility shim. Consider JavaScript utility module.
+
+**Success metrics:**
+- 3 analyzers enabled by default; CLI reports `ClientScriptTransform` ran in 80%+ of test migrations
+- All 8 test cases pass; 0 regressions in existing analyzer tests
+- Support questions about ClientScript → IJSRuntime decrease by 30%
+- Developers report ClientScript migration taking <2 hours per app (vs. 4+ previously)
+
+**Risks & Mitigations:**
+| Risk | Severity | Mitigation |
+|------|----------|-----------|
+| Over-ambition — attempting postback emulation | HIGH | Explicit non-goals (§Decision 6); regular review against scope |
+| Incomplete analysis — missing common patterns | MEDIUM | Audit top 50 Web Forms apps for 80/20 patterns |
+| TODO overload — developers frustrated | MEDIUM | Keep TODO messages specific; always reference docs; include code examples |
+| JavaScript interop complexity | MEDIUM | Provide detailed sample page with runnable examples |
+
+**Related artifacts:**
+- PRD: `dev-docs/prd-clientscript-migration-support.md`
+- Gap Analysis: `.squad/decisions/inbox/forge-cli-gap-analysis.md` (§1.2)
+- Analyzers: `src/BlazorWebFormsComponents.Analyzers/PageClientScriptUsageAnalyzer.cs`, `IPostBackEventHandlerUsageAnalyzer.cs`
+- Components: `src/BlazorWebFormsComponents/ScriptManager.razor.cs`, `UpdatePanel.razor.cs`
+
+---
+
 ### 2026-07-25: EDMX→EF Core — Standalone parser script (Option 1 execution)
 
 **By:** Cyclops (Component Dev)
@@ -14127,3 +14192,123 @@ Added `AddManualItem(file, line, category, description, severity = "medium")` co
 - `ConnectionStringSettings` — value class with `Name`, `ConnectionString`, `ProviderName`
 
 **Why:** Web Forms ConfigurationManager usage is common in migrated code. Static class matches Web Forms API. Namespace `BlazorWebFormsComponents` enables `.targets` global using to shadow `System.Configuration.ConfigurationManager`. Graceful null return if not initialized at startup.
+
+---
+
+## Decision: ClientScript Migration Documentation — Phase 1 Delivery
+
+**Date:** 2026-07-30  
+**Decided by:** Beast (Technical Writer)  
+**Related:** PRD: dev-docs/prd-clientscript-migration-support.md  
+**Status:**  IMPLEMENTED
+
+Implemented Phase 1 documentation deliverables: ClientScriptMigrationGuide.md (34.8K with 11 sections), Analyzer Reference Pages (BWFC022, BWFC023, BWFC024), Navigation & Integration (mkdocs.yml, README.md). Delivered comprehensive migration guide covering startup scripts, script includes, inline blocks, postback events, form validation, IPostBackEventHandler, ScriptManager code-behind, common pitfalls, and unsupported patterns. All code examples are complete and testable; tabbed Web Forms/Blazor format for easy comparison. Navigation triple-linked (guide  analyzers  README) for discoverability.
+
+---
+
+## Decision: ClientScriptShim Documentation Strategy
+
+**Date:** 2026-08-XX  
+**Owner:** Beast (Technical Writer)  
+**Status:**  Implemented
+
+Updated ClientScriptMigrationGuide.md with ClientScriptShim as the recommended zero-rewrite approach. Lead with easiest path first: developers migrating large Web Forms codebases need fast, low-risk path to working code. ClientScriptShim provides that; modern alternatives (IJSRuntime, JS modules) positioned as Phase 2 optimizations. Updated BWFC022.md "How to Fix" section; maintained cross-references in BWFC023/024. Supported methods: RegisterStartupScript, RegisterClientScriptBlock, RegisterClientScriptInclude, IsStartupScriptRegistered (all zero-rewrite). Unsupported: GetPostBackEventReference, GetPostBackClientHyperlink, GetCallbackEventReference (require rewrite, throw NotSupportedException with guidance).
+
+---
+
+## Decision: ClientScriptTransform CLI Transform (Phase 1)
+
+**Date:** 2026-07-30  
+**Author:** Bishop (Migration Tooling Dev)  
+**Status:** Implemented
+
+Created ClientScriptTransform at Order 850 (between DataBind@800 and UrlCleanup@900). Handles 6 patterns: 3 automatable (RegisterStartupScript  eval skeleton, RegisterClientScriptInclude  TODO, ScriptManager.RegisterStartupScript  eval skeleton), 3 non-automatable (GetPostBackEventReference, RegisterClientScriptBlock, ScriptManager.GetCurrent  TODO markers). All TODO comments use // TODO(bwfc-general): convention. IJSRuntime injection automatic when startup scripts detected. Files: ClientScriptTransform.cs (new), Program.cs + TestHelpers.cs (modified), TC33-ClientScript test data. 330 tests pass, 0 regressions.
+
+---
+
+## Directive: Zero-Rewrite Philosophy
+
+**Date:** 2026-04-06T16:27Z  
+**By:** Jeffrey T. Fritz (via Copilot)  
+**What:** "This type of inventive and zero rewrite approach is PRECISELY what we should be building."  The ClientScriptShim pattern (same API surface, modern implementation underneath) is the gold standard for all future migration shims. Prefer compatibility shims over requiring code rewrites wherever feasible.
+
+---
+
+## Decision: ClientScript Analyzer Enhancement  Parameterized Messages
+
+**Date:** 2026-07-30  
+**Author:** Cyclops  
+**Status:** Implemented  
+**Scope:** BWFC022, BWFC023, BWFC024
+
+Enhanced Phase 1 analyzers with pattern-specific TODO guidance. BWFC022 uses parameterized MessageFormat with {0}/{1} args for method-specific messages while maintaining single diagnostic ID. BWFC024 detects ScriptManager.XXX static calls only (instance detection would require semantic analysis; static covers most common patterns, extensible later). BWFC023 expanded to 3-step guidance: remove interface  replace RaisePostBackEvent with EventCallback<T>  use @onclick. Impact: 172 analyzer tests pass (up from 159), no breaking changes, same IDs/locations, AnalyzerReleases.Unshipped.md updated.
+
+---
+
+## Decision: ClientScriptShim Runtime Shim
+
+**Date:** 2026-07-30  
+**By:** Cyclops (Component Dev)  
+**Status:** IMPLEMENTED  
+**Requested by:** Jeffrey T. Fritz
+
+Implemented ClientScriptShim as a scoped DI service. Runtime compatibility shim that lets migrated code-behind keep ClientScript.RegisterStartupScript(...) calls. Scripts queued during component lifecycle, auto-flushed via IJSRuntime in OnAfterRenderAsync. Key design: queue-and-flush via eval (simplest approach for migration scenarios; production apps should migrate to proper JS modules). Auto-flush on every render, not just firstRender (ensures scripts registered in event handlers execute). Script tag stripping when addScriptTags=true (since executed via IJSRuntime, not HTML injection). Unsupported methods throw NotSupportedException with guidance: GetPostBackEventReference, GetPostBackClientHyperlink, GetCallbackEventReference (fundamentally incompatible with Blazor's model).
+
+---
+
+## CLI Gap Analysis: webforms-to-blazor Migration Tool
+
+**By:** Forge (Lead / Web Forms Reviewer)  
+**Date:** 2026-07-25  
+**Scope:** Comprehensive gap analysis of src/BlazorWebFormsComponents.Cli
+
+Comprehensive assessment: CLI performs ~70% of mechanical L1 migration well (asp: prefix stripping, directives, Page_LoadOnInitializedAsync, Session/ViewState, basic scaffolding). Critical gaps: code-behind patterns (~15 Web Forms APIs produce no transform), multi-file scenarios (.ascx minimal treatment), authentication (FormsAuthentication unhandled), data sources (SqlDataSource/ObjectDataSource TODOs), test coverage (no .ascx/.vb/nested master cases). High-impact gaps: ClientScript (1.2  any app with JavaScript integration fails), ScriptManager code-behind, VB.NET support (~20% of legacy apps), User Controls (.ascx), FindControl, Membership/Roles, Request patterns, Server.MapPath, Global.asax patterns. High-value additions: ScriptManager code-behind transforms, validation group handling, GridView/ListView patterns, Request object patterns, Enum attribute conversions. Test coverage: 32 current cases (TC01-TC32); missing 16+ cases (TC33-TC48) for .ascx, masters, ClientScript, membership, forms auth, validators, VB.NET, enum attributes. Prioritized roadmap: P0 (LoginViewTransform removal, ItemType/TItem fix, TC33), P1 (EnumAttributeTransform, FindControlTransform, RequestAccessTransform, FormsAuthTransform, ScriptManagerCodeBehind, MainLayout scaffold, @using enums), P2 (report detail, ValidationTransform, ServerMapPath, GlobalAsaxScanner, CSS transforms), P3 (MembershipTransform, VB.NET, Web.sitemap).
+
+---
+
+## CLI Gap Analysis Decision Record
+
+**Author:** Forge (Lead / Web Forms Reviewer)  
+**Date:** 2026-07-27  
+**Status:** Complete  awaiting Jeff review
+
+Comprehensive gap analysis completed on webforms-to-blazor CLI tool. Assessed 200+ page real-world migration readiness: 26 active transforms (5 directive, 14 markup, 12 code-behind), 32 test inputs/outputs, shim generation, scaffolding. What's working: core transforms solid, Session/Cache shim auto-wired, DataSourceID scaffolds compilable stubs, TODO conventions consistent, 23 unit test files cover all transforms. Remaining gaps (prioritized top 5): UpdatePanel/ScriptManager transform (build-breaker for AJAX apps, medium effort), ConfigurationManager shim (build-breaker for AppSettings, medium effort), complex expression parsing (silent wrong output, medium effort), IsPostBack else-if chains (manual cleanup, large effort), Prescanner not built (no complexity scoring, medium effort). Recommendations: implement UpdatePanel/ScriptManager transform (40%+ of Web Forms apps), build ConfigurationManager shim, add expression depth handling, build Prescanner for complexity scoring. Decision questions for Jeff: Should UpdatePanel content be preserved (BWFC UpdatePanel) or stripped? ConfigurationManager shim class or transform to IConfiguration? Priority between expression depth vs Prescanner?
+
+---
+
+## Decision: ClientScript Sample Page Convention
+
+**By:** Jubilee (Sample Writer)  
+**Date:** 2026-07-30  
+**Status:** Implemented
+
+Created ClientScript migration sample page at Components/Pages/ControlSamples/ClientScript/Index.razor following established pattern. Convention established: migration demo pages use consistent Before/After side-by-side layout (row/col-md-6) with code blocks showing Web Forms pattern and Blazor equivalent. Live demos in card/card-body containers with text-muted "Key point" note. JS helper files in wwwroot/js/ included via script tag in App.razor (not dynamically loaded per-page). Smoke test entries for migration helper pages in AjaxControl_Loads_WithoutErrors theory. ComponentCatalog entries use "Migration Helpers" category with descriptive keywords.
+
+---
+
+## Decision: ClientScriptShim Sample Page Structure
+
+**By:** Jubilee (Sample Writer)  
+**Date:** 2026-07-30  
+**Affects:** Beast (docs linking), Rogue (test coverage)
+
+Created separate sample page for ClientScriptShim at /ControlSamples/ClientScriptShim rather than updating existing ClientScript page. Rationale: two pages serve different migration strategies. ClientScript page teaches "proper rewrite" using IJSRuntime directly (manual migration). ClientScriptShim page teaches "zero-rewrite" using compatibility shim (accelerated migration). Separate pages let developers choose their path. ClientScript page remains "learn the Blazor way" reference while shim page is "get migrated fast" option. Follow-ups: Beast consider linking between pages in docs; Rogue add ClientScriptShim to load test theory; ComponentList.razor has "Migration Helpers" subsection for other shim pages (Session, Cache, Request).
+
+---
+
+## Decision: ClientScript Test Coverage Scope (TC36TC38)
+
+**Author:** Rogue (QA Analyst)  
+**Date:** 2026-07-30  
+**Status:** Implemented
+
+Phase 1 ClientScript Migration test coverage decisions. BWFC024 tests deferred (analyzer doesn't exist yet; tests written when Cyclops delivers). Pattern-specific messages not yet in analyzer (PRD requests per-method messages; current analyzer emits single message; additional tests added when Cyclops enhances). CLI ClientScriptTransform tested comprehensively (Bishop/Forge created transform with full pattern support; Rogue wrote 19 unit tests covering all 5 regex patterns plus edge cases). Impact: 44 new tests total (25 analyzer + 19 CLI transform), all passing (172 analyzer, 349 CLI), no regressions.
+
+---
+
+## Finding: ClientScriptShim Null Type Guard Needed
+
+**By:** Rogue (QA Analyst)  
+**Affects:** Cyclops (Component Dev)
+
+Finding: ClientScriptShim.BuildKey(Type type, string key) accesses type.FullName without null check. Passing null throws NullReferenceException instead of expected ArgumentNullException. Recommendation: add ArgumentNullException.ThrowIfNull(type) guard in RegisterStartupScript, RegisterClientScriptBlock, IsStartupScriptRegistered methods  or in BuildKey itself. Test ClientScriptShimTests.RegisterStartupScript_NullType_ThrowsNullReference documents current behavior; rename to _ThrowsArgumentNull when Cyclops adds guard. Priority: Low (edge case, but consistent guard clauses good practice for public API).

@@ -915,3 +915,29 @@ foreach (var warning in warnings) {
 **Tests:** 172 analyzer tests pass (was 159). 13 new tests added across BWFC022/023/024.
 
 **Key technical decision:** Used parameterized `MessageFormat` with `{0}/{1}` args rather than separate DiagnosticDescriptor per method. Keeps single BWFC022 ID for all Page.ClientScript patterns, differentiated by message content. Existing tests without `.WithMessage()` continue to pass; new tests verify exact messages.
+
+### ClientScriptShim Implementation (2026-07-30)
+
+**Summary:** Built `ClientScriptShim` — a scoped service emulating `Page.ClientScript` (`ClientScriptManager`) from Web Forms. Follows the same queue-and-flush pattern used in Web Forms: methods like `RegisterStartupScript` queue scripts into dictionaries keyed for deduplication, and `FlushAsync(IJSRuntime)` executes them via `eval` after render.
+
+**Files created:** `src/BlazorWebFormsComponents/ClientScriptShim.cs`
+
+**Files modified:**
+- `ServiceCollectionExtensions.cs` — registered `ClientScriptShim` as scoped service after `CacheShim`
+- `BaseWebFormsComponent.cs` — added lazy-resolved `ClientScript` property (same pattern as `JsInterop`), added auto-flush call in `OnAfterRenderAsync`
+
+**API surface:**
+- `RegisterStartupScript(Type, string, string, bool)` / `RegisterStartupScript(Type, string, string)`
+- `IsStartupScriptRegistered(Type, string)`
+- `RegisterClientScriptBlock(Type, string, string, bool)` / `IsClientScriptBlockRegistered(Type, string)`
+- `RegisterClientScriptInclude(string, string)` / `RegisterClientScriptInclude(Type, string, string)` / `IsClientScriptIncludeRegistered(string)`
+- `FlushAsync(IJSRuntime)` — executes queued scripts/blocks via eval, loads includes via dynamic script tag injection
+- Unsupported: `GetPostBackEventReference`, `GetPostBackClientHyperlink`, `GetCallbackEventReference` throw `NotSupportedException` with migration guidance
+
+**Design decisions:**
+- Script tag stripping uses compiled Regex for perf; strips `<script>` wrappers when `addScriptTags=true`
+- Three separate dictionaries for startup scripts, blocks, and includes — mirrors Web Forms' separate registries
+- Flush runs blocks before startup scripts (Web Forms page lifecycle order)
+- Includes loaded via dynamic `<script>` element creation in eval
+- Auto-flush happens every render (not just firstRender) so scripts registered in event handlers work correctly
+- Build: 0 errors across net8.0/net9.0/net10.0

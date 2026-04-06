@@ -74,6 +74,23 @@
 
 ## Learnings
 
+### ClientScriptShim Unit Tests (2026-07-30)
+
+- **29 new unit tests delivered** for `ClientScriptShim` scoped service. All passing on net9.0.
+- **Categories:** Registration & deduplication (11 tests), script tag stripping (2 tests), FlushAsync behavior (7 tests), unsupported method throws (3 tests), edge cases (6 tests).
+- **Bug discovered:** `ClientScriptShim.BuildKey()` throws `NullReferenceException` on null type instead of `ArgumentNullException`. Documented in test `RegisterStartupScript_NullType_ThrowsNullReference`. Recommend Cyclops add guard clause.
+- **Mock pattern:** `IJSRuntime` mocked with `MockBehavior.Loose` — `InvokeVoidAsync` extension calls `InvokeAsync<IJSVoidResult>`, which returns `default(ValueTask)` via loose mock without explicit Setup. Verified by checking `mock.Invocations.Count` and extracting string args from invocation arguments.
+- **Null key handled gracefully** — null key does not throw (used as part of composite key). Null type does throw (BuildKey accesses `type.FullName`).
+- **FlushAsync clears queues** — after flush, `IsRegistered` returns false for all script types. Second flush is a no-op.
+
+### ClientScript Migration Tests — TC36/TC37/TC38 (2026-07-30)
+
+- **TC36–TC38 test coverage delivered:** 25 new analyzer tests + 19 CLI transform unit tests = 44 new tests total.
+- **Analyzer tests (172 total, 0 failures):** TC36 covers `Page.ClientScript.RegisterStartupScript()` detection including `this.Page.ClientScript` alternate syntax and message content verification (IJSRuntime). TC37 covers `RegisterClientScriptInclude()` and `RegisterClientScriptBlock()` detection. TC38 covers `GetPostBackEventReference()` detection with argument overloads and `IPostBackEventHandler` EventCallback guidance.
+- **CLI transform tests (19 new, 349 total, 0 failures):** Full coverage of `ClientScriptTransform.cs` — startup script→IJSRuntime conversion, include→TODO with script tag, block→TODO, GetPostBackEventReference→TODO with EventCallback, ScriptManager.GetCurrent→TODO, IJSRuntime injection, idempotency, and order verification.
+- **No BWFC024 analyzer exists yet** — ScriptManager code-behind tests deferred until Cyclops delivers analyzer.
+- **StubSource pattern:** Added `RegisterClientScriptInclude` and `GetPostBackEventReference(object, string)` overloads to the test stub in PageClientScriptUsageAnalyzerTests. Future test additions should include method overloads in the stub.
+
 <!--  Summarized 2026-02-27 by Scribe  covers M1M16 -->
 
 <!-- ⚠ Summarized 2026-03-06 by Scribe — older entries archived -->

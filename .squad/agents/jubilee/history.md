@@ -450,3 +450,26 @@ This wave establishes **documentation patterns** that will guide future control 
 - **Source Code section** updated with both new markup examples and full @code initialization for the new themes.
 - **Key discovery:** GridLines enum is in BlazorWebFormsComponents.Enums and requires explicit @using — not covered by @using BlazorWebFormsComponents alone. Similarly, TableItemStyle has an internal constructor — must use SkinBuilder.SubStyle() from outside the assembly.
 - **SubStyles keys** must match GridView's ApplyThemeSkin keys exactly: `HeaderStyle`, `AlternatingRowStyle`, `FooterStyle` (not `AlternatingItemStyle`).
+
+### ClientScript Migration Sample Page (2026-07-30)
+
+- **Created** `Components/Pages/ControlSamples/ClientScript/Index.razor` with 5 interactive demo sections covering all major ClientScript→Blazor migration patterns from the PRD.
+- **Sections:** (1) Startup Script — `RegisterStartupScript` → `OnAfterRenderAsync` + `IJSRuntime`, (2) Script Include — `RegisterClientScriptInclude` → static `<script>` tag, (3) Focus Management — `ScriptManager.SetFocus` → `ElementReference.FocusAsync()`, (4) Event Handlers — `GetPostBackEventReference`/`IPostBackEventHandler` → `@onclick`/`EventCallback`, (5) DOM Manipulation — `RegisterClientScriptBlock` → named JS functions or Blazor binding.
+- **Created** `wwwroot/js/clientscript-demo.js` with `initializePage()`, `focusElement()`, and `highlightElement()` helper functions.
+- **Updated** `App.razor` to include the JS file via `<script src="js/clientscript-demo.js">`.
+- **Updated** `ComponentCatalog.cs` — added "ClientScript" entry in "Migration Helpers" category (alphabetically before ScriptManager).
+- **Updated** `ControlSampleTests.cs` — added `[InlineData("/ControlSamples/ClientScript")]` to `AjaxControl_Loads_WithoutErrors` theory.
+- **Convention:** Migration demo pages use Before/After side-by-side `row`/`col-md-6` layout with `<pre><code>` blocks. Live demos in `card`/`card-body` with `text-muted` key-point notes. Migration quick-reference table at bottom.
+- **Build verified:** 0 errors, pre-existing BL0005 warnings only.
+
+### ClientScriptShim Sample Page (2026-07-30)
+
+- **Created** `Components/Pages/ControlSamples/ClientScriptShim/Index.razor` — NEW sample page at `/ControlSamples/ClientScriptShim` demonstrating the zero-rewrite migration path using `ClientScriptShim`.
+- **Four demo sections:** (1) RegisterStartupScript — Web Forms code-behind call unchanged, shim queues and flushes via IJSRuntime, (2) RegisterClientScriptInclude — dynamic script loading with same API, (3) Deduplication — `IsStartupScriptRegistered` check works identically, dictionary-based key dedup, (4) Side-by-side comparison — manual IJSRuntime rewrite vs ClientScriptShim zero-rewrite approach with visual contrast (warning/success card borders).
+- **Migration quick reference table** mapping all `Page.ClientScript.*` methods to shim equivalents, noting unsupported methods (GetPostBackEventReference, GetCallbackEventReference) with Blazor alternatives.
+- **Info box** explaining three access patterns: `ClientScript` property on BaseWebFormsComponent, `@inject ClientScriptShim` for other pages, `AddBlazorWebFormsComponents()` for service registration.
+- **Updated** `ComponentCatalog.cs` — added "ClientScriptShim" entry in "Migration Helpers" category immediately after "ClientScript".
+- **Updated** `ComponentList.razor` — added new "Migration Helpers" subsection with links to both ClientScript (IJSRuntime) and ClientScriptShim (Zero-Rewrite) pages, above existing "Migration Tools" section.
+- **Page uses `@inject ClientScriptShim ClientScript`** — injected as scoped service. Calls `FlushAsync(JS)` in `OnAfterRenderAsync` since the page doesn't inherit BaseWebFormsComponent.
+- **Pattern:** Source code section at bottom showing complete `@code` block with escaped `@@` directives for display. Follows established migration demo conventions.
+- **Build verified:** 0 errors, pre-existing BL0005 warnings only.

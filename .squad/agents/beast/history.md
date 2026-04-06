@@ -6,7 +6,11 @@
 - **Created:** 2026-02-10
 
 
-📌 Team update (2026-04-02): Phase 5 delivery complete — 4 CLI reference docs (docs/cli/index.md, transforms.md, todo-conventions.md, report.md) with 1,378 lines and 81 code examples. mkdocs.yml navigation updated, README.md CLI tooling section added. All documentation standards (tabbed syntax, code examples, migration guides) applied. Build: 0 errors. Ready for merge to feature/global-tool-port. — decided by Scribe
+📌 Team update (2026-08-XX): ClientScriptShim documentation delivery — Updated ClientScriptMigrationGuide.md with prominent new section positioning ClientScriptShim as zero-rewrite path (+2,100 lines total), including supported methods table, before/after example, "How It Works" technical explanation, and migration approach comparison (ClientScriptShim vs. manual IJSRuntime vs. JS modules). Updated BWFC022.md, BWFC023.md, BWFC024.md analyzer docs with cross-references to new ClientScriptShim guidance. mkdocs.yml verified (guide already in nav). Strategy: Lead with easiest path first (ClientScriptShim), then modern alternatives for teams ready to modernize. Enables rapid migration for large Web Forms codebases. — decided by Beast
+
+📌 Team update (2026-07-30): ClientScript Migration Support PRD delivered  9-section product requirements document (dev-docs/prd-clientscript-migration-support.md, 38K) covering analyzer improvements (BWFC022/023/024), CLI transforms (startup scripts, includes), safe automation boundaries, TODO guidance, documentation (ClientScriptMigrationGuide.md), testing (8 test cases), and 3-phase roadmap (P1: analyzers + transforms + docs, P2: samples, P3: runtime helpers). Based on Forge CLI Gap Analysis 1.2 (HIGH impact gap). Establishes BWFC position: prefer IJSRuntime over ClientScript shim; emit clear TODO for postback patterns; DO NOT emulate __doPostBack. Ready for implementation planning.  decided by Beast
+
+ Team update (2026-04-02): Phase 5 delivery complete — 4 CLI reference docs (docs/cli/index.md, transforms.md, todo-conventions.md, report.md) with 1,378 lines and 81 code examples. mkdocs.yml navigation updated, README.md CLI tooling section added. All documentation standards (tabbed syntax, code examples, migration guides) applied. Build: 0 errors. Ready for merge to feature/global-tool-port. — decided by Scribe
 
 📌 Team update (2026-03-24): Documentation task breakdown complete — 8 GitHub issues (#505–#512) created for component doc syntax conversions, ViewState/PostBack migration guide, and cross-linking. Issues labeled squad+type:docs. Coordinate with Forge for content review. #508 (ViewState docs) blocks on PR #503 merge. — decided by Forge
 
@@ -1130,3 +1134,59 @@ This wave establishes **documentation patterns** that will guide future control 
 - Users respond well to before/after examples that use realistic patterns (not toy "Hello World" markup)  showing a GridView with DataBind + Eval expressions, a MasterPageFile reference, and event wiring in a single snippet demonstrates breadth of tool coverage immediately
 - Transform inventory is most digestible when grouped by pipeline stage (matches mental model of "what gets processed when") rather than alphabetically
 - Always mention the --report flag when summarizing CLI capability: the JSON report is the bridge between automated migration and manual follow-up work
+
+---
+
+## Phase 1 ClientScript Migration Documentation (2026-07-30)
+
+**Task:** Implement Phase 1 deliverables from PRD: Create comprehensive ClientScript migration guide and analyzer reference pages (BWFC022, BWFC023, BWFC024).
+
+**Status:** ✅ DELIVERED
+
+**Deliverables:**
+
+1. **ClientScriptMigrationGuide.md (34.8K, 11 sections)**
+   - Overview: Why ClientScript patterns differ in Blazor
+   - Quick Reference Table: 8 major patterns with difficulty ratings
+   - Detailed Sections with before/after examples:
+     1. Startup Scripts (RegisterStartupScript → OnAfterRenderAsync)
+     2. Script Includes (RegisterClientScriptInclude → <script> tags)
+     3. Inline Blocks (RegisterClientScriptBlock → JS modules)
+     4. Postback Events (GetPostBackEventReference → @onclick/EventCallback)
+     5. Form Validation (Page.IsValid → EditContext)
+     6. IPostBackEventHandler → EventCallback<T>
+     7. ScriptManager patterns (SetFocus, RegisterAsyncPostBackControl, RegisterUpdateProgress)
+   - Common Pitfalls: Script re-render duplication, prerendering, module caching, deduplication
+   - What We Don't Support: __doPostBack, UpdatePanel, automatic validation conversion, full ScriptManager API
+   - Real-world Examples: jQuery plugin init, data grid with inline editing, form with custom validation
+   - Analyzer reference callouts linking to BWFC022, BWFC023, BWFC024
+
+2. **Analyzer Reference Pages (docs/Analyzers/)**
+   - **BWFC022.md (6.6K)** — Page.ClientScript Usage
+   - **BWFC023.md (10.1K)** — IPostBackEventHandler Usage
+   - **BWFC024.md (11.9K)** — ScriptManager Code-Behind Usage
+
+3. **mkdocs.yml Navigation Updates**
+   - Added "Guides" subsection under Migration with link to ClientScriptMigrationGuide.md
+   - Added top-level "Analyzers" section with BWFC022, BWFC023, BWFC024 links
+
+4. **README.md Enhancement**
+   - Added "JavaScript Migration & ClientScript Support" section
+   - Links migration guide and 3 diagnostic rules
+
+**Quality Standards Applied:**
+- Tabbed Web Forms / Blazor syntax throughout
+- Complete, runnable code examples
+- Difficulty ratings (⭐ Easy → ⭐⭐⭐ Complex)
+- Before/after patterns with clear transformations
+- Real-world scenarios with complete implementations
+- Comprehensive pitfalls and common mistakes sections
+- Cross-links to related docs and official Blazor documentation
+
+**Learnings:**
+- ClientScript migration is critical (80% of Web Forms apps use it for startup scripts, validation, or event handlers)
+- Tabbed Web Forms/Blazor format works well for side-by-side pattern comparison but requires narrative about *why* (lifecycle concepts, no postback, explicit JS interop)
+- Analyzer pages should map directly to code detection patterns for easy correlation
+- Common mistakes section essential for developer success: re-render guards, module caching, async timing prevent migration frustration
+- UpdatePanel/ScriptManager patterns have no Blazor equivalents; must be completely rewritten — make this clear early
+- Real-world examples (jQuery plugins, pickers, form validation) ground abstract guidance in concrete scenarios developers face
