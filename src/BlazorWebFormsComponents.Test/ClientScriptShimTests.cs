@@ -424,6 +424,165 @@ public class ClientScriptShimTests
 
 	#endregion
 
+	#region Phase 2 — PostBack Deep Tests
+
+	[Fact]
+	public void GetPostBackEventReference_EscapesSingleQuotesInArgument()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetPostBackEventReference(new object(), "it's a test");
+
+		result.ShouldContain("it\\'s a test");
+	}
+
+	[Fact]
+	public void GetPostBackEventReference_EscapesBackslashesInArgument()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetPostBackEventReference(new object(), "path\\to\\file");
+
+		result.ShouldContain("path\\\\to\\\\file");
+	}
+
+	[Fact]
+	public void GetPostBackEventReference_EmptyArgument_ProducesEmptyQuotes()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetPostBackEventReference(new object(), "");
+
+		result.ShouldContain("''");
+	}
+
+	[Fact]
+	public void GetPostBackEventReference_ControlType_ResolvesToTypeName()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetPostBackEventReference(new object(), "arg");
+
+		// Plain object resolves to its type name
+		result.ShouldContain("Object");
+	}
+
+	[Fact]
+	public void GetPostBackEventReference_OutputFormat_IsDoPostBackCall()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetPostBackEventReference(new object(), "myarg");
+
+		// Should match the format: __doPostBack('id', 'arg')
+		result.ShouldStartWith("__doPostBack(");
+		result.ShouldEndWith(")");
+		result.ShouldContain("myarg");
+	}
+
+	[Fact]
+	public void GetPostBackClientHyperlink_ContainsSameContentAsEventReference()
+	{
+		var shim = CreateShim();
+		var control = new object();
+		var argument = "test";
+
+		var reference = shim.GetPostBackEventReference(control, argument);
+		var hyperlink = shim.GetPostBackClientHyperlink(control, argument);
+
+		hyperlink.ShouldBe($"javascript:{reference}");
+	}
+
+	[Fact]
+	public void GetPostBackClientHyperlink_NullControl_ContainsUnknown()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetPostBackClientHyperlink(null!, "arg");
+
+		result.ShouldStartWith("javascript:");
+		result.ShouldContain("unknown");
+	}
+
+	[Fact]
+	public void GetPostBackClientHyperlink_EscapesSpecialChars()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetPostBackClientHyperlink(new object(), "it's");
+
+		result.ShouldStartWith("javascript:");
+		result.ShouldContain("\\'");
+	}
+
+	#endregion
+
+	#region Phase 2 — Callback Deep Tests
+
+	[Fact]
+	public void GetCallbackEventReference_EscapesSingleQuotesInArgument()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetCallbackEventReference(
+			new object(), "it's", "onSuccess", "ctx", "onError", false);
+
+		result.ShouldContain("it\\'s");
+	}
+
+	[Fact]
+	public void GetCallbackEventReference_EscapesBackslashesInContext()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetCallbackEventReference(
+			new object(), "arg", "onSuccess", "path\\ctx", "onError", false);
+
+		result.ShouldContain("path\\\\ctx");
+	}
+
+	[Fact]
+	public void GetCallbackEventReference_NullContext_DefaultsToEmpty()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetCallbackEventReference(
+			new object(), "arg", "onSuccess", null!, "onError", false);
+
+		// null context → empty string between quotes
+		result.ShouldContain("__bwfc_callback");
+	}
+
+	[Fact]
+	public void GetCallbackEventReference_NullArgument_DefaultsToEmpty()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetCallbackEventReference(
+			new object(), null!, "onSuccess", "ctx", "onError", false);
+
+		result.ShouldContain("__bwfc_callback");
+		result.ShouldContain("''");
+	}
+
+	[Fact]
+	public void GetCallbackEventReference_OutputFormat_ContainsAllParams()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetCallbackEventReference(
+			new object(), "myarg", "successFn", "myctx", "errorFn", true);
+
+		result.ShouldStartWith("__bwfc_callback(");
+		result.ShouldEndWith(")");
+		result.ShouldContain("myarg");
+		result.ShouldContain("successFn");
+		result.ShouldContain("myctx");
+		result.ShouldContain("errorFn");
+	}
+
+	#endregion
+
 	#region Edge Cases
 
 	[Fact]
