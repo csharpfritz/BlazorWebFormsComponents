@@ -66,9 +66,9 @@ Inject `ClientScriptShim` and use it the same way:
 | `IsStartupScriptRegistered(Type, string)` | ✅ Supported | Deduplication check |
 | `IsClientScriptBlockRegistered(Type, string)` | ✅ Supported | Deduplication check |
 | `IsClientScriptIncludeRegistered(string)` | ✅ Supported | Deduplication check |
-| `GetPostBackEventReference(...)` | ❌ Throws | Use `@onclick` / `EventCallback<T>` instead |
-| `GetPostBackClientHyperlink(...)` | ❌ Throws | Use `NavigationManager` or `<a>` tags |
-| `GetCallbackEventReference(...)` | ❌ Throws | Use `IJSRuntime` + `EventCallback<T>` |
+| `GetPostBackEventReference(...)` | ✅ Supported (Phase 2) | Returns `__doPostBack()` string; handled by postback shim |
+| `GetPostBackClientHyperlink(...)` | ✅ Supported (Phase 2) | Returns hyperlink-compatible postback string |
+| `GetCallbackEventReference(...)` | ✅ Supported (Phase 2) | Returns callback bridge string; requires JS handler |
 
 ### How It Works Internally
 
@@ -462,10 +462,11 @@ For truly global scripts, you can inline them in `index.html` or the layout:
 
 ### What It Does
 
-`GetPostBackEventReference()` generates a dynamic JavaScript call to trigger a postback event, often used in client-side event handlers that need to notify the server.
+`GetPostBackEventReference()` generates a dynamic JavaScript call to trigger a postback event, often used in client-side event handlers that need to notify the server. **Phase 2 now includes a working shim for this pattern.**
 
-### Web Forms
+### 🎯 Easiest Approach: ClientScriptShim (Phase 2 — Zero Rewrite)
 
+**Web Forms:**
 ```csharp
 public string GetDeleteButtonScript()
 {
@@ -481,74 +482,360 @@ public string GetDeleteButtonScript()
 // <a href='<%# GetDeleteButtonScript() %>'>Delete</a>
 ```
 
-When the user clicks the link, `__doPostBack()` POSTs the form back to the server with event data.
+**Blazor with BWFC — Zero rewrite!**
+```csharp
+// Same code works! ClientScriptShim returns a working __doPostBack() JS string
+public string GetDeleteButtonScript()
+{
+    return ClientScript.GetPostBackEventReference(
+        new PostBackOptions(btnDelete, "clicked")
+        {
+            PerformValidation = false
+        });
+}
 
-### Blazor Equivalent
+// Usage in markup:
+// <a href="@GetDeleteButtonScript()">Delete</a>
+```
 
-Blazor has **no `__doPostBack()` equivalent** because there's no postback cycle. Instead, bind a click handler directly to a component method using `@onclick` or `EventCallback`:
+### How It Works (Phase 2)
+
+1. **`GetPostBackEventReference()` returns `__doPostBack('controlId', 'arg')`** — the exact same function name as Web Forms.
+
+2. **BWFC ships `bwfc-postback.js`** which defines `__doPostBack()` as a JavaScript bridge function:
+   ```javascript
+   window.__doPostBack = async function(eventTarget, eventArgument) {
+       // Bridge back into Blazor via JS interop
+       await DotNet.invokeMethodAsync('BlazorWebFormsComponents', 'HandlePostBackFromJs', 
+           eventTarget, eventArgument);
+   };
+   ```
+
+3. **The page registers itself as a postback target** in `OnAfterRenderAsync`, exposing a .NET callback method via `DotNetObjectReference`.
+
+4. **When JavaScript calls `__doPostBack()`**, it invokes the .NET `HandlePostBackFromJs` method via JS interop, which fires the page's `PostBack` event.
+
+5. **Your C# code handles the PostBack event**, just like Web Forms:
+   ```csharp
+   @code {
+       protected override void OnInitialized()
+       {
+           PostBack += (sender, args) =>
+           {
+               // args.EventTarget — the control that triggered the postback
+               // args.EventArgument — the argument passed
+               HandleMyPostBack(args.EventTarget, args.EventArgument);
+           };
+       }
+       
+       private void HandleMyPostBack(string eventTarget, string eventArgument)
+       {
+           if (eventTarget == "btnDelete" && eventArgument == "clicked")
+           {
+               DeleteItem();
+           }
+       }
+   }
+   ```
+
+### Usage Pattern
+
+Use `GetPostBackEventReference()` in data-bound attributes or JavaScript event handlers that need to trigger server-side actions:
+
+```razor
+@foreach (var item in items)
+{
+    <a href="@ClientScript.GetPostBackEventReference(item, "edit")">
+        Edit
+    </a>
+    <a href="@ClientScript.GetPostBackEventReference(item, "delete")">
+        Delete
+    </a>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        PostBack += (sender, args) =>
+        {
+            if (args.EventArgument == "edit")
+            {
+                EditItem(args.EventTarget);
+            }
+            else if (args.EventArgument == "delete")
+            {
+                DeleteItem(args.EventTarget);
+            }
+        };
+    }
+}
+```
+
+### Alternative: Modern Blazor Approach
+
+If you prefer to modernize away from postback patterns, use `@onclick` or `EventCallback` instead:
 
 === "Simple Case: @onclick"
     ```razor
-    <button @onclick="HandleDelete">Delete</button>
+    @foreach (var item in items)
+    {
+        <button @onclick="() => EditItem(item.Id)">Edit</button>
+        <button @onclick="() => DeleteItem(item.Id)">Delete</button>
+    }
     
     @code {
-        private async Task HandleDelete()
-        {
-            // Handle delete directly in component
-            await DeleteItem();
-        }
+        private async Task EditItem(int itemId) { ... }
+        private async Task DeleteItem(int itemId) { ... }
     }
     ```
 
 === "Parameterized Case: EventCallback"
     ```razor
     <!-- Parent component -->
-    <ChildComponent ItemId="@itemId" OnDelete="HandleDelete" />
+    @foreach (var item in items)
+    {
+        <ChildComponent Item="@item" OnEdit="HandleEdit" OnDelete="HandleDelete" />
+    }
     
     @code {
-        private async Task HandleDelete(int itemId)
-        {
-            await DeleteItemAsync(itemId);
-        }
+        private async Task HandleEdit(Item item) { ... }
+        private async Task HandleDelete(Item item) { ... }
     }
     
     <!-- ChildComponent.razor -->
-    @inject NavigationManager Nav
-    
-    <button @onclick="RaiseDelete">Delete</button>
-    
     @code {
         [Parameter]
-        public int ItemId { get; set; }
+        public Item Item { get; set; }
         
         [Parameter]
-        public EventCallback<int> OnDelete { get; set; }
+        public EventCallback<Item> OnEdit { get; set; }
         
-        private async Task RaiseDelete()
-        {
-            await OnDelete.InvokeAsync(ItemId);
-        }
+        [Parameter]
+        public EventCallback<Item> OnDelete { get; set; }
+        
+        private async Task RaiseEdit() => await OnEdit.InvokeAsync(Item);
+        private async Task RaiseDelete() => await OnDelete.InvokeAsync(Item);
     }
     ```
 
 ### Key Differences
 
-| Aspect | Web Forms | Blazor |
-|--------|-----------|--------|
-| **Mechanism** | JavaScript `__doPostBack()` → HTTP POST | Direct component method call |
-| **Server roundtrip** | Full page reload on postback | Blazor diff sync (no page reload) |
-| **Validation** | Server-side `Page.IsValid` | `EditContext`-based validation |
-| **Event data** | Form-encoded POST body | Method parameters |
-
-### When to Use Each
-
-- **`@onclick`** — Simple button click, no complex validation
-- **`EventCallback<T>`** — Parent/child communication, reusable components
-- **Form handlers** — For multi-field validation, use `EditForm` + `EditContext`
+| Aspect | Web Forms | Blazor (Phase 2 with Shim) | Blazor (Modern) |
+|--------|-----------|--------------------------|----------------|
+| **Mechanism** | `__doPostBack()` → HTTP POST | `__doPostBack()` → JS interop → .NET | Direct component method call |
+| **Server roundtrip** | Full page reload | Blazor diff sync (no page reload) | Instant (no roundtrip) |
+| **Compatibility** | Zero rewrite | Zero rewrite | Requires refactoring |
+| **Best for** | Code migration (Phase 1) | Code migration (Phase 2) | New development |
 
 ---
 
-## 5. Form Validation Scripts
+## 5. Callback Event References (Phase 2)
+
+### What It Does
+
+`GetCallbackEventReference()` generates a JavaScript callback bridge for server callback processing (AJAX-style communication without UpdatePanel). **Phase 2 includes a working shim for this pattern.**
+
+### Web Forms
+
+```csharp
+protected void Page_Load(object sender, EventArgs e)
+{
+    string callback = Page.ClientScript.GetCallbackEventReference(
+        this, 
+        "arg",           // JavaScript argument to pass
+        "onSuccess",     // JavaScript function to call on success
+        "ctx",           // Context object to pass to callback
+        "onError",       // JavaScript function to call on error
+        true);           // useAsync
+    
+    // Inject the callback string into a JavaScript function
+    Page.ClientScript.RegisterStartupScript(this.GetType(), "initCallback",
+        $"var callback = '{callback}'; " +
+        "function myCallback(arg) { callback(arg); }",
+        true);
+}
+
+// In markup:
+// <button onclick="myCallback('someData')">Call Server</button>
+
+// Server-side callback handler:
+public void RaiseCallbackEvent(string eventArgument)
+{
+    // Process eventArgument and prepare return value
+}
+
+public string GetCallbackResult()
+{
+    // Return result to JavaScript
+    return "Server processed: " + eventArgument;
+}
+```
+
+### Blazor with BWFC (Phase 2 — Zero Rewrite)
+
+```csharp
+// Same pattern works! ClientScriptShim provides the callback bridge
+protected override void OnInitialized()
+{
+    string callback = ClientScript.GetCallbackEventReference(
+        this, 
+        "arg",
+        "onSuccess",
+        "ctx",
+        "onError",
+        useAsync: true);
+    
+    // Register the callback into the page
+    ClientScript.RegisterStartupScript(this.GetType(), "initCallback",
+        $"var callback = '{callback}'; " +
+        "function myCallback(arg) { callback(arg); }",
+        true);
+}
+
+// Handler methods (same as Web Forms):
+public void RaiseCallbackEvent(string eventArgument)
+{
+    // Process eventArgument
+}
+
+public string GetCallbackResult()
+{
+    // Return result to JavaScript
+}
+```
+
+### How It Works (Phase 2)
+
+1. **`GetCallbackEventReference()` returns a JavaScript function call string** that bridges back to .NET:
+   ```javascript
+   // Returned string looks like:
+   "WebForm_DoCallback('controlId',arg,onSuccess,ctx,onError,true)"
+   ```
+
+2. **BWFC ships `bwfc-callback.js`** which defines `WebForm_DoCallback()` as a bridge:
+   ```javascript
+   window.WebForm_DoCallback = async function(controlId, arg, onSuccess, ctx, onError, async) {
+       try {
+           const result = await DotNet.invokeMethodAsync('BlazorWebFormsComponents', 
+               'HandleCallbackFromJs', controlId, arg);
+           if (onSuccess) {
+               onSuccess(result, ctx);
+           }
+       } catch (err) {
+           if (onError) {
+               onError(err, ctx);
+           }
+       }
+   };
+   ```
+
+3. **Your C# methods handle the callback**, just like Web Forms:
+   ```csharp
+   public void RaiseCallbackEvent(string eventArgument)
+   {
+       // Process the callback argument
+       // Set _callbackResult for GetCallbackResult()
+   }
+   
+   public string GetCallbackResult()
+   {
+       // Return data back to the JavaScript callback
+       return _callbackResult;
+   }
+   ```
+
+4. **JavaScript receives the result** in the `onSuccess` callback:
+   ```javascript
+   function onSuccess(result, context) {
+       console.log('Server returned:', result);
+       // Update UI with server response
+   }
+   ```
+
+### Usage Pattern
+
+Use callback events for AJAX-style server communication without page reload:
+
+```razor
+@inject IJSRuntime JS
+
+<button @onclick="FetchDataViaCallback">Fetch Data</button>
+<div id="result"></div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Define JavaScript callback handlers
+            await JS.InvokeVoidAsync("eval", @"
+                window.onCallbackSuccess = function(result, context) {
+                    document.getElementById('result').innerHTML = result;
+                };
+                window.onCallbackError = function(error, context) {
+                    console.error('Callback error:', error);
+                };
+            ");
+        }
+    }
+    
+    private async Task FetchDataViaCallback()
+    {
+        // Get the callback reference
+        string callback = ClientScript.GetCallbackEventReference(
+            this,
+            "\"userQuery\"",  // Argument to pass
+            "onCallbackSuccess",
+            "null",
+            "onCallbackError",
+            useAsync: true);
+        
+        // Execute it via JS interop
+        await JS.InvokeVoidAsync("eval", $"{callback};");
+    }
+    
+    public void RaiseCallbackEvent(string eventArgument)
+    {
+        // Process the query
+        _callbackResult = $"Data for: {eventArgument}";
+    }
+    
+    private string _callbackResult = "";
+    
+    public string GetCallbackResult()
+    {
+        return _callbackResult;
+    }
+}
+```
+
+### Alternative: Modern Blazor Approach
+
+For new development, use `IJSRuntime` with direct method calls instead of callbacks:
+
+```razor
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+<button @onclick="FetchData">Fetch Data</button>
+<div id="result">@result</div>
+
+@code {
+    private string result = "";
+    
+    private async Task FetchData()
+    {
+        // Direct async call to server
+        result = await Http.GetStringAsync("/api/data");
+    }
+}
+```
+
+This is cleaner, type-safe, and easier to test than callback-based patterns.
+
+---
+
+## 6. Form Validation Scripts
 
 ### What It Does
 
@@ -659,7 +946,7 @@ public DateTime EventDate { get; set; }
 
 ---
 
-## 6. IPostBackEventHandler — Custom Event Binding
+## 7. IPostBackEventHandler — Custom Event Binding
 
 ### What It Does
 
@@ -743,7 +1030,7 @@ If the postback event passes data:
 
 ---
 
-## 7. ScriptManager Code-Behind Patterns
+## 8. ScriptManager Code-Behind Patterns
 
 ### SetFocus()
 
@@ -831,24 +1118,68 @@ Show a loading indicator using component state:
 }
 ```
 
-### GetCurrent() and Related Methods
+### GetCurrent() and Related Methods (Phase 2)
 
 **Web Forms:**
 ```csharp
 ScriptManager sm = ScriptManager.GetCurrent(Page);
+sm.RegisterStartupScript(this.GetType(), "init", "initPage();", true);
 sm.SetFocus(txtSearch);
-sm.RegisterAsyncPostBackControl(gridView);
 ```
 
-**Blazor:**
-`ScriptManager.GetCurrent()` returns `null` in Blazor. **Do not use it.** Instead:
-- For `SetFocus`: Use `@ref` + `IJSRuntime` (see above)
-- For `RegisterAsyncPostBackControl`: Use component parameter binding
-- For `RegisterUpdateProgress`: Use component state
+**Blazor with BWFC (Phase 2 — Zero Rewrite):**
+```csharp
+// Same pattern works! ScriptManagerShim wraps ClientScriptShim
+ScriptManager sm = ScriptManager.GetCurrent(this);  // 'this' is the component (replaces Page)
+sm.RegisterStartupScript(this.GetType(), "init", "initPage();", true);
+// SetFocus still requires JS interop (see above)
+```
+
+### How It Works (Phase 2)
+
+1. **`ScriptManager.GetCurrent(page)`** extracts the `ClientScriptShim` from the component's dependency injection context.
+
+2. **All `RegisterStartupScript`, `RegisterClientScriptBlock`, `RegisterClientScriptInclude` calls delegate to `ClientScriptShim`**, which queues scripts during initialization.
+
+3. **Scripts are flushed in `OnAfterRenderAsync`** via `IJSRuntime`, exactly like Phase 1.
+
+4. **Focus and other component methods require JavaScript interop**, as documented in the sections above.
+
+### Pattern: RegisterStartupScript via ScriptManager
+
+Instead of calling `Page.ClientScript` directly, you can use `ScriptManager.GetCurrent()`:
+
+```csharp
+// Web Forms
+ScriptManager sm = ScriptManager.GetCurrent(Page);
+sm.RegisterStartupScript(this.GetType(), "init", "console.log('loaded');", true);
+
+// Blazor (Phase 2)
+ScriptManager sm = ScriptManager.GetCurrent(this);
+sm.RegisterStartupScript(this.GetType(), "init", "console.log('loaded');", true);
+// Zero code change! Same methods, same behavior
+```
+
+### Key Differences
+
+| Method | Phase 1 | Phase 2 | Notes |
+|--------|---------|---------|-------|
+| `RegisterStartupScript()` | ✅ ClientScriptShim | ✅ Via ScriptManager | Both work; ScriptManager delegates to ClientScriptShim |
+| `RegisterClientScriptBlock()` | ✅ ClientScriptShim | ✅ Via ScriptManager | Both work; same delegation |
+| `RegisterClientScriptInclude()` | ✅ ClientScriptShim | ✅ Via ScriptManager | Both work; same delegation |
+| `GetCurrent()` | ❌ Unsupported | ✅ Phase 2 | Returns the component's ClientScriptShim |
+| `SetFocus()` | ❌ Unsupported | ❌ Still not supported | Use `JS.InvokeVoidAsync("focus", @ref)` instead |
+| `RegisterAsyncPostBackControl()` | ❌ Unsupported | ❌ Still not supported | UpdatePanel is not emulated; use component binding |
+
+### When to Use ScriptManager vs ClientScriptShim
+
+- **Directly** — Both `ClientScript` property (Phase 1) and `ScriptManager.GetCurrent()` (Phase 2) work
+- **No functional difference** — ScriptManager just wraps ClientScriptShim for API compatibility
+- **Choose based on your Web Forms code** — If you used `ScriptManager`, keep using it; if you used `Page.ClientScript`, use `ClientScript` property
 
 ---
 
-## 8. Common Pitfalls and Solutions
+## 9. Common Pitfalls and Solutions
 
 ### Pitfall 1: Script Runs Multiple Times Due to Re-renders
 
@@ -1034,7 +1365,7 @@ protected override async Task OnAfterRenderAsync(bool firstRender)
 
 ---
 
-## 9. What We Don't Support (And Why)
+## 10. What We Don't Support (And Why)
 
 ### `__doPostBack()` and Postback Events
 
@@ -1078,7 +1409,7 @@ Our Roslyn analyzers (BWFC022, BWFC023, BWFC024) detect problematic patterns and
 
 ---
 
-## 10. Analyzers and CLI Transforms
+## 11. Analyzers and CLI Transforms
 
 To help automate migration detection, BWFC provides three diagnostic rules:
 
@@ -1133,7 +1464,7 @@ See [BWFC024 Reference](../Analyzers/BWFC024.md) for details.
 
 ---
 
-## 11. Real-World Examples
+## 12. Real-World Examples
 
 ### Example 1: jQuery Plugin Initialization
 

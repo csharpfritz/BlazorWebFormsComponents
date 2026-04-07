@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ServerShim>();
         services.AddScoped<CacheShim>();
         services.AddScoped<ClientScriptShim>();
+        services.AddScoped(sp => new ScriptManagerShim(sp.GetRequiredService<ClientScriptShim>()));
 
         var options = new BlazorWebFormsComponentsOptions();
         configure?.Invoke(options);

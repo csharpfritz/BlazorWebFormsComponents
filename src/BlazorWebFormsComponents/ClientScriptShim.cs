@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
@@ -27,6 +28,9 @@ public class ClientScriptShim
 	private readonly Dictionary<string, string> _startupScripts = new();
 	private readonly Dictionary<string, string> _scriptBlocks = new();
 	private readonly Dictionary<string, string> _scriptIncludes = new();
+	private readonly HashSet<string> _flushedStartupScripts = new();
+	private readonly HashSet<string> _flushedScriptBlocks = new();
+	private readonly HashSet<string> _flushedScriptIncludes = new();
 
 	/// <summary>
 	/// Initializes a new instance of the <see cref="ClientScriptShim"/> class.
@@ -79,7 +83,8 @@ public class ClientScriptShim
 	/// <returns><c>true</c> if the script is registered; otherwise <c>false</c>.</returns>
 	public bool IsStartupScriptRegistered(Type type, string key)
 	{
-		return _startupScripts.ContainsKey(BuildKey(type, key));
+		var k = BuildKey(type, key);
+		return _startupScripts.ContainsKey(k) || _flushedStartupScripts.Contains(k);
 	}
 
 	// ─── Client Script Blocks ──────────────────────────────────────────
@@ -110,7 +115,8 @@ public class ClientScriptShim
 	/// <returns><c>true</c> if the script block is registered; otherwise <c>false</c>.</returns>
 	public bool IsClientScriptBlockRegistered(Type type, string key)
 	{
-		return _scriptBlocks.ContainsKey(BuildKey(type, key));
+		var k = BuildKey(type, key);
+		return _scriptBlocks.ContainsKey(k) || _flushedScriptBlocks.Contains(k);
 	}
 
 	// ─── Client Script Includes ────────────────────────────────────────
@@ -148,7 +154,7 @@ public class ClientScriptShim
 	/// <returns><c>true</c> if the include is registered; otherwise <c>false</c>.</returns>
 	public bool IsClientScriptIncludeRegistered(string key)
 	{
-		return _scriptIncludes.ContainsKey(key);
+		return _scriptIncludes.ContainsKey(key) || _flushedScriptIncludes.Contains(key);
 	}
 
 	// ─── Flush ─────────────────────────────────────────────────────────
@@ -187,50 +193,55 @@ public class ClientScriptShim
 			await jsRuntime.InvokeVoidAsync("eval", loaderScript);
 		}
 
+		foreach (var key in _scriptBlocks.Keys) _flushedScriptBlocks.Add(key);
+		foreach (var key in _startupScripts.Keys) _flushedStartupScripts.Add(key);
+		foreach (var key in _scriptIncludes.Keys) _flushedScriptIncludes.Add(key);
+
 		_scriptBlocks.Clear();
 		_startupScripts.Clear();
 		_scriptIncludes.Clear();
 	}
 
-	// ─── Unsupported Methods ───────────────────────────────────────────
+	// ─── PostBack / Callback Methods ──────────────────────────────────
 
 	/// <summary>
-	/// Not supported in Blazor. Throws <see cref="NotSupportedException"/>
-	/// with migration guidance.
+	/// Returns a JavaScript string that triggers a postback, mirroring the
+	/// Web Forms <c>ClientScriptManager.GetPostBackEventReference</c> behavior.
+	/// The returned string calls <c>__doPostBack(eventTarget, eventArgument)</c>,
+	/// which is defined in <c>bwfc-postback.js</c>.
 	/// </summary>
-	/// <exception cref="NotSupportedException">Always thrown.</exception>
+	/// <param name="control">The control initiating the postback (used to resolve an ID).</param>
+	/// <param name="argument">The event argument string.</param>
+	/// <returns>A JavaScript expression string, e.g. <c>__doPostBack('Button1', '')</c>.</returns>
 	public string GetPostBackEventReference(object control, string argument)
 	{
-		throw new NotSupportedException(
-			"GetPostBackEventReference is not supported in Blazor. " +
-			"Use @onclick / EventCallback<T> instead. " +
-			"See: docs/Migration/ClientScriptMigrationGuide.md");
+		var id = ResolveControlId(control);
+		return $"__doPostBack('{EscapeJsString(id)}', '{EscapeJsString(argument ?? string.Empty)}')";
 	}
 
 	/// <summary>
-	/// Not supported in Blazor. Throws <see cref="NotSupportedException"/>
-	/// with migration guidance.
+	/// Returns a <c>javascript:</c> URL that triggers a postback, mirroring
+	/// <c>ClientScriptManager.GetPostBackClientHyperlink</c>.
 	/// </summary>
-	/// <exception cref="NotSupportedException">Always thrown.</exception>
+	/// <param name="control">The control initiating the postback.</param>
+	/// <param name="argument">The event argument string.</param>
+	/// <returns>A <c>javascript:__doPostBack(...)</c> URL string.</returns>
 	public string GetPostBackClientHyperlink(object control, string argument)
 	{
-		throw new NotSupportedException(
-			"GetPostBackClientHyperlink is not supported in Blazor. " +
-			"Use NavigationManager or <a href=\"...\"> instead. " +
-			"See: docs/Migration/ClientScriptMigrationGuide.md");
+		return $"javascript:{GetPostBackEventReference(control, argument)}";
 	}
 
 	/// <summary>
-	/// Not supported in Blazor. Throws <see cref="NotSupportedException"/>
-	/// with migration guidance.
+	/// Returns a JavaScript expression that invokes the BWFC callback bridge,
+	/// mirroring <c>ClientScriptManager.GetCallbackEventReference</c>.
+	/// The returned expression calls <c>__bwfc_callback</c> defined in
+	/// <c>bwfc-postback.js</c>.
 	/// </summary>
-	/// <exception cref="NotSupportedException">Always thrown.</exception>
-	public string GetCallbackEventReference(object control, string argument, string clientCallback, string context, string clientErrorCallback, bool useAsync)
+	public string GetCallbackEventReference(object control, string argument,
+		string clientCallback, string context, string clientErrorCallback, bool useAsync)
 	{
-		throw new NotSupportedException(
-			"GetCallbackEventReference is not supported in Blazor. " +
-			"Use IJSRuntime / EventCallback<T> for JS-to-.NET interop. " +
-			"See: docs/Migration/ClientScriptMigrationGuide.md");
+		var id = ResolveControlId(control);
+		return $"__bwfc_callback('{EscapeJsString(id)}', '{EscapeJsString(argument ?? string.Empty)}', {clientCallback ?? "null"}, '{EscapeJsString(context ?? string.Empty)}', {clientErrorCallback ?? "null"})";
 	}
 
 	// ─── Helpers ───────────────────────────────────────────────────────
@@ -249,5 +260,19 @@ public class ClientScriptShim
 	private static string EscapeJsString(string value)
 	{
 		return value.Replace("\\", "\\\\").Replace("'", "\\'");
+	}
+
+	/// <summary>
+	/// Resolves a control reference to an ID string suitable for use in
+	/// JavaScript postback/callback expressions.
+	/// Prefers <see cref="BaseWebFormsComponent.ID"/> when available.
+	/// </summary>
+	private static string ResolveControlId(object control)
+	{
+		if (control is BaseWebFormsComponent bwfc && !string.IsNullOrEmpty(bwfc.ID))
+			return bwfc.ID;
+		if (control is ComponentBase)
+			return control.GetType().Name;
+		return control?.GetType().Name ?? "unknown";
 	}
 }
