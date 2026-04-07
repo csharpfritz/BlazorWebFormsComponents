@@ -200,6 +200,8 @@ public static class ComponentCatalog
             Keywords: new[] { "response", "redirect", "navigation", "tilde", "aspx", "migration", "shim" }),
         new("IsPostBack", "Migration Helpers", "/migration/ispostback", "IsPostBack status, guard pattern, and IsHttpContextAvailable check",
             Keywords: new[] { "ispostback", "postback", "guard", "httpcontext", "lifecycle", "migration", "shim" }),
+        new("PostBack Demo", "Migration Helpers", "/ControlSamples/PostBackDemo", "GetPostBackEventReference, GetPostBackClientHyperlink, and ScriptManager.GetCurrent demos",
+            Keywords: new[] { "postback", "dopostback", "scriptmanager", "clientscript", "hyperlink", "callback", "migration", "shim" }),
 
         // Cross-Cutting / Base Properties
         new("BaseProperties", "Utility", "/ControlSamples/BaseProperties", "AccessKey, ToolTip, BackColor, ForeColor and other base class properties",
