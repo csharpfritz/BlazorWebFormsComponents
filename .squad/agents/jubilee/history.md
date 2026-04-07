@@ -473,3 +473,16 @@ This wave establishes **documentation patterns** that will guide future control 
 - **Page uses `@inject ClientScriptShim ClientScript`** — injected as scoped service. Calls `FlushAsync(JS)` in `OnAfterRenderAsync` since the page doesn't inherit BaseWebFormsComponent.
 - **Pattern:** Source code section at bottom showing complete `@code` block with escaped `@@` directives for display. Follows established migration demo conventions.
 - **Build verified:** 0 errors, pre-existing BL0005 warnings only.
+
+### PostBack & ScriptManager Demo Page (ClientScript Phase 2)
+
+- **Created** `samples/AfterBlazorServerSide/Components/Pages/ControlSamples/PostBackDemo/Index.razor` — three-section demo page for Phase 2 ClientScript postback shims.
+- **Section 1: GetPostBackEventReference** — button with `onclick="@_postBackScript"` fires `__doPostBack` from JS. PostBack event on WebFormsPageBase receives it server-side. Stable IDs: `postback-button`, `postback-script`, `postback-result`.
+- **Section 2: GetPostBackClientHyperlink** — anchor `href="@_postBackHyperlink"` triggers postback via `javascript:__doPostBack(...)` URL. Stable IDs: `postback-link`, `hyperlink-script`, `hyperlink-result`.
+- **Section 3: ScriptManager.GetCurrent** — uses `ScriptManagerShim.GetCurrent(this)` to register startup script that writes into `#scriptmanager-target`. Same Web Forms code pattern.
+- **Source Code section** at bottom with escaped `@@` directives.
+- **Inherits WebFormsPageBase** (not `@inject`) — gives access to `ClientScript`, `PostBack` event, and `ScriptManagerShim.GetCurrent(this)`. This differs from the ClientScriptShim demo which uses `@inject`.
+- **Updated** `ComponentCatalog.cs` — added "PostBack Demo" entry in "Migration Helpers" category after "IsPostBack".
+- **Updated** `ComponentList.razor` — added PostBack & ScriptManager link in Migration Helpers section.
+- **Build verified:** 0 errors, pre-existing BL0005 warnings only.
+- **Lesson:** Pages that need the PostBack event must `@inherits WebFormsPageBase`. The ClientScript property is available via inheritance (no separate `@inject` needed). `OnAfterRenderAsync` in WebFormsPageBase handles `FlushAsync` automatically.
