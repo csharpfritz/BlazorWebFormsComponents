@@ -229,10 +229,10 @@ public class ClientScriptTransformTests
 
     #endregion
 
-    #region TC38 — GetPostBackEventReference and ScriptManager.GetCurrent
+    #region TC38 — GetPostBackEventReference and ScriptManager.GetCurrent (Phase 2: shim-preserving)
 
     [Fact]
-    public void TC38_GetPostBackEventReference_EmitsTodoWithEventCallbackGuidance()
+    public void TC38_GetPostBackEventReference_StripsPagePrefix()
     {
         var input = @"namespace MyApp
 {
@@ -246,13 +246,14 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("TODO(bwfc-general)", result);
-        Assert.Contains("@onclick", result);
-        Assert.Contains("EventCallback", result);
+        Assert.Contains("ClientScript.GetPostBackEventReference(btnSubmit", result);
+        Assert.DoesNotContain("Page.ClientScript", result);
+        Assert.DoesNotContain("// TODO(bwfc-general): Replace __doPostBack", result);
+        Assert.DoesNotContain("// Original:", result);
     }
 
     [Fact]
-    public void TC38_GetPostBackEventReference_PreservesOriginalAsComment()
+    public void TC38_GetPostBackEventReference_StripsThisPrefix()
     {
         var input = @"namespace MyApp
 {
@@ -260,18 +261,38 @@ public class ClientScriptTransformTests
     {
         void DoWork()
         {
-            var postbackRef = Page.ClientScript.GetPostBackEventReference(btnSubmit, ""validate"");
+            var postbackRef = this.ClientScript.GetPostBackEventReference(btnSubmit, ""validate"");
         }
     }
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("// Original:", result);
-        Assert.Contains("GetPostBackEventReference", result);
+        Assert.Contains("ClientScript.GetPostBackEventReference(btnSubmit", result);
+        Assert.DoesNotContain("this.ClientScript", result);
+        Assert.DoesNotContain("// Original:", result);
     }
 
     [Fact]
-    public void TC38_ScriptManagerGetCurrent_EmitsTodo()
+    public void TC38_GetPostBackEventReference_BareCall_SetsShimFlag()
+    {
+        var input = @"namespace MyApp
+{
+    public partial class MyPage
+    {
+        void DoWork()
+        {
+            var postbackRef = ClientScript.GetPostBackEventReference(btnSubmit, ""validate"");
+        }
+    }
+}";
+        var result = _transform.Apply(input, TestMetadata(input));
+
+        Assert.Contains("ClientScript.GetPostBackEventReference(btnSubmit", result);
+        Assert.Contains("ClientScriptShim", result);
+    }
+
+    [Fact]
+    public void TC38_ScriptManagerGetCurrent_ConvertsPageToThis()
     {
         var input = @"namespace MyApp
 {
@@ -285,13 +306,32 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("TODO(bwfc-general)", result);
-        Assert.Contains("ScriptManager.GetCurrent()", result);
-        Assert.Contains("IJSRuntime", result);
+        Assert.Contains("ScriptManager.GetCurrent(this)", result);
+        Assert.DoesNotContain("ScriptManager.GetCurrent(Page)", result);
+        Assert.DoesNotContain("ScriptManager.GetCurrent() has no Blazor equivalent", result);
     }
 
     [Fact]
-    public void TC38_ScriptManagerGetCurrent_WithThis_EmitsTodo()
+    public void TC38_ScriptManagerGetCurrent_WithThisDotPage_ConvertsToThis()
+    {
+        var input = @"namespace MyApp
+{
+    public partial class MyPage
+    {
+        void Page_Load()
+        {
+            var sm = ScriptManager.GetCurrent(this.Page);
+        }
+    }
+}";
+        var result = _transform.Apply(input, TestMetadata(input));
+
+        Assert.Contains("ScriptManager.GetCurrent(this)", result);
+        Assert.DoesNotContain("this.Page", result);
+    }
+
+    [Fact]
+    public void TC38_ScriptManagerGetCurrent_PreservesThis()
     {
         var input = @"namespace MyApp
 {
@@ -305,8 +345,49 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.Contains("TODO(bwfc-general)", result);
-        Assert.Contains("ScriptManager.GetCurrent()", result);
+        Assert.Contains("ScriptManager.GetCurrent(this)", result);
+        Assert.DoesNotContain("ScriptManager.GetCurrent() has no Blazor equivalent", result);
+        Assert.Contains("ScriptManagerShim", result);
+    }
+
+    [Fact]
+    public void TC38_ScriptManagerGetCurrent_AddsScriptManagerShimComment()
+    {
+        var input = @"namespace MyApp
+{
+    public partial class MyPage
+    {
+        void Page_Load()
+        {
+            var sm = ScriptManager.GetCurrent(Page);
+        }
+    }
+}";
+        var result = _transform.Apply(input, TestMetadata(input));
+
+        Assert.Contains("ScriptManagerShim", result);
+        Assert.Contains("ClientScriptShim", result);
+    }
+
+    [Fact]
+    public void TC38_ScriptManagerGetCurrent_FullPattern_Preserved()
+    {
+        var input = @"namespace MyApp
+{
+    public partial class MyPage
+    {
+        void Page_Load()
+        {
+            ScriptManager sm = ScriptManager.GetCurrent(Page);
+            sm.RegisterStartupScript(this.GetType(), ""key"", ""script"", true);
+        }
+    }
+}";
+        var result = _transform.Apply(input, TestMetadata(input));
+
+        Assert.Contains("ScriptManager sm = ScriptManager.GetCurrent(this)", result);
+        Assert.Contains("sm.RegisterStartupScript(this.GetType()", result);
+        Assert.Contains("ScriptManagerShim", result);
     }
 
     #endregion
@@ -342,10 +423,12 @@ public class ClientScriptTransformTests
         Assert.Contains("ClientScript.RegisterClientScriptBlock", result);
         // ScriptManager.RegisterStartupScript → ClientScript.RegisterStartupScript
         Assert.DoesNotContain("ScriptManager.RegisterStartupScript", result);
-        // Postback → TODO with EventCallback
-        Assert.Contains("@onclick", result);
-        // ScriptManager.GetCurrent → TODO
-        Assert.Contains("ScriptManager.GetCurrent() has no Blazor equivalent", result);
+        // Postback → preserved with prefix stripped
+        Assert.Contains("ClientScript.GetPostBackEventReference", result);
+        Assert.DoesNotContain("Page.ClientScript.GetPostBackEventReference", result);
+        // ScriptManager.GetCurrent → Page replaced with this
+        Assert.Contains("ScriptManager.GetCurrent(this)", result);
+        Assert.DoesNotContain("ScriptManager.GetCurrent(Page)", result);
         // ClientScriptShim comment injected (not IJSRuntime)
         Assert.Contains("ClientScriptShim", result);
         Assert.DoesNotContain("[Inject] private IJSRuntime JS", result);
@@ -367,7 +450,7 @@ public class ClientScriptTransformTests
     }
 
     [Fact]
-    public void DoesNotAddShimComment_WhenOnlyPostbackRef()
+    public void AddsShimComment_WhenOnlyPostbackRef()
     {
         var input = @"namespace MyApp
 {
@@ -381,7 +464,7 @@ public class ClientScriptTransformTests
 }";
         var result = _transform.Apply(input, TestMetadata(input));
 
-        Assert.DoesNotContain("ClientScriptShim", result);
+        Assert.Contains("ClientScriptShim", result);
     }
 
     [Fact]

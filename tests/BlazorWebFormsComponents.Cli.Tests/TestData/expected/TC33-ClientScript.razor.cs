@@ -20,7 +20,7 @@ namespace MyApp
 {
     public partial class TC33_ClientScript
     {
-    // TODO(bwfc-general): ClientScript calls preserved — uses ClientScriptShim. Inject @inject ClientScriptShim ClientScript if not using BaseWebFormsComponent.
+    // TODO(bwfc-general): ClientScript calls preserved — uses ClientScriptShim + ScriptManagerShim. Inject @inject ClientScriptShim ClientScript and @inject ScriptManagerShim ScriptManager if not using BaseWebFormsComponent.
 
         protected override async Task OnInitializedAsync()
         {
@@ -40,8 +40,7 @@ namespace MyApp
                 ResolveUrl("~/Scripts/jquery-ui.min.js"));
 
             // Pattern 3: GetPostBackEventReference
-            // TODO(bwfc-general): Replace __doPostBack with @onclick or EventCallback. See ClientScriptMigrationGuide.md
-            // Original: var postbackRef = Page.ClientScript.GetPostBackEventReference(btnSubmit, "validate");
+            var postbackRef = ClientScript.GetPostBackEventReference(btnSubmit, "validate");
 
             // Pattern 4: RegisterClientScriptBlock
             ClientScript.RegisterClientScriptBlock(this.GetType(), "block1", "<script>var x = 1;</script>");
@@ -50,7 +49,7 @@ namespace MyApp
             ClientScript.RegisterStartupScript(this.GetType(), "smScript", "alert('hello');", true);
 
             // Pattern 6: ScriptManager.GetCurrent
-            // TODO(bwfc-general): ScriptManager.GetCurrent() has no Blazor equivalent. Use IJSRuntime directly.
+            var sm = ScriptManager.GetCurrent(this);
         }
     }
 }

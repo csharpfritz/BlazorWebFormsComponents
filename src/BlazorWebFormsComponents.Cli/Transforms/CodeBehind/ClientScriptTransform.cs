@@ -12,11 +12,9 @@ namespace BlazorWebFormsComponents.Cli.Transforms.CodeBehind;
 ///   - RegisterStartupScript() → strip Page./this. prefix
 ///   - RegisterClientScriptInclude() → strip Page./this. prefix
 ///   - RegisterClientScriptBlock() → strip Page./this. prefix
+///   - GetPostBackEventReference() → strip Page./this. prefix
 ///   - ScriptManager.RegisterStartupScript() → convert to ClientScript.RegisterStartupScript()
-///
-/// Non-automatable (TODO markers):
-///   - GetPostBackEventReference() → TODO: replace with @onclick / EventCallback
-///   - ScriptManager.GetCurrent() → TODO: use IJSRuntime directly
+///   - ScriptManager.GetCurrent(Page) → ScriptManager.GetCurrent(this)
 /// </summary>
 public class ClientScriptTransform : ICodeBehindTransform
 {
@@ -27,7 +25,7 @@ public class ClientScriptTransform : ICodeBehindTransform
 
     // Strips "Page." or "this." prefix before ClientScript method calls that the shim supports
     private static readonly Regex PageOrThisPrefixRegex = new(
-        @"(?:Page\.|this\.)(?=ClientScript\.(?:RegisterStartupScript|RegisterClientScriptInclude|RegisterClientScriptBlock)\s*\()",
+        @"(?:Page\.|this\.)(?=ClientScript\.(?:RegisterStartupScript|RegisterClientScriptInclude|RegisterClientScriptBlock|GetPostBackEventReference)\s*\()",
         RegexOptions.Compiled);
 
     // Pattern 1b: ScriptManager.RegisterStartupScript(control, type, key, script, bool)
@@ -36,17 +34,9 @@ public class ClientScriptTransform : ICodeBehindTransform
         @"ScriptManager\.RegisterStartupScript\s*\(\s*[^,]*,\s*",
         RegexOptions.Compiled);
 
-    // --- Non-automatable patterns ---
-
-    // Pattern 3: Page.ClientScript.GetPostBackEventReference(...)
-    //   Uses alternation of quoted-strings and non-quote chars to handle complex args
-    private static readonly Regex GetPostBackEventRefRegex = new(
-        @"([ \t]*)(.*(?:Page\.ClientScript|(?:this\.)?ClientScript)\.GetPostBackEventReference\s*\((?:""[^""]*""|[^""])*?\)\s*;)",
-        RegexOptions.Compiled);
-
-    // Pattern 5: ScriptManager.GetCurrent(...) — handles nested parens
-    private static readonly Regex ScriptManagerGetCurrentRegex = new(
-        @"([ \t]*)(?:var\s+\w+\s*=\s*)?ScriptManager\.GetCurrent\s*\((?:""[^""]*""|[^""])*?\)\s*;",
+    // Pattern 5: ScriptManager.GetCurrent(Page) or ScriptManager.GetCurrent(this.Page) → ScriptManager.GetCurrent(this)
+    private static readonly Regex ScriptManagerGetCurrentPageRegex = new(
+        @"ScriptManager\.GetCurrent\s*\(\s*(?:this\.)?Page\s*\)",
         RegexOptions.Compiled);
 
     // For injecting ClientScriptShim dependency comment
@@ -57,8 +47,9 @@ public class ClientScriptTransform : ICodeBehindTransform
     public string Apply(string content, FileMetadata metadata)
     {
         var hasShimCall = false;
+        var hasScriptManagerCall = false;
 
-        // Patterns 1, 2, 4: Strip Page./this. prefix — calls become shim-compatible
+        // Patterns 1, 2, 3, 4: Strip Page./this. prefix — calls become shim-compatible
         if (PageOrThisPrefixRegex.IsMatch(content))
         {
             content = PageOrThisPrefixRegex.Replace(content, "");
@@ -75,37 +66,34 @@ public class ClientScriptTransform : ICodeBehindTransform
         // Detect calls that were already "ClientScript.XXX(...)" without prefix — still shim-compatible
         if (!hasShimCall && (content.Contains("ClientScript.RegisterStartupScript") ||
             content.Contains("ClientScript.RegisterClientScriptInclude") ||
-            content.Contains("ClientScript.RegisterClientScriptBlock")))
+            content.Contains("ClientScript.RegisterClientScriptBlock") ||
+            content.Contains("ClientScript.GetPostBackEventReference")))
         {
             hasShimCall = true;
         }
 
-        // Pattern 3: GetPostBackEventReference → TODO (shim throws NotSupportedException)
-        if (GetPostBackEventRefRegex.IsMatch(content))
+        // Pattern 5: ScriptManager.GetCurrent(Page) → ScriptManager.GetCurrent(this)
+        if (ScriptManagerGetCurrentPageRegex.IsMatch(content))
         {
-            content = GetPostBackEventRefRegex.Replace(content, m =>
-            {
-                var indent = m.Groups[1].Value;
-                var originalLine = m.Groups[2].Value;
-                return $"{indent}// TODO(bwfc-general): Replace __doPostBack with @onclick or EventCallback. See ClientScriptMigrationGuide.md\n{indent}// Original: {originalLine.Trim()}";
-            });
+            content = ScriptManagerGetCurrentPageRegex.Replace(content, "ScriptManager.GetCurrent(this)");
+            hasShimCall = true;
+            hasScriptManagerCall = true;
         }
 
-        // Pattern 5: ScriptManager.GetCurrent → TODO
-        if (ScriptManagerGetCurrentRegex.IsMatch(content))
+        // Detect ScriptManager.GetCurrent(this) already in correct form
+        if (!hasScriptManagerCall && content.Contains("ScriptManager.GetCurrent(this)"))
         {
-            content = ScriptManagerGetCurrentRegex.Replace(content, m =>
-            {
-                var indent = m.Groups[1].Value;
-                return $"{indent}// TODO(bwfc-general): ScriptManager.GetCurrent() has no Blazor equivalent. Use IJSRuntime directly.";
-            });
+            hasShimCall = true;
+            hasScriptManagerCall = true;
         }
 
-        // Add ClientScriptShim dependency comment when shim-preserving transforms were made
+        // Add shim dependency comment when shim-preserving transforms were made
         if (hasShimCall && ClassOpenRegex.IsMatch(content) &&
             !content.Contains("// TODO(bwfc-general): ClientScript calls preserved"))
         {
-            var shimComment = "\n    // TODO(bwfc-general): ClientScript calls preserved — uses ClientScriptShim. Inject @inject ClientScriptShim ClientScript if not using BaseWebFormsComponent.\n";
+            var shimComment = hasScriptManagerCall
+                ? "\n    // TODO(bwfc-general): ClientScript calls preserved — uses ClientScriptShim + ScriptManagerShim. Inject @inject ClientScriptShim ClientScript and @inject ScriptManagerShim ScriptManager if not using BaseWebFormsComponent.\n"
+                : "\n    // TODO(bwfc-general): ClientScript calls preserved — uses ClientScriptShim. Inject @inject ClientScriptShim ClientScript if not using BaseWebFormsComponent.\n";
             content = ClassOpenRegex.Replace(content, "$1" + shimComment, 1);
         }
 
