@@ -11,12 +11,14 @@
 
 This analyzer warns when you use `ScriptManager` code-behind methods like `GetCurrent()`, `SetFocus()`, `RegisterAsyncPostBackControl()`, and similar — Web Forms APIs for managing client scripts and UpdatePanel behavior.
 
+**Note:** Phase 2 now includes support for `GetCurrent()` and script registration methods via `ScriptManagerShim`. Methods like `SetFocus()` and `RegisterAsyncPostBackControl()` still require modernization.
+
 **Detected patterns:**
-- `ScriptManager.GetCurrent(Page)` / `ScriptManager.GetCurrent(this)`
-- `.SetFocus(control)`
-- `.RegisterAsyncPostBackControl(control)`
-- `.RegisterUpdateProgress(...)`
-- `.RegisterPostBackControl(...)`
+- `ScriptManager.GetCurrent(Page)` / `ScriptManager.GetCurrent(this)` — ✅ Phase 2 supported
+- `.SetFocus(control)` — ❌ Still requires JS interop
+- `.RegisterAsyncPostBackControl(control)` — ❌ Still requires component binding
+- `.RegisterUpdateProgress(...)` — ❌ Still requires component state
+- `.RegisterPostBackControl(...)` — ❌ Not supported
 
 ---
 
@@ -60,7 +62,36 @@ These methods have **no direct equivalents**. Each requires a different approach
 
 ## How to Fix
 
-The fix depends on **which** ScriptManager method you're using.
+The fix depends on **which** ScriptManager method you're using and which Phase you're in.
+
+### ✅ Phase 2: GetCurrent() and Script Registration Methods
+
+`ScriptManager.GetCurrent()` now returns a working `ScriptManagerShim` that delegates to `ClientScriptShim`.
+
+=== "Web Forms (Before)"
+    ```csharp
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        ScriptManager sm = ScriptManager.GetCurrent(Page);
+        sm.RegisterStartupScript(this.GetType(), "init", "initPage();", true);
+    }
+    ```
+
+=== "Blazor (After — Phase 2, Zero Rewrite)"
+    ```csharp
+    protected override void OnInitialized()
+    {
+        // Same code works! ScriptManagerShim returns the component's ClientScriptShim
+        ScriptManager sm = ScriptManager.GetCurrent(this);
+        sm.RegisterStartupScript(this.GetType(), "init", "initPage();", true);
+    }
+    ```
+
+---
+
+### Still Requiring Modernization
+
+Other ScriptManager methods still require refactoring. See the fixes below.
 
 ### Fix 1: SetFocus() → JavaScript Interop
 
@@ -245,7 +276,7 @@ await module.InvokeVoidAsync("focusElement", searchBox);
 
 | Web Forms Method | Blazor Equivalent | Approach |
 |---|---|---|
-| `GetCurrent(Page)` | — | Remove; use component state |
+| `GetCurrent(Page)` | `ScriptManager.GetCurrent(this)` (Phase 2 — Zero Rewrite) | Easy |
 | `.SetFocus(control)` | `JS.InvokeVoidAsync("focus", @ref)` | JavaScript interop |
 | `.RegisterAsyncPostBackControl()` | Component parameter binding | Remove; use `@bind` or `EventCallback` |
 | `.RegisterPostBackControl()` | — | Remove; not needed in Blazor |

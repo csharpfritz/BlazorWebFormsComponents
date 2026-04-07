@@ -78,7 +78,7 @@ If you prefer to modernize your code now, rewrite to `IJSRuntime` directly. The 
 | `RegisterStartupScript()` | `ClientScriptShim` (⭐ Easy) or `OnAfterRenderAsync()` + `IJSRuntime` (⭐⭐ Moderate) | ⭐ Easy |
 | `RegisterClientScriptInclude()` | `ClientScriptShim` (⭐ Easy) or `<script>` tag in layout (⭐ Easy) | ⭐ Easy |
 | `RegisterClientScriptBlock()` | `ClientScriptShim` (⭐ Easy) or JS module (⭐ Easy) | ⭐ Easy |
-| `GetPostBackEventReference()` | `@onclick` or `EventCallback<T>` | ⭐⭐ Medium |
+| `GetPostBackEventReference()` | `ClientScriptShim` (⭐ Easy — Phase 2) or `@onclick` / `EventCallback<T>` (⭐⭐ Medium) | ⭐ Easy |
 
 ### Common Fix: Startup Script
 
@@ -144,7 +144,17 @@ If you prefer to modernize your code now, rewrite to `IJSRuntime` directly. The 
     }
     ```
 
-=== "Blazor (After)"
+=== "Blazor (After — Phase 2 with Shim, Zero Rewrite)"
+    ```csharp
+    // Same code works! ClientScriptShim returns __doPostBack() string
+    public string GetDeleteButtonScript()
+    {
+        return ClientScript.GetPostBackEventReference(
+            new PostBackOptions(btnDelete, "clicked"));
+    }
+    ```
+
+=== "Blazor (Modern Approach)"
     ```razor
     <button @onclick="HandleDelete">Delete</button>
     
