@@ -350,43 +350,76 @@ public class ClientScriptShimTests
 
 	#endregion
 
-	#region Unsupported Methods
+	#region PostBack / Callback Methods
 
-	// NOTE: Exact method signatures depend on Cyclops's implementation.
-	// These tests verify the throw behavior — signatures may need adjustment
-	// once the shim is finalized.
+	// These methods now return working JavaScript strings instead of throwing.
 
 	[Fact]
-	public void GetPostBackEventReference_ThrowsNotSupported()
+	public void GetPostBackEventReference_ReturnsDoPostBackJs()
 	{
 		var shim = CreateShim();
 
-		var ex = Should.Throw<NotSupportedException>(() =>
-			shim.GetPostBackEventReference(null!, "arg"));
+		var result = shim.GetPostBackEventReference(new object(), "arg");
 
-		ex.Message.ShouldNotBeNullOrWhiteSpace();
+		result.ShouldContain("__doPostBack");
+		result.ShouldContain("arg");
 	}
 
 	[Fact]
-	public void GetPostBackClientHyperlink_ThrowsNotSupported()
+	public void GetPostBackEventReference_NullControl_ReturnsUnknownTarget()
 	{
 		var shim = CreateShim();
 
-		var ex = Should.Throw<NotSupportedException>(() =>
-			shim.GetPostBackClientHyperlink(null!, "arg"));
+		var result = shim.GetPostBackEventReference(null!, "arg");
 
-		ex.Message.ShouldNotBeNullOrWhiteSpace();
+		result.ShouldContain("__doPostBack('unknown',");
 	}
 
 	[Fact]
-	public void GetCallbackEventReference_ThrowsNotSupported()
+	public void GetPostBackEventReference_NullArgument_DefaultsToEmpty()
 	{
 		var shim = CreateShim();
 
-		var ex = Should.Throw<NotSupportedException>(() =>
-			shim.GetCallbackEventReference(null!, "arg", "callback", "ctx", "errorCb", false));
+		var result = shim.GetPostBackEventReference(new object(), null!);
 
-		ex.Message.ShouldNotBeNullOrWhiteSpace();
+		result.ShouldContain("__doPostBack(");
+		result.ShouldContain("''");
+	}
+
+	[Fact]
+	public void GetPostBackClientHyperlink_ReturnsJavascriptUrl()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetPostBackClientHyperlink(new object(), "arg");
+
+		result.ShouldStartWith("javascript:");
+		result.ShouldContain("__doPostBack");
+	}
+
+	[Fact]
+	public void GetCallbackEventReference_ReturnsCallbackJs()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetCallbackEventReference(
+			new object(), "arg", "onSuccess", "ctx", "onError", false);
+
+		result.ShouldContain("__bwfc_callback");
+		result.ShouldContain("arg");
+		result.ShouldContain("onSuccess");
+		result.ShouldContain("onError");
+	}
+
+	[Fact]
+	public void GetCallbackEventReference_NullCallbacks_UsesNull()
+	{
+		var shim = CreateShim();
+
+		var result = shim.GetCallbackEventReference(
+			new object(), "arg", null!, null, null!, false);
+
+		result.ShouldContain("null");
 	}
 
 	#endregion

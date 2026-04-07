@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using Microsoft.JSInterop;
 
 namespace BlazorWebFormsComponents;
 
@@ -12,10 +14,10 @@ namespace BlazorWebFormsComponents;
 /// Base class for converted ASP.NET Web Forms pages. Provides Page.Title,
 /// Page.MetaDescription, Page.MetaKeywords, IsPostBack, Response.Redirect,
 /// Response.Cookies, Request.Cookies, Request.QueryString, Request.Url,
-/// ViewState, and GetRouteUrl compatibility so that Web Forms code-behind
-/// patterns survive migration with minimal changes.
+/// ViewState, GetRouteUrl, ClientScript, and PostBack compatibility so that
+/// Web Forms code-behind patterns survive migration with minimal changes.
 /// </summary>
-public abstract class WebFormsPageBase : ComponentBase
+public abstract class WebFormsPageBase : ComponentBase, IAsyncDisposable
 {
 [Inject] private IPageService _pageService { get; set; } = null!;
 [Inject] private NavigationManager _navigationManager { get; set; } = null!;
@@ -25,6 +27,25 @@ public abstract class WebFormsPageBase : ComponentBase
 [Inject] private SessionShim _sessionShim { get; set; } = null!;
 [Inject] private IWebHostEnvironment _webHostEnvironment { get; set; } = null!;
 [Inject] private CacheShim _cacheShim { get; set; } = null!;
+[Inject] private IJSRuntime _jsRuntime { get; set; } = null!;
+[Inject] private ClientScriptShim _clientScriptShim { get; set; } = null!;
+
+/// <summary>
+/// Provides access to client script registration methods, emulating
+/// <c>Page.ClientScript</c> from ASP.NET Web Forms.
+/// </summary>
+public ClientScriptShim ClientScript => _clientScriptShim;
+
+// ─── PostBack Support ─────────────────────────────────────────────
+
+private DotNetObjectReference<WebFormsPageBase>? _postBackRef;
+private string? _postBackTargetId;
+
+/// <summary>
+/// Raised when a postback is triggered from JavaScript via <c>__doPostBack()</c>.
+/// Subscribe to this event in derived pages to handle postback actions.
+/// </summary>
+public event EventHandler<PostBackEventArgs>? PostBack;
 
 /// <summary>
 /// Provides dictionary-style <c>Session["key"]</c> access, emulating
@@ -236,5 +257,106 @@ throw new InvalidOperationException(
 $"{memberName} requires HttpContext, which is unavailable during interactive " +
 $"rendering (WebSocket mode). Use {nameof(IsHttpContextAvailable)} to guard " +
 $"calls to this member, or ensure the page runs in SSR mode.");
+}
+
+// ─── PostBack JS Interop ──────────────────────────────────────────
+
+// Inline bootstrap ensures __doPostBack and registration functions exist
+// before any postback target is registered. The standalone bwfc-postback.js
+// file is also available for manual <script> inclusion.
+private const string PostBackBootstrapJs = @"
+window.__bwfc = window.__bwfc || {};
+window.__bwfc.postBackTargets = window.__bwfc.postBackTargets || {};
+if (!window.__doPostBack) {
+    window.__doPostBack = function(t, a) {
+        var h = window.__bwfc.postBackTargets[t];
+        if (h) h.invokeMethodAsync('HandlePostBackFromJs', t, a);
+        else console.warn('[BWFC] No postback handler for:', t);
+    };
+}
+if (!window.__bwfc.registerPostBackTarget) {
+    window.__bwfc.registerPostBackTarget = function(id, dotNetRef) {
+        window.__bwfc.postBackTargets[id] = dotNetRef;
+    };
+}
+if (!window.__bwfc.unregisterPostBackTarget) {
+    window.__bwfc.unregisterPostBackTarget = function(id) {
+        delete window.__bwfc.postBackTargets[id];
+    };
+}
+if (!window.__bwfc_callback) {
+    window.__bwfc_callback = function(id, arg, successCb, ctx, errorCb) {
+        var h = window.__bwfc.postBackTargets[id];
+        if (h) {
+            h.invokeMethodAsync('HandleCallbackFromJs', id, arg)
+                .then(function(r) { if (successCb) successCb(r, ctx); })
+                .catch(function(e) { if (errorCb) errorCb(e.message, ctx); });
+        }
+    };
+}
+";
+
+/// <summary>
+/// Called from JavaScript when <c>__doPostBack(eventTarget, eventArgument)</c> fires.
+/// Raises the <see cref="PostBack"/> event and triggers a re-render.
+/// </summary>
+[JSInvokable]
+public Task HandlePostBackFromJs(string eventTarget, string eventArgument)
+{
+    PostBack?.Invoke(this, new PostBackEventArgs(eventTarget, eventArgument));
+    StateHasChanged();
+    return Task.CompletedTask;
+}
+
+/// <summary>
+/// Called from JavaScript when <c>__bwfc_callback</c> fires.
+/// Override in derived pages to return callback data.
+/// </summary>
+[JSInvokable]
+public virtual Task<string> HandleCallbackFromJs(string eventTarget, string eventArgument)
+{
+    return Task.FromResult(string.Empty);
+}
+
+/// <inheritdoc />
+protected override async Task OnAfterRenderAsync(bool firstRender)
+{
+    await base.OnAfterRenderAsync(firstRender);
+
+    if (firstRender)
+    {
+        _postBackTargetId = $"{GetType().Name}_{GetHashCode()}";
+        _postBackRef = DotNetObjectReference.Create(this);
+
+        // Bootstrap __doPostBack and registration functions
+        await _jsRuntime.InvokeVoidAsync("eval", PostBackBootstrapJs);
+        await _jsRuntime.InvokeVoidAsync("__bwfc.registerPostBackTarget",
+            _postBackTargetId, _postBackRef);
+    }
+
+    // Flush any queued ClientScript registrations
+    if (_clientScriptShim != null)
+    {
+        await _clientScriptShim.FlushAsync(_jsRuntime);
+    }
+}
+
+/// <inheritdoc />
+public virtual async ValueTask DisposeAsync()
+{
+    if (_postBackTargetId != null && _postBackRef != null)
+    {
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync(
+                "__bwfc.unregisterPostBackTarget", _postBackTargetId);
+        }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
+
+        _postBackRef.Dispose();
+        _postBackRef = null;
+    }
 }
 }
