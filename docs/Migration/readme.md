@@ -6,6 +6,19 @@ The output project from this operation will be a .NET Core 3.1 project running s
 
 The first step is a step of acknowledgement.  This process is not 100% and is not guaranteed to deliver a Blazor application without some amount of rewriting.  Applications are written in many different ways, and the tools provided here are attempting to get your project *CLOSE* to Blazor so that you have to rewrite as little code as possible.
 
+## Migration Philosophy: The Strangler Fig Pattern
+
+BWFC is built around the **Strangler Fig migration pattern** — the practice of incrementally replacing a legacy system while keeping it running in parallel, rather than attempting a complete rewrite all at once.
+
+Instead of taking your Web Forms app offline for weeks to rewrite everything, the Strangler Fig approach lets you:
+
+- **Migrate one page or feature at a time** — without stopping the legacy app
+- **Keep both running in parallel** — with traffic routing between them
+- **Use zero-rewrite shims** — ClientScriptShim, SessionShim, and others let code work unchanged
+- **Modernize at your own pace** — refactor shims to native Blazor patterns on your schedule
+
+For a detailed guide on how to apply this pattern, see the **[Strangler Fig Pattern documentation](StranglerFigPattern.md)**.
+
 ## Phase 1: Just Make It Compile (Compilation Shims)
 
 Before diving into deep architectural changes, BWFC provides **compilation shims** that allow migrated code to compile unchanged. This phase focuses on making your Web Forms code work in a Blazor project with minimal refactoring.

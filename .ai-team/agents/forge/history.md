@@ -218,3 +218,56 @@ Team updates (2026-03-04-05): PRs upstream, reports in docs/migration-tests/, be
 
  Team update (2026-03-06): WebFormsPageBase is the canonical base class for all migrated pages (not ComponentBase). All agents must use WebFormsPageBase  decided by Jeffrey T. Fritz
  Team update (2026-03-06): LoginView is a native BWFC component  do NOT convert to AuthorizeView. Strip asp: prefix only  decided by Jeffrey T. Fritz
+
+### CLI Gap Analysis — webforms-to-blazor Tool (2026-07-25)
+
+**Task:** Comprehensive gap analysis of `src/BlazorWebFormsComponents.Cli` migration tool.
+
+**Current state (14 markup + 12 code-behind transforms):**
+- Markup: AspPrefix, AjaxToolkit, Attributes, Content, DataSource, Events, Expressions, Form, LoginView, MasterPage, SelectMethod, Template, URL transforms
+- Code-behind: BaseClass, DataBind, EventHandler, GetRouteUrl, IsPostBack, PageLifecycle, Response, Session, Todo, UrlCleanup, Using, ViewState transforms
+- Scaffolding: .csproj, Program.cs, _Imports.razor, App.razor, Routes.razor, GlobalUsings.cs, WebFormsShims.cs
+
+**Critical gaps identified (6 — will break real migrations):**
+1. **FindControl()** — no transform → compile error (every Web Forms app uses this)
+2. **ClientScript / RegisterStartupScript** — no transform → runtime failure
+3. **FormsAuthentication** — mentioned in shims but no actual transform
+4. **Membership/Roles** — no transform → compile error
+5. **VB.NET code-behind** — detected but C# regex patterns fail silently
+6. **User controls (.ascx)** — prefix stripped but no cross-file correlation, no tests
+
+**High-value additions (8 — cover most real-world apps):**
+1. ScriptManager code-behind patterns (GetCurrent, RegisterAsyncPostBackControl)
+2. Validation group handling (Page.Validate, Page.IsValid)
+3. GridView/ListView code-behind patterns (DataKeys, EditIndex)
+4. Request object patterns (QueryString, Form, Cookies)
+5. Server.MapPath conversion
+6. Global.asax pattern extraction
+7. Enum attribute conversions (TextMode, Display, GridLines → strong-typed)
+8. Static file url(~/) transforms
+
+**Quality issues in existing transforms:**
+1. **ItemType bug** — blindly converts all to TItem, but GridView/ListView/FormView use ItemType
+2. **LoginViewTransform conflicts with BWFC component** — should be REMOVED per Jeff's directive
+3. IsPostBack edge cases (nested, else-if) produce unparseable output
+4. DataBindTransform.InjectItemsAttributes() may not be called from pipeline
+
+**Scaffold gaps:**
+- Missing MainLayout.razor (Routes.razor references it)
+- Missing `@using BlazorWebFormsComponents.Enums` in _Imports.razor
+- Missing `AddHttpContextAccessor()` in Program.cs
+
+**Test coverage gaps (32 current → 45+ needed):**
+- TC33: .ascx user control (P0)
+- TC35: FindControl patterns (P0)
+- TC36-38: ClientScript, Membership, FormsAuth (P1)
+- TC47: VB.NET code-behind (P1)
+- TC48: Enum string attributes (P1)
+
+**Priority fixes:**
+- P0: Remove LoginViewTransform, fix ItemType/TItem logic, add .ascx test
+- P1: EnumAttributeTransform, FindControlTransform, RequestAccessTransform, FormsAuthTransform, ScriptManagerCodeBehindTransform, scaffold fixes
+
+**Estimated coverage improvement:** 70% → 88% L1 mechanical coverage after P0+P1+P2
+
+**Decision:** `.squad/decisions/inbox/forge-cli-gap-analysis.md`

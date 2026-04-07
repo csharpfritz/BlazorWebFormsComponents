@@ -1,11 +1,14 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using BlazorWebFormsComponents;
 using Bunit;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -36,6 +39,18 @@ public class IsPostBackTests : IDisposable
 		_ctx.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
 		_ctx.Services.AddLogging();
 		_ctx.Services.AddScoped<SessionShim>();
+		_ctx.Services.AddSingleton<IWebHostEnvironment>(CreateMockWebHostEnv());
+		_ctx.Services.AddMemoryCache();
+		_ctx.Services.AddScoped<CacheShim>();
+		_ctx.Services.AddScoped<ServerShim>();
+	}
+
+	private static IWebHostEnvironment CreateMockWebHostEnv()
+	{
+		var mock = new Mock<IWebHostEnvironment>();
+		mock.Setup(e => e.WebRootPath).Returns(Path.Combine(Path.GetTempPath(), "wwwroot"));
+		mock.Setup(e => e.ContentRootPath).Returns(Path.GetTempPath());
+		return mock.Object;
 	}
 
 	public void Dispose() => _ctx.Dispose();

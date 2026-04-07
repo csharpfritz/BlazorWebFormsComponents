@@ -1,0 +1,178 @@
+# WebForms to Blazor CLI Tool
+
+The `webforms-to-blazor` CLI is a powerful command-line tool that automates the first phase of your Web Forms to Blazor migration. It performs deterministic, pattern-based transformations on your Web Forms markup and code-behind to produce Blazor-ready code.
+
+## What It Does
+
+This tool **reduces manual migration effort** by:
+
+- Removing boilerplate Web Forms directives and syntax
+- Converting ASP.NET server controls to BWFC components
+- Replacing Web Forms expressions with Blazor syntax
+- Extracting code patterns and flagging them with TODO comments for Copilot L2 automation
+- Scaffolding a new Blazor project structure with shims and services
+
+The tool processes `.aspx`, `.ascx`, and `.master` files in a fixed sequence, ensuring each transformation builds on the previous one correctly.
+
+## Installation
+
+### As a Global Tool
+
+```bash
+dotnet tool install --global Fritz.WebFormsToBlazor
+```
+
+### From Source
+
+```bash
+cd src/BlazorWebFormsComponents.Cli
+dotnet pack
+dotnet tool install --global --add-source ./bin/Release Fritz.WebFormsToBlazor
+```
+
+### Verify Installation
+
+```bash
+webforms-to-blazor --help
+```
+
+## Quick Start
+
+### Convert a Single File
+
+```bash
+webforms-to-blazor migrate --input ProductCard.ascx --output ./BlazorComponents
+```
+
+### Convert a Whole Project
+
+```bash
+webforms-to-blazor migrate --input ./MyWebFormsProject --output ./MyBlazorProject
+```
+
+The tool will:
+1. Scan all `.aspx`, `.ascx`, and `.master` files
+2. Apply 33 transforms in sequence
+3. Generate a migration report
+4. Scaffold supporting files (Program.cs, shims, handlers)
+
+## Two Commands
+
+### `migrate` — Full Project Migration
+
+Transforms an entire Web Forms project to Blazor with scaffolding.
+
+```bash
+webforms-to-blazor migrate \
+  --input ./MyWebFormsProject \
+  --output ./MyBlazorProject \
+  --database SqlServer \
+  --scaffold
+```
+
+**Key Options:**
+
+- `--input <path>` — Web Forms project root (required)
+- `--output <path>` — Blazor output directory (required)
+- `--database <provider>` — SqlServer, Sqlite, Postgres, Oracle (scaffolds appropriate connection setup)
+- `--scaffold` — Generate Program.cs, _Imports.razor, App.razor, and shims
+- `--dry-run` — Preview changes without writing files
+
+**Output:**
+- Converted `.razor` files
+- Converted `.razor.cs` code-behind
+- Generated `Program.cs` with shim registration
+- Migration report (`migration-report.json`)
+
+### `convert` — File-Level Transformation
+
+Converts individual files without scaffolding. Useful for incremental migrations.
+
+```bash
+webforms-to-blazor convert \
+  --input ./Controls/MyControl.ascx \
+  --output ./Components/MyControl.razor
+```
+
+**Key Options:**
+
+- `--input <path>` — Single `.ascx` or `.aspx` file (required)
+- `--output <path>` — Output file path
+- `--dry-run` — Preview transformation
+
+## Transform Categories
+
+The tool applies **33 transforms** organized in three groups:
+
+1. **Directives** (5) — Page, Master, Control, Register, Import directives
+2. **Markup** (19) — Controls, expressions, templates, data binding
+3. **Code-Behind** (9) — Using statements, base classes, lifecycle, event handlers
+
+See **[Transform Reference](transforms.md)** for complete details on each transform, including before/after examples.
+
+## TODO Comments and L2 Automation
+
+The tool inserts TODO comments with standardized category slugs so Copilot L2 skills can automatically follow up on migration work:
+
+```csharp
+// TODO(bwfc-lifecycle): Page_Load → OnInitializedAsync
+// TODO(bwfc-ispostback): Review IsPostBack guard for Blazor patterns
+// TODO(bwfc-session-state): SessionShim auto-wired via [Inject]
+```
+
+See **[TODO Categories](todo-conventions.md)** for the complete list of 13 categories and how L2 automation uses them.
+
+## Migration Report
+
+After migration, the tool generates a `migration-report.json` with:
+
+- File-by-file transformation summary
+- Manual work items flagged by category
+- Severity levels (Info, Warning, Error)
+- Precise file locations and line numbers
+
+See **[Report Format](report.md)** for schema and examples.
+
+## Limitations & Next Steps
+
+**This tool handles Level 1 transformations only:**
+
+- ✅ Markup and directive conversion
+- ✅ Pattern detection and guidance
+- ✅ Boilerplate removal
+- ❌ Logic rewriting (use Copilot L2 skills for this)
+
+After running the CLI:
+
+1. **Review TODO comments** — each one points to a specific migration pattern
+2. **Run Copilot L2 skills** — automated follow-up transforms for complex patterns
+3. **Build and test** — verify your Blazor project compiles and runs
+4. **Manual tweaks** — business logic, styling, third-party integrations
+
+## Example: Full Migration Workflow
+
+```bash
+# 1. Scan and transform
+webforms-to-blazor migrate \
+  --input ./MyApp.Web \
+  --output ./MyApp.Blazor \
+  --database SqlServer \
+  --scaffold
+
+# 2. Review migration report
+cat MyApp.Blazor/migration-report.json | jq '.manualItems[] | select(.severity == "Error")'
+
+# 3. Build and identify missing pieces
+cd MyApp.Blazor
+dotnet build
+
+# 4. Use Copilot CLI for L2 automation
+copilot /webforms-migration
+```
+
+## Next Steps
+
+- **[Transform Reference](transforms.md)** — See what each transform does with before/after examples
+- **[TODO Conventions](todo-conventions.md)** — Understand the TODO categories for L2 automation
+- **[Report Schema](report.md)** — Interpret the migration report
+- **[Migration Strategies](../Migration/Strategies.md)** — Learn the full migration approach

@@ -6,6 +6,12 @@
 - **Created:** 2026-02-10
 
 
+📌 Team update (2026-08-XX): ClientScriptShim documentation delivery — Updated ClientScriptMigrationGuide.md with prominent new section positioning ClientScriptShim as zero-rewrite path (+2,100 lines total), including supported methods table, before/after example, "How It Works" technical explanation, and migration approach comparison (ClientScriptShim vs. manual IJSRuntime vs. JS modules). Updated BWFC022.md, BWFC023.md, BWFC024.md analyzer docs with cross-references to new ClientScriptShim guidance. mkdocs.yml verified (guide already in nav). Strategy: Lead with easiest path first (ClientScriptShim), then modern alternatives for teams ready to modernize. Enables rapid migration for large Web Forms codebases. — decided by Beast
+
+📌 Team update (2026-07-30): ClientScript Migration Support PRD delivered  9-section product requirements document (dev-docs/prd-clientscript-migration-support.md, 38K) covering analyzer improvements (BWFC022/023/024), CLI transforms (startup scripts, includes), safe automation boundaries, TODO guidance, documentation (ClientScriptMigrationGuide.md), testing (8 test cases), and 3-phase roadmap (P1: analyzers + transforms + docs, P2: samples, P3: runtime helpers). Based on Forge CLI Gap Analysis 1.2 (HIGH impact gap). Establishes BWFC position: prefer IJSRuntime over ClientScript shim; emit clear TODO for postback patterns; DO NOT emulate __doPostBack. Ready for implementation planning.  decided by Beast
+
+ Team update (2026-04-02): Phase 5 delivery complete — 4 CLI reference docs (docs/cli/index.md, transforms.md, todo-conventions.md, report.md) with 1,378 lines and 81 code examples. mkdocs.yml navigation updated, README.md CLI tooling section added. All documentation standards (tabbed syntax, code examples, migration guides) applied. Build: 0 errors. Ready for merge to feature/global-tool-port. — decided by Scribe
+
 📌 Team update (2026-03-24): Documentation task breakdown complete — 8 GitHub issues (#505–#512) created for component doc syntax conversions, ViewState/PostBack migration guide, and cross-linking. Issues labeled squad+type:docs. Coordinate with Forge for content review. #508 (ViewState docs) blocks on PR #503 merge. — decided by Forge
 
 📌 Team update (2026-03-17): HttpHandlerBase implementation complete (7 files in Handlers/). Returns IEndpointConventionBuilder; Session markers added; build passes 0 errors. — decided by Cyclops
@@ -1111,3 +1117,136 @@ This wave establishes **documentation patterns** that will guide future control 
 - mkdocs.yml navigation nesting signals cognitive importance: placing Phase 1 after "Getting Started" (discovery) tells developers "start here before deeper migration"
 - Cross-linking to Azure/AWS/ASP.NET docs increases doc value without duplicating content (readers can self-serve on secrets management, logging, etc.)
 
+
+### CLI Capability Writeup  Transform Inventory & Before/After Example (2026-04-03)
+
+**Task:** Produce a shareable CLI capability summary for the user covering all implemented transforms.
+
+**Delivered:** Inline chat response (not committed to repo)
+
+**Contents:**
+- Full inventory of all 31 CLI transforms with one-line descriptions, grouped by pipeline stage (Directives, Expressions, Tag Prefixes, Attributes, Normalization, Scaffolding)
+- Before/after ASPX  Razor example: realistic .aspx fragment (Page directive, MasterPageFile, asp:Button, asp:Label, Eval() binding, runat="server")  fully migrated .razor output
+- CLI usage synopsis: wfc-migrate migrate --input ./src --output ./out --report migration-report.json
+- Coverage callouts: what the tool handles automatically vs. what lands in ManualItem/TODO comments
+
+**Learnings:**
+- Users respond well to before/after examples that use realistic patterns (not toy "Hello World" markup)  showing a GridView with DataBind + Eval expressions, a MasterPageFile reference, and event wiring in a single snippet demonstrates breadth of tool coverage immediately
+- Transform inventory is most digestible when grouped by pipeline stage (matches mental model of "what gets processed when") rather than alphabetically
+- Always mention the --report flag when summarizing CLI capability: the JSON report is the bridge between automated migration and manual follow-up work
+
+---
+
+## Phase 1 ClientScript Migration Documentation (2026-07-30)
+
+**Task:** Implement Phase 1 deliverables from PRD: Create comprehensive ClientScript migration guide and analyzer reference pages (BWFC022, BWFC023, BWFC024).
+
+**Status:** ✅ DELIVERED
+
+**Deliverables:**
+
+1. **ClientScriptMigrationGuide.md (34.8K, 11 sections)**
+   - Overview: Why ClientScript patterns differ in Blazor
+   - Quick Reference Table: 8 major patterns with difficulty ratings
+   - Detailed Sections with before/after examples:
+     1. Startup Scripts (RegisterStartupScript → OnAfterRenderAsync)
+     2. Script Includes (RegisterClientScriptInclude → <script> tags)
+     3. Inline Blocks (RegisterClientScriptBlock → JS modules)
+     4. Postback Events (GetPostBackEventReference → @onclick/EventCallback)
+     5. Form Validation (Page.IsValid → EditContext)
+     6. IPostBackEventHandler → EventCallback<T>
+     7. ScriptManager patterns (SetFocus, RegisterAsyncPostBackControl, RegisterUpdateProgress)
+   - Common Pitfalls: Script re-render duplication, prerendering, module caching, deduplication
+   - What We Don't Support: __doPostBack, UpdatePanel, automatic validation conversion, full ScriptManager API
+   - Real-world Examples: jQuery plugin init, data grid with inline editing, form with custom validation
+   - Analyzer reference callouts linking to BWFC022, BWFC023, BWFC024
+
+2. **Analyzer Reference Pages (docs/Analyzers/)**
+   - **BWFC022.md (6.6K)** — Page.ClientScript Usage
+   - **BWFC023.md (10.1K)** — IPostBackEventHandler Usage
+   - **BWFC024.md (11.9K)** — ScriptManager Code-Behind Usage
+
+3. **mkdocs.yml Navigation Updates**
+   - Added "Guides" subsection under Migration with link to ClientScriptMigrationGuide.md
+   - Added top-level "Analyzers" section with BWFC022, BWFC023, BWFC024 links
+
+4. **README.md Enhancement**
+   - Added "JavaScript Migration & ClientScript Support" section
+   - Links migration guide and 3 diagnostic rules
+
+**Quality Standards Applied:**
+- Tabbed Web Forms / Blazor syntax throughout
+- Complete, runnable code examples
+- Difficulty ratings (⭐ Easy → ⭐⭐⭐ Complex)
+- Before/after patterns with clear transformations
+- Real-world scenarios with complete implementations
+- Comprehensive pitfalls and common mistakes sections
+- Cross-links to related docs and official Blazor documentation
+
+**Learnings:**
+- ClientScript migration is critical (80% of Web Forms apps use it for startup scripts, validation, or event handlers)
+- Tabbed Web Forms/Blazor format works well for side-by-side pattern comparison but requires narrative about *why* (lifecycle concepts, no postback, explicit JS interop)
+- Analyzer pages should map directly to code detection patterns for easy correlation
+- Common mistakes section essential for developer success: re-render guards, module caching, async timing prevent migration frustration
+- UpdatePanel/ScriptManager patterns have no Blazor equivalents; must be completely rewritten — make this clear early
+- Real-world examples (jQuery plugins, pickers, form validation) ground abstract guidance in concrete scenarios developers face
+
+## Learnings
+
+### Strangler Fig Pattern Documentation (2026 by Beast)
+
+**Session Task:** Create comprehensive Strangler Fig migration pattern documentation to frame BWFC's migration strategy around incremental, side-by-side Web Forms → Blazor migration.
+
+**Deliverables:**
+
+1. **New Guide: `docs/Migration/StranglerFigPattern.md` (12.1K, 280+ lines)**
+   - What Is the Strangler Fig Pattern: Biological metaphor + software definition
+   - How BWFC Enables Strangler Fig: 4-step journey (Instrument → Strangle → Zero-Rewrite → Modernize)
+   - Step 1: Instrument with BWFC package + Roslyn analyzers (BWFC022/023/024) — purely syntactic, no System.Web required
+   - Step 2: L1 mechanical transforms + CLI (webforms-to-blazor) + analyzer guidance
+   - Step 3: Zero-rewrite shims (ClientScriptShim, SessionShim, CacheShim, ServerShim) with detailed queue-and-flush explanation
+   - Step 4: Optional modernization path (Phase 2 refactoring to IJSRuntime, ISession, IMemoryCache)
+   - Visual progression diagram: Legacy 100% → Mixed parallel → Blazor dominant → Modernized native (4-phase journey)
+   - Why it works: Zero downtime, parallel velocity, reversible migration
+   - E-commerce example: 6-week incremental migration (Product Search → Cart → Accounts)
+   - Comparison table: Big Bang vs Strangler Fig vs Parallel Development
+
+2. **Updated Existing Docs to Cross-Link:**
+   - **`docs/Migration/ClientScriptMigrationGuide.md`** (after recommended shim section, line 102)
+     - Added "Strangler Fig Pattern Context" section explaining how ClientScript fits into incremental migration
+     - Link to StranglerFigPattern.md for full guide
+   
+   - **`docs/Migration/Strategies.md`** (after intro, before Readiness Planning)
+     - Added "The Strangler Fig Pattern: Migration Philosophy" section (5 key principles)
+     - Link to detailed StranglerFigPattern.md guide
+   
+   - **`docs/Migration/readme.md`** (after Step 0, new "Migration Philosophy" section)
+     - Added section explaining Strangler Fig approach
+     - Lists 4 key benefits (migrate 1 page at a time, keep both running, use shims, modernize at pace)
+     - Link to StranglerFigPattern.md
+
+3. **Navigation Updates: `mkdocs.yml`**
+   - Added "Strangler Fig Pattern: Migration/StranglerFigPattern.md" to Migration nav (line 192, right after Getting Started)
+   - Strategic placement: guides developers to philosophy BEFORE diving into mechanics (Phase 1, Phase 2, Strategies)
+
+**Key Technical Details Included:**
+- ✅ Roslyn analyzers are purely syntactic (match patterns like `IsClientScriptAccess()`, no type resolution needed)
+- ✅ ClientScriptShim uses queue-and-flush pattern: Register* → OnAfterRenderAsync → FlushAsync → IJSRuntime.InvokeVoidAsync("eval", ...)
+- ✅ Shims are production-ready from day 1; modernization is optional
+- ✅ L1 CLI handles directive changes, markup conversion, code-behind pattern transforms
+- ✅ Zero-rewrite philosophy: same API surface, modern implementation underneath
+
+**Documentation Style Applied:**
+- ✅ Empathetic, practical tone for experienced Web Forms developers
+- ✅ Real-world example (e-commerce site migration over 6 weeks)
+- ✅ Multiple visualization formats: narrative, visual progression diagram, comparison table
+- ✅ Clear section hierarchy with actionable next steps
+- ✅ Cross-references to 7 related guides (readiness, strategies, automatedmigration, analyzers, clientscript, session, lifecycle)
+
+**Learnings:**
+- Strangler Fig pattern is the *philosophical foundation* of BWFC — analyzers, CLI, shims all exist to support it
+- Developers need permission to migrate incrementally, not all-at-once — framing as "both systems run in parallel" reduces risk perception significantly
+- Visual progression (4-phase journey) more memorable than prose alone; developers can self-identify which phase they're in
+- Shim philosophy ("zero-rewrite") is the defining characteristic of BWFC; must be stated clearly and repeatedly
+- Real-world example reduces abstract pattern to concrete steps — 6-week timeline with specific pages makes it believable
+- Placement in nav right after "Getting Started" signals that philosophy comes before mechanics; guides readers toward informed decision-making

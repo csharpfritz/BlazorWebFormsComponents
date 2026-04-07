@@ -39,6 +39,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<BlazorWebFormsJsInterop>();
         services.AddScoped<IPageService, PageService>();
         services.AddScoped<SessionShim>();
+        services.AddMemoryCache();
+        services.AddScoped<ServerShim>();
+        services.AddScoped<CacheShim>();
+        services.AddScoped<ClientScriptShim>();
 
         var options = new BlazorWebFormsComponentsOptions();
         configure?.Invoke(options);

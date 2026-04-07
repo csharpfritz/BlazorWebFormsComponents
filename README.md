@@ -34,7 +34,48 @@ This is not for everyone, not everyone needs to migrate their application.  They
 
 Portions of the [original .NET Framework](https://github.com/microsoft/referencesource) are contributed to this project under their MIT license.
 
+## Migration CLI Tool
+
+The **`webforms-to-blazor` CLI tool** automates the first phase of Web Forms to Blazor migration. It applies deterministic transforms to your markup and code-behind, removing boilerplate and converting patterns:
+
+```bash
+# Full project migration
+dotnet tool install --global Fritz.WebFormsToBlazor
+webforms-to-blazor migrate --input ./MyWebFormsProject --output ./MyBlazorProject --scaffold
+
+# Or convert individual files
+webforms-to-blazor convert --input ProductCard.ascx --output ProductCard.razor
+```
+
+**What it does:**
+- Converts directives: `<%@ Page %>` → `@page`, `<%@ Control %>` → `@inherits`
+- Removes `asp:` prefixes: `<asp:Button>` → `<Button>`
+- Converts expressions: `<%: Model.Name %>` → `@(Model.Name)`
+- Detects patterns: Injects TODO comments for Copilot L2 automation
+- Scaffolds projects: Generates Program.cs, shims, and services
+
+**See the [CLI Tool Documentation](docs/cli/index.md) for:**
+- [Transform Reference](docs/cli/transforms.md) — All 33 transforms with before/after examples
+- [TODO Categories](docs/cli/todo-conventions.md) — Understand migration guidance comments
+- [Report Schema](docs/cli/report.md) — Interpret the migration report
+
+## JavaScript Migration & ClientScript Support
+
+Migrating JavaScript from Web Forms' `Page.ClientScript` and `ScriptManager` to Blazor's `IJSRuntime` is crucial for any real Web Forms application. **[ClientScript Migration Guide](docs/Migration/ClientScriptMigrationGuide.md)** covers:
+
+- Converting `RegisterStartupScript()` to `OnAfterRenderAsync()`
+- Migrating script includes and inline blocks
+- Replacing postback event patterns with Blazor events
+- Handling form validation with `EditContext`
+- ScriptManager patterns and their Blazor equivalents
+
+**Diagnostic Rules** help identify patterns that need migration:
+- **[BWFC022](docs/Analyzers/BWFC022.md)** — Page.ClientScript usage
+- **[BWFC023](docs/Analyzers/BWFC023.md)** — IPostBackEventHandler implementation
+- **[BWFC024](docs/Analyzers/BWFC024.md)** — ScriptManager code-behind methods
+
 ## Blazor Components for Controls
+
 
 There are a significant number of controls in ASP.NET Web Forms, and we will focus on creating components in the following order:
 

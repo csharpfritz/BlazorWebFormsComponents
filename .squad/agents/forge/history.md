@@ -725,3 +725,26 @@ Plan written to session workspace plan.md. Architecture decisions written to `.s
 **Pattern established:** All 8 issues follow consistent template (Context, Scope, Definition of Done, Notes). Labeled with `squad` + `type:docs`. Enables clear work delegation and measurable completion criteria.
 
 **Status:** Issues created and triaged in inbox. Awaiting team assignment. Decision note written to `.squad/decisions/inbox/forge-doc-task-plan.md`.
+
+### CLI Migration Tool Gap Analysis (2026-07-27)
+
+**Task:** Comprehensive gap analysis of `webforms-to-blazor` CLI for real-world 200+ page Web Forms migration readiness.
+
+**Prior Analysis:** `dev-docs/cli-gap-analysis.md` (dated 2025-07-27) documented 19 gaps (G1–G19) across 5 categories. This refresh validates what's been fixed and identifies remaining/new gaps.
+
+**Findings — What's Been Fixed Since Prior Analysis:**
+
+1. **G1 MasterPageTransform** — ✅ IMPLEMENTED. `ContentPlaceHolder→@Body`, `@inherits LayoutComponentBase`, strips `runat="server"` from head/form.
+2. **G2 LoginViewTransform** — ✅ IMPLEMENTED. `AnonymousTemplate→NotAuthorized`, `LoggedInTemplate→Authorized`, `RoleGroups→TODO(bwfc-identity)`.
+3. **G3 SelectMethodTransform** — ✅ IMPLEMENTED. Preserves attribute, adds `TODO(bwfc-select-method)` guidance per line.
+4. **G4 GetRouteUrlTransform** — ✅ IMPLEMENTED. `Page.GetRouteUrl(`→`GetRouteUrl(` with inheritance TODO.
+5. **G7 Session/ViewState wiring** — ✅ PARTIAL. `SessionDetectTransform` now injects `[Inject] SessionShim`, `CacheShim`. ViewState still guidance-only.
+6. **G8 DataSourceId scaffolding** — ✅ IMPROVED. `DataSourceIdTransform` now replaces `DataSourceID="X"` with `Items="@XData"` and scaffolds `private IEnumerable<object> XData` properties.
+7. **G10 URL attributes** — ✅ FIXED. `UrlReferenceTransform` now handles `src`, `BackImageUrl`, `PostBackUrl`, `DataNavigateUrlFormatString`, `HelpPageUrl`.
+8. **G13 Report structure** — ✅ IMPROVED. `ManualItem` is now a structured record with `File, Line, Category, Description, Severity`.
+9. **G15 TODO conventions** — ✅ STANDARDIZED. All transforms use `TODO(bwfc-*)` slugged format consistently.
+10. **G16 Shim wiring** — ✅ IMPROVED. `ShimGenerator` now references `AddBlazorWebFormsComponents()` for DI registration.
+
+**Transform Count:** 26 transforms active (5 directive, 14 markup, 12 code-behind). Prior gap analysis noted "27 transforms" but some were missing.
+
+**Unit Test Coverage:** 23 transform test files exist in `TransformUnit/` — all transforms now have dedicated tests.

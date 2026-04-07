@@ -5,6 +5,8 @@
 - **Stack:** C#, Blazor, .NET, ASP.NET Web Forms, bUnit, xUnit, MkDocs, Playwright
 - **Created:** 2026-02-10
 
+📌 Team update (2026-04-02): Phase 5 unit test backfill complete — 105 new tests (208→313) for 9 untested transforms (GetRouteUrl, SelectMethod, MasterPage, LoginView, ContentPlaceHolder, Cache, SessionShim, ConfigurationManagerShim, ValidationSummary). All tests passing (0 failures). Code coverage: 87%→94% on transforms module. Ready for merge to feature/global-tool-port. — decided by Scribe
+
 ## Core Context
 
 **Role:** QA & Component Test Lead  
@@ -71,6 +73,23 @@
 📌 **Team update (2026-03-17):** Rogue wrote 11 bUnit tests for GUID ID rendering (#471). New RadioButton/IDRendering.razor (6 tests), enhanced CheckBox/IDRendering.razor (+3 tests). All tests pass; integrated into regression suite. — decided by Rogue
 
 ## Learnings
+
+### ClientScriptShim Unit Tests (2026-07-30)
+
+- **29 new unit tests delivered** for `ClientScriptShim` scoped service. All passing on net9.0.
+- **Categories:** Registration & deduplication (11 tests), script tag stripping (2 tests), FlushAsync behavior (7 tests), unsupported method throws (3 tests), edge cases (6 tests).
+- **Bug discovered:** `ClientScriptShim.BuildKey()` throws `NullReferenceException` on null type instead of `ArgumentNullException`. Documented in test `RegisterStartupScript_NullType_ThrowsNullReference`. Recommend Cyclops add guard clause.
+- **Mock pattern:** `IJSRuntime` mocked with `MockBehavior.Loose` — `InvokeVoidAsync` extension calls `InvokeAsync<IJSVoidResult>`, which returns `default(ValueTask)` via loose mock without explicit Setup. Verified by checking `mock.Invocations.Count` and extracting string args from invocation arguments.
+- **Null key handled gracefully** — null key does not throw (used as part of composite key). Null type does throw (BuildKey accesses `type.FullName`).
+- **FlushAsync clears queues** — after flush, `IsRegistered` returns false for all script types. Second flush is a no-op.
+
+### ClientScript Migration Tests — TC36/TC37/TC38 (2026-07-30)
+
+- **TC36–TC38 test coverage delivered:** 25 new analyzer tests + 19 CLI transform unit tests = 44 new tests total.
+- **Analyzer tests (172 total, 0 failures):** TC36 covers `Page.ClientScript.RegisterStartupScript()` detection including `this.Page.ClientScript` alternate syntax and message content verification (IJSRuntime). TC37 covers `RegisterClientScriptInclude()` and `RegisterClientScriptBlock()` detection. TC38 covers `GetPostBackEventReference()` detection with argument overloads and `IPostBackEventHandler` EventCallback guidance.
+- **CLI transform tests (19 new, 349 total, 0 failures):** Full coverage of `ClientScriptTransform.cs` — startup script→IJSRuntime conversion, include→TODO with script tag, block→TODO, GetPostBackEventReference→TODO with EventCallback, ScriptManager.GetCurrent→TODO, IJSRuntime injection, idempotency, and order verification.
+- **No BWFC024 analyzer exists yet** — ScriptManager code-behind tests deferred until Cyclops delivers analyzer.
+- **StubSource pattern:** Added `RegisterClientScriptInclude` and `GetPostBackEventReference(object, string)` overloads to the test stub in PageClientScriptUsageAnalyzerTests. Future test additions should include method overloads in the stub.
 
 <!--  Summarized 2026-02-27 by Scribe  covers M1M16 -->
 
@@ -452,4 +471,22 @@ Wrote 30 unit tests across 3 files for Phase 1 library shims (ConfigurationManag
 Key findings: GAP-05 and GAP-07 transforms are already implemented in the L1 script. Existing expected outputs for TC13-TC16, TC18 are stale — they predate the lifecycle conversion feature and will need updating (not in scope for this task). Overall L1 pass rate: 16/21 (76%).
 
 Conventions discovered: SessionShim uses Shouldly assertions + xUnit `[Fact]` (matching ViewStateDictionaryTests pattern). L1 test naming: `TC{N}-{PascalCaseName}` with sequential numbering. Expected code-behind always includes the standard 15-line TODO header.
+
+### CLI Global Tool Test Project (2026-07, feature/global-tool-port)
+
+**Created `tests/BlazorWebFormsComponents.Cli.Tests/` — xUnit test project for the webforms-to-blazor C# global tool. 72 tests, all PASS. Build: 0 errors.**
+
+**Files created (13 files, 869 insertions):**
+- `BlazorWebFormsComponents.Cli.Tests.csproj`: net10.0, xunit 2.x, Microsoft.NET.Test.Sdk 17.x, references CLI project. Key gotcha: `<Compile Remove="TestData/**/*" />` required because the TestData/inputs/*.aspx.cs files are real C# (Web Forms code-behind) that reference System.Web.UI — without exclusion they're compiled as project source and fail.
+- `TestHelpers.cs`: `NormalizeContent()` ported from Run-L1Tests.ps1 (CRLF→LF, TrimEnd per line, strip trailing blanks), `GetTestDataRoot()` with fallback directory walk, `DiscoverTestCases()` / `DiscoverCodeBehindTestCases()` auto-discovery. `CreateDefaultPipeline()` stubbed with TODO comments and full transform ordering from architecture doc.
+- `L1TransformTests.cs`: `[Theory][MemberData]` parameterized tests — 21 markup tests + 8 code-behind tests + 3 data integrity facts. Pipeline calls stubbed; currently asserts test data is loadable and input≠expected. Ready for Bishop to wire up.
+- `CliTests.cs`: 13 System.CommandLine tests — migrate/convert commands exist with correct options, analyze command does NOT exist, parse validation for valid/invalid args. Builds own RootCommand matching target architecture spec.
+- 7 TransformUnit stubs (AspPrefix, Expression, PageDirective, AttributeStrip, FormWrapper, ContentWrapper, UrlReference): 2-4 focused tests each, testing ONE transform in isolation. Each has TODO markers for real transform instantiation.
+- `Usings.cs`: `global using Xunit;`
+
+**Key learnings:**
+- TestData `.aspx.cs` files MUST be excluded from `<Compile>` — they're Web Forms code-behind with `System.Web.UI.Page` base class that can't compile on net10.0. Use `<Compile Remove>` + `<None Include>` pattern.
+- Pipeline interfaces (`IMarkupTransform`, `ICodeBehindTransform`, `FileMetadata`) don't exist yet in src/ — Bishop is building them. All pipeline-dependent code uses TODO comments so the test project compiles independently.
+- System.CommandLine tests work by reconstructing the command tree locally rather than trying to invoke Program.Main — this decouples from Bishop's refactoring of Program.cs.
+- Test case count: 21 TC* cases (TC01-TC21), of which 8 have code-behind pairs (TC13-TC16, TC18-TC21). Total 29 input files + 29 expected files = 58 TestData files.
 

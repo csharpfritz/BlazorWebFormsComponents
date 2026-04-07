@@ -23,7 +23,19 @@
 		Services.AddLogging();
 		Services.AddScoped<SessionShim>();
 		Services.AddScoped<IPageService, PageService>();
+		RegisterShimServices();
 		return Render<TestPage>();
+	}
+
+	private void RegisterShimServices()
+	{
+		var mockEnv = new Mock<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();
+		mockEnv.Setup(e => e.WebRootPath).Returns(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wwwroot"));
+		mockEnv.Setup(e => e.ContentRootPath).Returns(System.IO.Path.GetTempPath());
+		Services.AddSingleton<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>(mockEnv.Object);
+		Services.AddMemoryCache();
+		Services.AddScoped<CacheShim>();
+		Services.AddScoped<ServerShim>();
 	}
 
 	[Fact]

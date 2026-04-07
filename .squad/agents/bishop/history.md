@@ -144,3 +144,56 @@ Both functions called in `Copy-CodeBehind` after existing transforms, before fil
 Updated 6 expected test files (TC13, TC14, TC15, TC16, TC18, TC19) to reflect new transforms.
 TC19 (lifecycle) and TC20/TC21 (event handlers) are dedicated test cases for these features.
 **All 21 tests pass at 100% line accuracy.**
+
+
+### Global Tool Pipeline Infrastructure + First 16 Markup Transforms (2026-07-27)
+
+**Task**: Build the C# global tool pipeline from the architecture doc (`dev-docs/global-tool-architecture.md`), replacing the PR #328 single-converter approach with the full sequential pipeline.
+
+**Implementation Details**:
+
+- **Pipeline Infrastructure**: Created `MigrationPipeline.cs` (orchestrates IMarkupTransform + ICodeBehindTransform chains, sorted by Order), `MigrationContext.cs` (per-file + project state), `FileMetadata.cs` (per-file metadata with FileType enum), `TransformResult.cs` (immutable step result), `MigrationReport.cs` (summary metrics).
+
+- **Transform Interfaces**: `IMarkupTransform` and `ICodeBehindTransform` with Name, Order, Apply(content, metadata) contract. All transforms are DI-registered singletons sorted by Order at pipeline construction time.
+
+- **SourceScanner**: Discovers .aspx/.ascx/.master files, pairs with .cs/.vb code-behind, generates output paths with .razor extension.
+
+- **16 Markup Transforms** (all regex patterns ported exactly from bwfc-migrate.ps1):
+  - Directives (100-210): PageDirective, MasterDirective, ControlDirective, ImportDirective, RegisterDirective
+  - Content/Form (300-310): ContentWrapper, FormWrapper
+  - Expressions (500): ExpressionTransform (comments, Bind(), Eval(), Item., encoded/unencoded)
+  - Tag Prefixes (600-610): AjaxToolkitPrefix, AspPrefix (+ ContentTemplate stripping, uc: prefix)
+  - Attributes (700-720): AttributeStrip (runat, AutoEventWireup, etc. + ItemTypeTItem + IDid + ItemType="object" fallback), EventWiring, UrlReference
+  - Normalization (800-820): TemplatePlaceholder, AttributeNormalize (booleans, enums, px units), DataSourceId
+
+- **CLI Subcommands**: Replaced single root command with `migrate` (full project) and `convert` (single file) subcommands per architecture doc. Options: --input, --output, --skip-scaffold, --dry-run, --verbose, --overwrite, --use-ai, --report.
+
+- **Deleted**: AscxToRazorConverter.cs (replaced by pipeline + transforms).
+
+- **PackageId**: Changed from `WebformsToBlazor.Cli` to `Fritz.WebFormsToBlazor`.
+
+**Validation**: All 12 test cases (TC01-TC12) produce exact expected output. Zero build errors.
+
+**Key Learnings**:
+1. Order of transforms matters critically  AjaxToolkitPrefix (600) MUST run before AspPrefix (610) to avoid treating `ajaxToolkit:` controls as `asp:` controls.
+2. AttributeStrip's ItemType="object" fallback injects BEFORE other attributes in the tag, matching the PS script's behavior and test expectations.
+3. Expression transforms must be ordered: Bind() before Eval() before encoded/unencoded, with comments first.
+4. DataSourceId transform runs last (820) because it matches bare control names (asp: prefix already stripped).
+5. ContentWrapperTransform strips asp:Content open+close tags using horizontal-whitespace-only patterns to avoid consuming indentation on the next line.
+
+### MasterPageTransform + GetRouteUrlTransform + ManualItem + TC12–TC23 (2026-04-03)
+
+**Commit:** `6824cbdc` on `feature/global-tool-port` — 41 files
+
+**MasterPageTransform:** Rewrites `<%@ MasterPageFile="~/Site.Master" %>` directive into Blazor `@layout SiteMaster` reference. Handles filename → class name conversion (strip extension, PascalCase).
+
+**GetRouteUrlTransform:** Converts `GetRouteUrl("routeName", new { key = val })` calls to Blazor `NavigationManager.GetUriWithQueryParameters()` equivalents. Registered in pipeline at Order 750 (after UrlReference, before normalization).
+
+**ManualItem model:** Structured record for migration report entries flagged for manual developer review. Fields: `Category` (slug), `File`, `Line`, `Message`, `Severity`. Enables typed JSON output in migration report rather than raw strings.
+
+**TC12–TC23 test data:** 12 new acceptance test input/expected-output pairs covering: MasterPage directives, GetRouteUrl calls, ManualItem annotation injection, ViewState attributes, ContentPlaceHolder, LoginView, Cache directives, SelectMethod, ValidationSummary, and mixed-transform scenarios.
+
+**Key learnings:**
+1. Master page filename → layout class name conversion must strip `~/`, directory path, and `.Master` extension, then PascalCase — a single regex replacement handles the common case but a helper method is cleaner for edge cases (spaces, hyphens).
+2. GetRouteUrl route-parameter extraction uses named capture groups to map `new { k = v }` anonymous objects; iteration order of anonymous-object properties must be preserved (C# doesn't guarantee it at runtime, but test data uses single-param routes to avoid ordering issues).
+3. ManualItem severity enum (`Info`, `Warning`, `Error`) maps to exit code: any `Error`-level item causes non-zero CLI exit, enabling CI gate integration.
