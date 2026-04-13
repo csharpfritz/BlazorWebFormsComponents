@@ -4,6 +4,31 @@
 
 <!-- Decisions are appended below by the Scribe after merging from .ai-team/decisions/inbox/ -->
 
+### 2026-04-13: Shim-First Migration Documentation Update
+
+**By:** Bishop (Migration Tooling Dev)
+
+**Status:** Implemented
+
+## Context
+
+The BWFC shim infrastructure (WebFormsPageBase, ResponseShim, SessionShim, RequestShim, CacheShim, ServerShim, ClientScriptShim, ViewStateDictionary, PostBack, FormShim, ConfigurationManager, BundleConfig, RouteConfig) has matured to the point where many Web Forms API calls compile and run AS-IS in Blazor. The migration-toolkit documentation still described a "convert everything manually" approach for these items.
+
+## Decision
+
+Updated all 5 migration-toolkit docs to reflect a "shim-first" migration paradigm:
+
+1. **Pipeline percentages shifted**: L1 ~60% (was ~40%), L2 ~30% (was ~45%), L3 ~10% (was ~15%)
+2. **Session["key"] moved out of Layer 3**: SessionShim handles basic usage; persistent/distributed session remains an architecture decision
+3. **Response.Redirect, IsPostBack, Page.Title, Request.QueryString, Cache removed from Layer 2 manual work**: All handled AS-IS by shims
+4. **New "Optional: Refactor to Native Blazor" section**: Developers can choose to keep shims long-term or refactor incrementally
+
+## Impact
+
+- Psylocke: copilot-instructions-template.md already aligned (updated separately)
+- Cyclops/Rogue: Migration skills should reference shim-first approach when guiding developers
+- All agents: When migrating code-behind, check if the API is shim-handled before writing conversion transforms
+
 ### 2026-07-30: ClientScript Migration Strategy & Roadmap
 
 **By:** Beast (Technical Writer)
@@ -14312,3 +14337,2706 @@ Phase 1 ClientScript Migration test coverage decisions. BWFC024 tests deferred (
 **Affects:** Cyclops (Component Dev)
 
 Finding: ClientScriptShim.BuildKey(Type type, string key) accesses type.FullName without null check. Passing null throws NullReferenceException instead of expected ArgumentNullException. Recommendation: add ArgumentNullException.ThrowIfNull(type) guard in RegisterStartupScript, RegisterClientScriptBlock, IsStartupScriptRegistered methods  or in BuildKey itself. Test ClientScriptShimTests.RegisterStartupScript_NullType_ThrowsNullReference documents current behavior; rename to _ThrowsArgumentNull when Cyclops adds guard. Priority: Low (edge case, but consistent guard clauses good practice for public API).
+
+# Decision: Strangler Fig Pattern Documentation
+
+**Date:** 2026  
+**Proposed by:** Beast (Technical Writer)  
+**Status:** IMPLEMENTED  
+
+## Summary
+
+Created comprehensive **Strangler Fig Pattern** documentation as the overarching philosophical framework for BWFC migration strategy. The pattern explains why BWFC exists and how its three layers (Roslyn analyzers, CLI tool, runtime shims) work together to enable incremental, side-by-side Web Forms → Blazor migration with zero downtime.
+
+## Context
+
+Jeff Fritz requested that BWFC's migration documentation be reframed around the **Strangler Fig pattern** — the practice of incrementally replacing a legacy system while keeping it running in parallel. This is the core philosophy underlying BWFC's design:
+
+- **Roslyn analyzers** guide migration by detecting Web Forms patterns
+- **CLI tool** performs L1 mechanical transforms
+- **Runtime shims** (ClientScriptShim, SessionShim, CacheShim, ServerShim) enable zero-rewrite compatibility
+
+Current migration guides scattered this philosophy across many documents. Consolidation was needed.
+
+## Decision
+
+Implement Strangler Fig pattern documentation as:
+
+1. **New standalone guide** (`docs/Migration/StranglerFigPattern.md`) covering:
+   - What the pattern is (biological metaphor → software practice)
+   - How BWFC enables it (4-step journey: Instrument → Strangle → Zero-Rewrite → Modernize)
+   - Visual progression (Legacy → Mixed → Blazor Dominant → Modernized)
+   - Why it works (zero downtime, parallel velocity, reversibility)
+   - Real-world e-commerce example (6-week phased migration)
+   - Comparison: Big Bang vs Strangler Fig vs Parallel Development
+
+2. **Cross-link from existing docs:**
+   - ClientScriptMigrationGuide.md: Add "Strangler Fig Pattern Context" section after recommended shim section
+   - Strategies.md: Add "The Strangler Fig Pattern: Migration Philosophy" section near top
+   - readme.md: Add "Migration Philosophy" section explaining the approach
+
+3. **Update mkdocs.yml navigation:**
+   - Place StranglerFigPattern.md second in Migration nav (right after "Getting Started")
+   - Strategic positioning: readers learn philosophy before mechanics
+
+## Key Technical Facts Documented
+
+- **Roslyn analyzers are purely syntactic** — They match patterns like `IsClientScriptAccess()` in the syntax tree without requiring System.Web type resolution. This means they work in any .NET project.
+
+- **ClientScriptShim uses queue-and-flush pattern** — Scripts are queued during component lifecycle, auto-flushed in OnAfterRenderAsync via IJSRuntime.InvokeVoidAsync("eval", script). This matches Web Forms deduplication behavior.
+
+- **Shims are production-ready** — Zero-rewrite approach is permanent, not a transitional hack. Modernization (Phase 2 refactoring to native Blazor patterns) is optional and on the team's schedule.
+
+- **L1 CLI handles mechanical transforms** — Directive changes (@Page → @page), markup conversion (<asp: → component names), code-behind pattern transforms (Page_Load → OnInitialized).
+
+## Rationale
+
+1. **Philosophy first** — Developers need to understand *why* they can migrate incrementally before diving into *how*. Strangler Fig pattern explains the "why."
+
+2. **Reduces migration anxiety** — Framing as "both systems run in parallel" with reversible steps makes large migrations feel manageable and low-risk.
+
+3. **Differentiates BWFC** — The zero-rewrite shim approach is what makes BWFC unique. This must be the first thing developers learn.
+
+4. **Guides informed decisions** — Developers can identify their current phase (Legacy, Mixed, Dominant, Modernized) and know what steps come next.
+
+5. **Consolidates scattered philosophy** — Previously, the pattern was implied across many docs. Now it's explicit and easy to reference.
+
+## Cross-References
+
+- **Roslyn Analyzers:** [Analyzers.md](../../docs/Migration/Analyzers.md) — Technical details on BWFC022, BWFC023, BWFC024
+- **ClientScriptShim:** [ClientScriptMigrationGuide.md](../../docs/Migration/ClientScriptMigrationGuide.md) — Deep dive on JS pattern migration
+- **Session State:** [Phase2-SessionShim.md](../../docs/Migration/Phase2-SessionShim.md) — Zero-rewrite session migration
+- **Automated Migration:** [AutomatedMigration.md](../../docs/Migration/AutomatedMigration.md) — L1 CLI tool guide
+- **Migration Strategies:** [Strategies.md](../../docs/Migration/Strategies.md) — High-level planning
+
+## Files Created/Updated
+
+- ✅ **Created:** `docs/Migration/StranglerFigPattern.md` (12.1K, comprehensive guide)
+- ✅ **Updated:** `docs/Migration/ClientScriptMigrationGuide.md` (added Strangler Fig context section)
+- ✅ **Updated:** `docs/Migration/Strategies.md` (added pattern philosophy section)
+- ✅ **Updated:** `docs/Migration/readme.md` (added migration philosophy section)
+- ✅ **Updated:** `mkdocs.yml` (added StranglerFigPattern to nav, strategic placement after Getting Started)
+- ✅ **Updated:** `.squad/agents/beast/history.md` (appended documentation task details and learnings)
+
+## Learnings
+
+1. **Metaphors matter** — The Strangler Fig metaphor (tree gradually replacing another tree) immediately resonates with developers and makes the pattern memorable.
+
+2. **Visual progression > prose** — The 4-phase diagram (Legacy → Mixed → Dominant → Modernized) conveys the journey better than narrative alone.
+
+3. **Real-world examples > abstract patterns** — The e-commerce example (6-week phased migration of Product Search → Cart → Accounts) makes incremental migration feel achievable.
+
+4. **Philosophy placement in nav signals importance** — Placing StranglerFigPattern right after "Getting Started" tells developers "learn this first, before mechanics."
+
+5. **Zero-rewrite is the differentiator** — Must be stated clearly and repeatedly. It's what makes BWFC unique and why teams should choose it over "big bang" rewrites.
+
+6. **Shims are production-ready** — Developers fear compatibility layers are "temporary hacks." Documentation must emphasize shims are permanent, well-tested, and leave room for optional Phase 2 modernization.
+
+## Next Steps (if any)
+
+- Monitor developer questions in issues/discussions to see if Strangler Fig framing resonates
+- Use this doc as the intro reference for first-time migration planners
+- Consider creating a decision tree helper ("What phase are you in? What's your next step?") based on the 4-phase model
+
+
+---
+
+# Decision: WebFormsForm Documentation Architecture
+
+**Decided by:** Beast (Technical Writer)  
+**Date:** 2026-XX  
+**Status:** Approved & Implemented
+
+## Problem Statement
+
+New `<WebFormsForm>` component needed comprehensive documentation explaining how it bridges HTTP POST form submission gap in interactive Blazor Server mode. Developers need clear guidance on:
+1. When to use WebFormsForm vs. standard `<form>` vs. EditForm
+2. How form data flows from JS interop into `Request.Form` shim
+3. Three-phase migration path from Web Forms → interactive → modern Blazor
+
+## Solution Implemented
+
+### 1. New Documentation File: `docs/UtilityFeatures/WebFormsForm.md`
+
+**Structure:**
+- Background: Explains Web Forms form submission vs. interactive Blazor WebSocket gap
+- Use Cases: Interactive pages, SSR pages, gradual migration scenarios
+- Rendering Mode Behavior table: SSR (native `Request.Form`) vs. Interactive (JS interop) vs. Target (EditForm)
+- Parameters table: Method, Action, OnSubmit, ChildContent, unmatched attributes
+- Syntax Comparison: Web Forms (asp:TextBox, asp:Button, code-behind) vs. Blazor (HTML inputs, WebFormsForm, C# callback)
+- Migration Path: 3-phase approach with code examples
+- Full Working Example: Login form (Web Forms → Blazor)
+- "How It Works" section: Form submission → JS interop → FormData capture → OnSubmit callback → SetRequestFormData
+- Dual-Mode Support: Code samples for SSR (ExcludeFromInteractiveRouting) vs. Interactive (WebFormsForm)
+- Notes: HTML attributes passthrough, file uploads, default action, validation, accessibility
+- Related Documentation: Cross-links to RequestShim, WebFormsPage, EditForm
+
+**Lines:** ~270 (inline with Button.md, GridView.md complexity)
+
+### 2. Navigation Update: `mkdocs.yml`
+
+Added entry under Utility Features section:
+```yaml
+- WebFormsForm: UtilityFeatures/WebFormsForm.md
+```
+
+Positioned alphabetically before WebFormsPage for discoverability.
+
+### 3. Cross-Reference: `docs/UtilityFeatures/RequestShim.md`
+
+Updated "Rendering Mode Behavior" section to explain interactive mode story:
+- Added note: "Use `<WebFormsForm>` component to enable access (see below)"
+- Inserted new subsection: "Interactive Mode: Using WebFormsForm" with code example
+- Links to WebFormsForm.md documentation
+
+## Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Component doc location:** `UtilityFeatures/` (not EditorControls) | WebFormsForm is a form wrapper utility, not an individual Web Forms control |
+| **Dual-mode explanation:** SSR vs. Interactive table + examples | Developers often mix SSR and interactive pages; clarifies when each approach applies |
+| **3-phase migration path:** SSR → Interactive → EditForm | Reflects team's gradual migration philosophy; no forced rewrites |
+| **Cross-reference in RequestShim.md** | Closes the loop: form submission captures data → Request.Form enables access → developers understand the flow |
+| **Login form example** | Concrete, realistic scenario (authentication) more relatable than generic form |
+| **"How It Works" section** | Builds developer confidence: explains JS interop, FormData API, callback mechanism |
+
+## Migration Narrative
+
+**Phase 1: Quickest Path (SSR)**
+- Keep existing `<form>` elements
+- Mark page with `[ExcludeFromInteractiveRouting]`
+- `Request.Form` works natively
+- No code changes
+
+**Phase 2: Gradual Adoption (Interactive)**
+- Replace `<form>` with `<WebFormsForm>`
+- Add `OnSubmit` callback
+- Call `SetRequestFormData(e)` to populate Request.Form
+- Existing code-behind logic continues working
+
+**Phase 3: Target State (Modern)**
+- Replace `<WebFormsForm>` with `<EditForm>`
+- Use `@bind` for two-way binding
+- Eliminate Request.Form shim
+- Full type safety
+
+## Standards Applied
+
+✅ **Tabbed Syntax**: Web Forms / Blazor comparison tabs for all code examples  
+✅ **Parameters Table**: Type, Default, Description format consistent with Button, GridView docs  
+✅ **Migration Guide Pattern**: Before/after with exact transformations  
+✅ **Cross-Linking**: RequestShim.md updated with forward reference to WebFormsForm.md  
+✅ **Accessibility Notes**: Semantic HTML guidance included  
+✅ **Code Examples**: Complete, runnable, realistic scenarios  
+
+## Deliverables
+
+| Item | Status |
+|------|--------|
+| `docs/UtilityFeatures/WebFormsForm.md` created | ✅ Done |
+| `mkdocs.yml` updated with navigation entry | ✅ Done |
+| `RequestShim.md` updated with cross-reference | ✅ Done |
+| `.squad/agents/beast/history.md` updated with learnings | ✅ Done |
+| All cross-references verified | ✅ Done |
+
+## Impact
+
+- **Developers:** Clear pathway for form submission in interactive Blazor; no guessing about Request.Form availability
+- **Gradual Migration:** Supports 3-phase adoption; teams can migrate at their own pace
+- **Documentation Consistency:** Follows established patterns; integrates seamlessly with existing BWFC docs
+- **Discoverability:** Linked from RequestShim.md; positioned in navigation for developers searching form topics
+
+## Related Decisions
+
+- Decision to support `Request.Form` in interactive mode (not documented here, but context for this feature)
+- Strangler Fig Pattern migration strategy (referenced in Phase 1/2/3 narrative)
+
+
+---
+
+# Decision: CLI Transform Preserves All ClientScript/ScriptManager Patterns (Phase 2)
+
+**Date:** 2026-07-31
+**Author:** Bishop (Migration Tooling Dev)
+**Status:** Implemented
+
+## Context
+
+ClientScriptTransform Phase 1 emitted TODO markers for `GetPostBackEventReference` and `ScriptManager.GetCurrent()` because no runtime shim existed. Phase 2 shims (ClientScriptShim + ScriptManagerShim) now handle these patterns.
+
+## Decision
+
+The CLI transform now preserves ALL six ClientScript/ScriptManager patterns instead of commenting out two of them. Zero TODO markers remain — shims handle everything at runtime.
+
+- `GetPostBackEventReference` → prefix-stripped, preserved for ClientScriptShim
+- `ScriptManager.GetCurrent(Page)` → converted to `ScriptManager.GetCurrent(this)` for ScriptManagerShim
+- Shim dependency comment conditionally mentions ScriptManagerShim when ScriptManager patterns detected
+
+## Impact
+
+- All agents: migrated code no longer has `// TODO: Replace __doPostBack` or `// TODO: ScriptManager.GetCurrent() has no Blazor equivalent` — these calls just work via shims
+- Layer 2 agents: less manual fixup needed for postback and ScriptManager patterns
+- Test count: 349 → 353
+
+
+---
+
+### ClientScriptTransform: Switched Default to Shim-Preserving Path
+
+**By:** Bishop (Migration Tooling Dev)
+
+**Date:** 2026-07-31
+
+**Status:** IMPLEMENTED
+
+**Requested by:** Jeffrey T. Fritz
+
+**Affects:** Forge (CLI output changes), Cyclops (analyzer guidance may reference IJSRuntime → update to reference ClientScriptShim), Beast (docs may reference old transform behavior)
+
+**Summary:** `ClientScriptTransform.cs` in the CLI pipeline no longer rewrites `Page.ClientScript` calls to `IJSRuntime` skeletons. Instead, it strips `Page.`/`this.` prefixes and preserves the original API calls, which are now handled at runtime by `ClientScriptShim`.
+
+**What changed:**
+1. `RegisterStartupScript`, `RegisterClientScriptInclude`, `RegisterClientScriptBlock` — prefix stripped, calls preserved
+2. `ScriptManager.RegisterStartupScript(control, ...)` → `ClientScript.RegisterStartupScript(...)` (first param dropped)
+3. `GetPostBackEventReference` — still TODO (shim throws NotSupportedException)
+4. `ScriptManager.GetCurrent` — still TODO (no shim equivalent)
+5. IJSRuntime `[Inject]` injection removed; replaced with ClientScriptShim dependency comment
+
+**Why:** Jeff's directive: "Zero-rewrite shim approach is PRECISELY what we should be building." The ClientScriptShim makes the original Web Forms API calls work as-is in Blazor, so the CLI should preserve them rather than rewriting to a different API.
+
+**Impact on other agents:**
+- **Forge/Bishop:** CLI `migrate` command output for any code-behind with ClientScript calls will now contain preserved calls instead of IJSRuntime skeletons
+- **Cyclops:** Analyzers BWFC022/023/024 guidance text may reference IJSRuntime migration — consider updating to mention ClientScriptShim as the primary path
+- **Beast:** ClientScriptMigrationGuide.md may need a section on the shim-first approach
+- **All agents:** When generating migrated code-behind, use `ClientScript.XXX(...)` calls (not `IJSRuntime`) for patterns the shim supports
+
+
+---
+
+### 2026-04-07T12:26:20Z: GitHub workflow and release process
+**By:** Jeffrey T. Fritz (via Copilot)
+**What:**
+1. Feature/fix PRs go against UPSTREAM (FritzAndFriends/BlazorWebFormsComponents) targeting the `dev` branch using squash merge.
+2. After merge, pull upstream/dev to local and push to origin. Delete the feature branch.
+3. Feature branches use `feature/{description}` naming convention.
+4. Release process: PR from upstream/dev → upstream/main using regular merge (NOT squash). Add a tag, create a GitHub Release. This triggers CI/CD to deploy sample sites, docs, and push NuGet packages.
+5. Post-release: sync both dev and main locally from upstream and push to origin.
+**Why:** User request — captured for team memory. These are the canonical Git and release workflows for all Squad agents.
+
+
+---
+
+# Decision: PostBack Shim Runtime Strategy
+
+**Date:** 2026-07-17  
+**Author:** Cyclops  
+**Status:** Implemented  
+
+## Context
+
+ClientScriptShim Phase 1 left `GetPostBackEventReference()`, `GetPostBackClientHyperlink()`, and `GetCallbackEventReference()` as `NotSupportedException` stubs. Phase 2 needed to make these return working JavaScript strings — zero rewrite, same API.
+
+## Decision
+
+1. **Inline JS bootstrap** — WebFormsPageBase.OnAfterRenderAsync injects `__doPostBack` and registration functions via `eval()` on firstRender. This avoids race conditions with external script loading while keeping `bwfc-postback.js` available as an optional static asset.
+
+2. **ResolveControlId priority** — Checks `BaseWebFormsComponent.ID` first (the developer-assigned HTML ID), then falls back to `GetType().Name`. This matches Web Forms' ClientID behavior.
+
+3. **ScriptManagerShim dual-path** — Supports both DI injection (`services.AddScoped<ScriptManagerShim>`) and static `GetCurrent(page)` factory. Migrated code using `ScriptManager.GetCurrent(Page)` compiles unchanged.
+
+4. **PostBack target ID format** — `TypeName_HashCode` ensures per-instance uniqueness when multiple page components exist.
+
+## Impact
+
+- Tests updated: 3 tests changed from throw-verification to return-value-verification, plus 3 new null-handling tests
+- No breaking changes to existing consumers
+- WebFormsPageBase now implements IAsyncDisposable (new interface on the class)
+
+
+---
+
+# Decision: WebFormsForm JS Interop as ES Module
+
+**Date:** 2026-07
+**Author:** Cyclops
+**Status:** Implemented
+**Issue:** #533
+
+## Context
+WebFormsForm needs JS interop to read FormData from the DOM during interactive mode form submissions.
+
+## Decision
+Used ES module pattern (`export function readFormData`) loaded via `IJSObjectReference` import, matching the existing `Basepage.module.js` and `chart-interop.js` pattern — NOT the IIFE+window global pattern used by `bwfc-postback.js`.
+
+## Rationale
+- ES modules are the established pattern for component-level JS interop in this project
+- Module import is lazy (loaded on first submit), avoiding unnecessary script loading
+- `IJSObjectReference` provides proper disposal and cleanup
+- The postback IIFE pattern exists because it needs to be globally available for `__doPostBack()`; form data reading is component-scoped
+
+## Implications
+- New JS interop files should follow the ES module pattern unless they need global availability
+- The JS file path is `_content/Fritz.BlazorWebFormsComponents/js/bwfc-webformsform.js`
+
+
+---
+
+# WebFormsForm Architecture — Issue #533
+
+**Requested by:** Jeffrey T. Fritz  
+**Date:** 2026-03-28  
+**Status:** Design Phase  
+**Affects:** FormShim, RequestShim, WebFormsPageBase, JS Interop
+
+---
+
+## Overview
+
+Issue #533 proposes a `<WebFormsForm>` Blazor component to enable `Request.Form` support in interactive mode (ServerInteractive render mode with Blazor Server). Currently, `Request.Form` only works in SSR mode because interactive mode has no HTTP POST — form submissions flow through SignalR WebSocket.
+
+The solution bridges this gap via JavaScript interop: WebFormsForm captures FormData on submit, sends it through SignalR to C#, and populates a mutable FormShim that backs `Request.Form`.
+
+---
+
+## Architecture Design
+
+### 1. FormShim Changes — Dual-Mode Support
+
+**Current State:**
+```csharp
+public class FormShim
+{
+    private readonly IFormCollection? _form;
+    internal FormShim(IFormCollection? form) { _form = form; }
+    public string? this[string key] { get { ... } }
+    public string[]? GetValues(string key) { ... }
+}
+```
+
+FormShim is immutable and wraps only `IFormCollection`. Problem: no way to inject data from JS interop in interactive mode.
+
+**Solution:** Add dual-mode internal representation.
+
+```csharp
+public class FormShim
+{
+    private readonly IFormCollection? _form;
+    private Dictionary<string, StringValues>? _interopData;
+
+    // Keep existing constructor for SSR (IFormCollection from HttpContext.Request.Form)
+    internal FormShim(IFormCollection? form)
+    {
+        _form = form;
+        _interopData = null;
+    }
+
+    // New constructor for JS interop data (interactive mode)
+    internal FormShim(Dictionary<string, StringValues> interopData)
+    {
+        _form = null;
+        _interopData = interopData;
+    }
+
+    // New method: populate from JS interop data
+    // Called by WebFormsForm component after receiving data from JS
+    internal void SetFormData(Dictionary<string, StringValues> data)
+    {
+        _interopData = data;
+    }
+
+    // Update indexer and methods to check both sources
+    public string? this[string key]
+    {
+        get
+        {
+            if (_form != null)
+                return _form.TryGetValue(key, out var values) ? values.FirstOrDefault() : null;
+
+            if (_interopData != null)
+                return _interopData.TryGetValue(key, out var values) ? values.FirstOrDefault() : null;
+
+            return null;
+        }
+    }
+
+    public string[]? GetValues(string key)
+    {
+        if (_form != null)
+        {
+            if (_form.TryGetValue(key, out var values))
+            {
+                var result = values.ToArray();
+                return result.Length > 0 ? result : null;
+            }
+            return null;
+        }
+
+        if (_interopData != null)
+        {
+            if (_interopData.TryGetValue(key, out var values))
+            {
+                var result = values.ToArray();
+                return result.Length > 0 ? result : null;
+            }
+            return null;
+        }
+
+        return null;
+    }
+
+    public string[] AllKeys
+        => (_form?.Keys ?? _interopData?.Keys ?? Array.Empty<string>()).ToArray();
+
+    public int Count
+        => (_form?.Count ?? _interopData?.Count ?? 0);
+
+    public bool ContainsKey(string key)
+        => (_form?.ContainsKey(key) ?? _interopData?.ContainsKey(key) ?? false);
+}
+```
+
+**Key Decisions:**
+- Add a new constructor for interop data (ctor overloading, not a factory method).
+- Keep `_form` nullable for both cases (SSR has form, interactive has interop data).
+- Use `Dictionary<string, StringValues>` internally for interop (matches ASP.NET Core's IFormCollection structure).
+- All accessors fallback to `_interopData` if `_form` is null.
+
+**Why:** Minimal surface change to FormShim. Existing code paths unaffected. Interactive mode gets a separate code path that's transparent to end users.
+
+---
+
+### 2. RequestShim Changes — Mutable Form Property
+
+**Current State:**
+```csharp
+public FormShim Form
+{
+    get
+    {
+        if (_httpContext != null)
+            return new FormShim(_httpContext.Request.Form);
+        
+        if (!_formWarned)
+        {
+            _logger.LogWarning("Request.Form accessed without HttpContext...");
+            _formWarned = true;
+        }
+
+        return new FormShim(null);
+    }
+}
+```
+
+**Problem:** Creates a new FormShim on every access (property getter). No way for WebFormsForm to update the FormShim that Request.Form returns.
+
+**Solution:** Cache the FormShim instance. In interactive mode, reuse the same instance so WebFormsForm mutations are visible to subsequent Request.Form accesses.
+
+```csharp
+public class RequestShim
+{
+    private readonly HttpContext? _httpContext;
+    private readonly NavigationManager _nav;
+    private readonly ILogger _logger;
+    private bool _cookieWarned;
+    private bool _formWarned;
+    private FormShim? _cachedFormShim; // ← Cache for interactive mode
+
+    // ... existing constructor ...
+
+    public FormShim Form
+    {
+        get
+        {
+            if (_httpContext != null)
+            {
+                try
+                {
+                    // SSR: always fresh (live HttpContext.Request.Form)
+                    return new FormShim(_httpContext.Request.Form);
+                }
+                catch (InvalidOperationException)
+                {
+                    return new FormShim(null);
+                }
+            }
+
+            // Interactive: cache and reuse so mutations persist
+            if (_cachedFormShim == null)
+            {
+                if (!_formWarned)
+                {
+                    _logger.LogWarning(
+                        "Request.Form accessed without HttpContext (interactive render mode). " +
+                        "Returning empty FormShim. Form-dependent logic will not function. " +
+                        "Use <WebFormsForm> component to populate Request.Form from submitted form data.");
+                    _formWarned = true;
+                }
+
+                _cachedFormShim = new FormShim(new Dictionary<string, StringValues>());
+            }
+
+            return _cachedFormShim;
+        }
+    }
+
+    /// <summary>
+    /// Internal method called by WebFormsForm component (via JS interop)
+    /// to populate Request.Form with submitted form data in interactive mode.
+    /// </summary>
+    internal void SetFormData(Dictionary<string, StringValues> formData)
+    {
+        if (_httpContext == null) // Only in interactive mode
+        {
+            _cachedFormShim ??= new FormShim(new Dictionary<string, StringValues>());
+            _cachedFormShim.SetFormData(formData);
+        }
+    }
+}
+```
+
+**Key Decisions:**
+- Cache FormShim only in interactive mode (SSR always creates fresh, which is correct for stateless HTTP).
+- Add `SetFormData()` method for WebFormsForm to call.
+- Log helpful message guiding developers to use WebFormsForm.
+
+**Why:** Maintains SSR's stateless HTTP semantics while supporting interactive mode's persistent component state. Cache only when needed.
+
+---
+
+### 3. WebFormsForm Component — Razor Structure
+
+Create a new file: `src/BlazorWebFormsComponents/Components/WebFormsForm.razor`
+
+```razor
+@* WebFormsForm.razor — Component wrapping <form> for interactive Request.Form support *@
+@namespace BlazorWebFormsComponents
+@inherits ComponentBase
+@implements IAsyncDisposable
+
+@if (!IsInteractiveMode)
+{
+    @* SSR mode: render a plain form that posts naturally *@
+    <form method="@Method.ToString().ToLower()" action="@Action" @attributes="HtmlAttributes">
+        @ChildContent
+    </form>
+}
+else
+{
+    @* Interactive mode: prevent default, use JS interop *@
+    <form method="@Method.ToString().ToLower()" 
+          @onsubmit="HandleSubmit" 
+          @onsubmit:preventDefault
+          @ref="_formElement"
+          @attributes="HtmlAttributes">
+        @ChildContent
+    </form>
+}
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    [Inject] private IJSRuntime JSRuntime { get; set; } = null!;
+    [Inject] private IHttpContextAccessor HttpContextAccessor { get; set; } = null!;
+
+    /// <summary>
+    /// HTTP method: GET (default) or POST.
+    /// </summary>
+    [Parameter]
+    public FormMethod Method { get; set; } = FormMethod.Post;
+
+    /// <summary>
+    /// Form action URL (SSR mode only). In interactive mode, ignored.
+    /// </summary>
+    [Parameter]
+    public string? Action { get; set; }
+
+    /// <summary>
+    /// Content to render inside the form (child components and elements).
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Additional HTML attributes (class, id, data-*, etc.).
+    /// </summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public Dictionary<string, object> HtmlAttributes { get; set; } = new();
+
+    /// <summary>
+    /// Raised when form is submitted in interactive mode.
+    /// Subscribe to perform validation or post-processing.
+    /// </summary>
+    [Parameter]
+    public EventCallback<Dictionary<string, StringValues>> OnSubmit { get; set; }
+
+    private ElementReference _formElement;
+    private DotNetObjectReference<WebFormsForm>? _dotnetRef;
+    private bool IsInteractiveMode => HttpContextAccessor.HttpContext == null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if (firstRender && IsInteractiveMode)
+        {
+            _dotnetRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync(
+                "window.bwfc?.webFormsForm?.registerForm",
+                _dotnetRef,
+                _formElement);
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        // Read FormData from DOM
+        var formData = await JSRuntime.InvokeAsync<Dictionary<string, StringValues>>(
+            "window.bwfc?.webFormsForm?.readFormData",
+            _formElement);
+
+        if (formData != null)
+        {
+            // Populate Request.Form via RequestShim
+            // (see WebFormsPageBase integration below)
+            await OnSubmit.InvokeAsync(formData);
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public Task ReceiveFormDataFromJs(Dictionary<string, StringValues> formData)
+    {
+        // Alternative path: JS can call this directly
+        return OnSubmit.InvokeAsync(formData);
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (IsInteractiveMode && _dotnetRef != null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync(
+                    "window.bwfc?.webFormsForm?.unregisterForm",
+                    _dotnetRef);
+            }
+            catch { }
+
+            _dotnetRef.Dispose();
+            _dotnetRef = null;
+        }
+    }
+}
+```
+
+**Key Design Points:**
+
+1. **Render Mode Detection:** `IsInteractiveMode` checks if `HttpContext` is available.
+   - SSR: render native `<form method="post" action="...">` (normal form posting)
+   - Interactive: render form with `@onsubmit="HandleSubmit"` + `preventDefault`
+
+2. **Method & Action Properties:**
+   - `Action` ignored in interactive mode (forms don't POST in Blazor Server)
+   - `Method` property for API completeness (some apps may inspect it)
+
+3. **Child Content:** Standard RenderFragment to wrap input fields, buttons, etc.
+
+4. **HTML Attributes:** `[Parameter(CaptureUnmatchedValues = true)]` allows `<WebFormsForm id="myForm" class="form-control">`.
+
+5. **OnSubmit Callback:** Optional `EventCallback<Dictionary<string, StringValues>>` for validation/logging. Allows page components to hook form submission.
+
+6. **FormMethod Enum:** Define a simple enum for HTTP method.
+
+```csharp
+// src/BlazorWebFormsComponents/Components/FormMethod.cs
+public enum FormMethod
+{
+    Get = 0,
+    Post = 1
+}
+```
+
+---
+
+### 4. JavaScript Module — FormData Capture & Interop
+
+Create: `src/BlazorWebFormsComponents/wwwroot/js/bwfc-webformsform.js`
+
+```javascript
+// bwfc-webformsform.js
+// Manages FormData capture and interop for WebFormsForm in interactive mode
+
+(function () {
+    'use strict';
+
+    window.bwfc = window.bwfc || {};
+    window.bwfc.webFormsForm = window.bwfc.webFormsForm || {};
+
+    const registeredForms = new Map();
+
+    /**
+     * Registers a form for interop and sets up submit handler.
+     * Called from WebFormsForm.OnAfterRenderAsync()
+     * @param {DotNetObjectReference} dotnetRef - Reference to WebFormsForm component
+     * @param {ElementReference} formElement - Reference to DOM form element
+     */
+    window.bwfc.webFormsForm.registerForm = function (dotnetRef, formElement) {
+        if (!formElement) {
+            console.warn('[BWFC WebFormsForm] Form element reference invalid');
+            return;
+        }
+
+        registeredForms.set(formElement, dotnetRef);
+    };
+
+    /**
+     * Unregisters a form (cleanup on dispose).
+     * @param {DotNetObjectReference} dotnetRef - Reference to WebFormsForm component
+     */
+    window.bwfc.webFormsForm.unregisterForm = function (dotnetRef) {
+        for (let [formEl, ref] of registeredForms.entries()) {
+            if (ref === dotnetRef) {
+                registeredForms.delete(formEl);
+                break;
+            }
+        }
+    };
+
+    /**
+     * Reads FormData from a form element and converts to key-value pairs.
+     * Supports multi-value fields (e.g., checkboxes, multi-select).
+     * @param {ElementReference} formElement - Reference to DOM form element
+     * @returns {Object} Dictionary of field names → string[] or string
+     */
+    window.bwfc.webFormsForm.readFormData = async function (formElement) {
+        if (!formElement) {
+            console.warn('[BWFC WebFormsForm] Form element reference invalid');
+            return {};
+        }
+
+        const formData = new FormData(formElement);
+        const result = {};
+
+        // GroupValue fields by name to handle multi-value fields (checkboxes, etc.)
+        for (const [key, value] of formData.entries()) {
+            if (!result[key]) {
+                result[key] = [];
+            }
+            result[key].push(value);
+        }
+
+        // Convert single-value fields from array to string for compatibility
+        // (ASP.NET NameValueCollection returns string or string[], we'll let C# handle it)
+        // Actually, keep as arrays — FormShim.GetValues() expects StringValues (IEnumerable<string>)
+        for (const key in result) {
+            if (result[key].length === 1) {
+                // Keep as array; StringValues will wrap it
+            }
+        }
+
+        console.debug('[BWFC WebFormsForm] Captured form data:', result);
+        return result;
+    };
+
+    /**
+     * Alternative: submits form data directly via JS interop callback.
+     * For advanced scenarios (custom form validation, AJAX-style submission).
+     * @param {DotNetObjectReference} dotnetRef - Reference to WebFormsForm component
+     * @param {ElementReference} formElement - Reference to DOM form element
+     */
+    window.bwfc.webFormsForm.submitFormData = async function (dotnetRef, formElement) {
+        if (!dotnetRef || !formElement) {
+            console.warn('[BWFC WebFormsForm] Invalid dotnetRef or formElement');
+            return;
+        }
+
+        try {
+            const formData = await window.bwfc.webFormsForm.readFormData(formElement);
+            await dotnetRef.invokeMethodAsync('ReceiveFormDataFromJs', formData);
+        } catch (error) {
+            console.error('[BWFC WebFormsForm] Error submitting form:', error);
+        }
+    };
+
+})();
+```
+
+**Key Points:**
+
+1. **registerForm():** Called from `OnAfterRenderAsync()` in WebFormsForm. Stores reference for later cleanup.
+2. **readFormData():** Reads `FormData` from DOM, converts to key-value pairs, handles multi-value fields.
+3. **unregisterForm():** Cleanup on component dispose.
+4. **Multi-value support:** Uses `Dictionary<string, StringValues>` — JS returns arrays, C# FormShim knows how to handle them.
+5. **No auto-post:** Module does NOT submit the form. That's the component's job (`HandleSubmit` or `OnSubmit` callback).
+
+---
+
+### 5. WebFormsPageBase Integration
+
+**Change:** Override `Request` property to support form population in interactive mode.
+
+```csharp
+// In WebFormsPageBase.cs
+
+[Inject] private RequestShim _requestShim { get; set; } = null!;
+
+/// <summary>
+/// Compatibility shim for Web Forms <c>Request</c> object.
+/// In interactive mode, caches the FormShim instance so that WebFormsForm
+/// component mutations are visible to subsequent Request.Form accesses.
+/// </summary>
+protected RequestShim Request
+    => _requestShim;
+
+/// <summary>
+/// Internal method called by WebFormsForm via event callback.
+/// Populates Request.Form with submitted form data in interactive mode.
+/// </summary>
+[JSInvokable]
+public Task SetFormDataFromWebFormsForm(Dictionary<string, StringValues> formData)
+{
+    _requestShim.SetFormData(formData);
+    StateHasChanged(); // Trigger re-render
+    return Task.CompletedTask;
+}
+```
+
+**How it flows in interactive mode:**
+
+1. User submits `<WebFormsForm>`
+2. `HandleSubmit()` calls `OnSubmit.InvokeAsync(formData)`
+3. Page component's `OnSubmit` parameter is bound to page's method
+4. Page calls `_requestShim.SetFormData(formData)` (now available via Request.Form)
+5. Page's event handler accesses `Request.Form["fieldName"]` — gets the submitted data
+6. `StateHasChanged()` triggers re-render
+
+**Alternative (Less Coupled):**
+
+If tight coupling to WebFormsForm is undesirable, instead expose a public method on WebFormsPageBase that children can call:
+
+```csharp
+/// <summary>
+/// Called by WebFormsForm component to populate Request.Form data in interactive mode.
+/// </summary>
+public void SetRequestFormData(Dictionary<string, StringValues> formData)
+{
+    _requestShim.SetFormData(formData);
+}
+```
+
+Then in page components, bind `<WebFormsForm OnSubmit="Page.SetRequestFormData">`.
+
+---
+
+### 6. Migration Story — What Markup Changes?
+
+**Old Web Forms (Server-side form POST):**
+```html
+<form runat="server">
+    <asp:TextBox runat="server" ID="TextBox1" />
+    <asp:Button runat="server" Text="Submit" OnClick="Button1_Click" />
+</form>
+
+<!-- Code-behind -->
+protected void Button1_Click(object sender, EventArgs e)
+{
+    string value = Request.Form["TextBox1"];
+    // ...
+}
+```
+
+**Blazor SSR (identical):**
+```razor
+<WebFormsForm>
+    <input type="text" name="TextBox1" />
+    <button type="submit">Submit</button>
+</WebFormsForm>
+
+<!-- Page code -->
+protected override async Task OnInitializedAsync()
+{
+    if (IsPostBack)
+    {
+        string value = Request.Form["TextBox1"];
+        // ...
+    }
+}
+```
+
+**Blazor ServerInteractive (NEW — with WebFormsForm):**
+```razor
+<WebFormsForm @ref="FormComponent" OnSubmit="HandleFormSubmit">
+    <input type="text" name="TextBox1" />
+    <button type="submit">Submit</button>
+</WebFormsForm>
+
+<!-- Page code -->
+private WebFormsForm? FormComponent { get; set; }
+
+private async Task HandleFormSubmit(Dictionary<string, StringValues> formData)
+{
+    // Manually invoke SetRequestFormData, OR
+    // RequestShim has already been populated by WebFormsForm's OnSubmit
+    string value = Request.Form["TextBox1"];
+    // ...
+    await InvokeAsync(StateHasChanged);
+}
+```
+
+**Key Insight:** Migration is seamless. The only visible difference is the addition of an `OnSubmit` callback handler to wire form submission to page state. For SSR pages migrating to ServerInteractive, this is typically a small change.
+
+---
+
+### 7. Key Design Decisions & Rationale
+
+#### A. Why not use form POST in interactive mode?
+
+In Blazor Server, the page **is** a persistent WebSocket connection. HTTP form POST doesn't apply — all interactions flow through `IJSRuntime.InvokeAsync()` and `[JSInvokable]` methods. There's no POST body, no IFormCollection. We must bridge via interop.
+
+#### B. Why cache FormShim in RequestShim?
+
+SSR pages create a fresh RequestShim on every request (stateless HTTP). Interactive pages keep a single RequestShim for the component's lifetime. Caching ensures that mutations by WebFormsForm are visible on subsequent `Request.Form` accesses — critical for code like:
+
+```csharp
+protected override async Task OnInitializedAsync()
+{
+    if (IsPostBack && Request.Form.ContainsKey("TextBox1"))
+    {
+        // Request.Form must be populated from the prior Submit
+    }
+}
+```
+
+Without caching, `Request.Form` would return a new empty FormShim each time, and subsequent accesses would see nothing.
+
+#### B. Why a separate constructor for FormShim?
+
+Overloading constructors is simpler and more explicit than a factory method. We have two legitimate ways to construct a FormShim:
+- `new FormShim(IFormCollection?)` — SSR with HttpContext
+- `new FormShim(Dictionary<string, StringValues>)` — Interactive via JS interop
+
+Both are valid; constructor overloading makes both visible in IntelliSense.
+
+#### D. Why `@onsubmit` instead of raw JS event listener?
+
+In Blazor, `@onsubmit` is the idiomatic pattern for form submission. It integrates with component lifecycle and handles preventDefault. Raw JS event listeners would work but are less discoverable and harder to test with bUnit.
+
+#### E. Why `OnSubmit` callback instead of automatic wiring?
+
+A component shouldn't assume a parent's Request.Form population logic. Some pages may want to validate, transform, or reject form data before populating. An `EventCallback` parameter gives flexibility — pages can opt-in to specific behavior.
+
+#### F. Why two JS methods (`registerForm` + `readFormData`)?
+
+Separation of concerns:
+- `registerForm()` just tracks component references for cleanup
+- `readFormData()` is pure function logic — can be called from multiple contexts (event handler, manual button, etc.)
+
+This pattern is consistent with the postback bridge (`registerPostBackTarget`, `__doPostBack`).
+
+---
+
+### 8. Testing Strategy
+
+#### bUnit Tests (Component-level)
+
+- **Test 1:** SSR mode — renders `<form method="post" action="...">` with no interop setup
+- **Test 2:** Interactive mode — renders `<form @onsubmit="...">` with FormElement reference
+- **Test 3:** OnSubmit callback fires with correct FormData dictionary when form is submitted
+- **Test 4:** Multi-value fields (e.g., `<input type="checkbox" name="check" value="a" /> <input type="checkbox" name="check" value="b" />`) captured as array in FormData
+- **Test 5:** Child content renders correctly inside `<form>`
+- **Test 6:** HTML attributes (class, id, data-*) applied to `<form>` element
+
+#### Playwright Integration Tests
+
+- **Test 1:** User fills text input, submits form, page's OnSubmit fires, Request.Form contains submitted data
+- **Test 2:** User selects multiple checkboxes with same name, submits, Request.Form.GetValues() returns all values
+- **Test 3:** User submits empty form, Request.Form.Count is 0 (no fields)
+- **Test 4:** Form submission in SSR mode doesn't involve JS interop (just POST)
+- **Test 5:** JavaScript console has no errors
+
+---
+
+## Open Questions & Follow-ups
+
+1. **Who instantiates WebFormsForm?** Is it typically the page component, or a user control? Scope needs clarification for testing.
+
+2. **Form ID and naming:** Should WebFormsForm accept an ID parameter and enforce uniqueness? Web Forms forms typically have `id="form1"`.
+
+3. **Hidden fields:** Web Forms often use hidden `__VIEWSTATE` and `__EVENTVALIDATION` fields. Should WebFormsForm auto-generate these? Or should pages manually add them? (Recommendation: manually via `@code`).
+
+4. **Multiple forms:** Can a page have multiple WebFormsForm components? If so, each should be independent (separate JS interop tracking).
+
+5. **Async form submissions:** Should WebFormsForm support AJAX-style async post in the future (without full page reload)? Current design enables this but doesn't implement it.
+
+---
+
+## Implementation Checklist
+
+- [ ] Add `FormMethod` enum (`Enums/FormMethod.cs`)
+- [ ] Update `FormShim.cs` — dual-mode constructor + `SetFormData()` method
+- [ ] Update `RequestShim.cs` — cache FormShim + `SetFormData()` method
+- [ ] Create `Components/WebFormsForm.razor` component
+- [ ] Create `wwwroot/js/bwfc-webformsform.js` module
+- [ ] Update `WebFormsPageBase.cs` — integrate form data population
+- [ ] Write bUnit tests (8–10 test cases)
+- [ ] Write Playwright integration tests (5 test cases)
+- [ ] Create sample page (`Components/Pages/ControlSamples/WebFormsForm/Index.razor`)
+- [ ] Update mkdocs.yml navigation
+- [ ] Update component reference docs
+- [ ] Update README with WebFormsForm link
+
+---
+
+## Success Criteria
+
+✅ `<WebFormsForm>` component renders correctly in both SSR and ServerInteractive modes  
+✅ `Request.Form["field"]` returns submitted values in interactive mode  
+✅ `Request.Form.GetValues("field")` works for multi-value fields  
+✅ All 8+ bUnit tests pass  
+✅ All 5+ Playwright tests pass  
+✅ Sample page demonstrates form submission and data access  
+✅ Zero regressions in existing tests  
+✅ Documentation is clear and complete
+
+
+---
+
+# WebFormsForm must inherit ComponentBase explicitly
+
+**Author:** Rogue (QA)  
+**Date:** 2026-07  
+**Scope:** WebFormsForm.razor, RequestShim.cs  
+**Issue:** #533
+
+## Decision
+
+Any `.razor` component in the main project that should NOT be a Web Forms control must explicitly declare `@inherits ComponentBase` to override the project-level `_Imports.razor` (which specifies `@inherits BaseWebFormsComponent`).
+
+## Bugs Found
+
+1. **WebFormsForm.razor** — Missing `@inherits ComponentBase` caused it to inherit `BaseWebFormsComponent` via `_Imports.razor`. Both classes had `[Parameter(CaptureUnmatchedValues = true)]`, throwing `ThrowForMultipleCaptureUnmatchedValuesParameters` at render time. Fixed by adding `@inherits ComponentBase`.
+
+2. **RequestShim.cs line 79** — `new FormShim(null)` was ambiguous between `FormShim(IFormCollection?)` and `FormShim(Dictionary<string, StringValues>)` after the dual-mode constructor was added. Fixed by casting to `(IFormCollection?)null`.
+
+## Impact
+
+Both fixes are required for the WebFormsForm component to render at all. Without them, any page using `<WebFormsForm>` crashes at component initialization.
+
+
+---
+
+
+
+# Decision: WebFormsForm Interactive Tests Use WaitForAsync Pattern
+
+**Date:** 2025-07-25
+**Author:** Colossus
+**Status:** Implemented
+
+## Context
+
+The `/migration/webforms-form` demo page runs in interactive Blazor Server mode (no `[ExcludeFromInteractiveRouting]`). Unlike the SSR `/migration/request-form` page which uses HTTP POST + page reload, this page submits via SignalR/JS interop and re-renders in place.
+
+## Decision
+
+Interactive form submission tests use `WaitForAsync(Visible)` on result elements rather than `WaitForLoadStateAsync(NetworkIdle)`. The URL assertion uses `ToHaveURLAsync` to confirm no navigation occurred. This establishes the pattern for all future interactive migration demo tests.
+
+## Affected Files
+
+- `samples/AfterBlazorServerSide.Tests/ControlSampleTests.cs` — 1 new InlineData
+- `samples/AfterBlazorServerSide.Tests/Migration/WebFormsFormTests.cs` — new file, 4 tests
+
+
+---
+
+# Decision: WebFormsForm Demo — Interactive Companion to RequestFormDemo
+
+**Author:** Jubilee  
+**Date:** 2026-07-17  
+**Status:** Proposed
+
+## Context
+
+The `RequestFormDemo.razor` sample uses `[ExcludeFromInteractiveRouting]` for SSR-only `Request.Form` access. The new `<WebFormsForm>` component enables the same `Request.Form["key"]` API in **interactive** render mode via JS interop. A companion demo page is needed.
+
+## Decision
+
+Created `WebFormsFormDemo.razor` at `/migration/webforms-form` that:
+- Runs in interactive mode (no `[ExcludeFromInteractiveRouting]`)
+- Uses `<WebFormsForm OnSubmit="HandleFormSubmit">` + `SetRequestFormData(e)` pattern
+- Presents a 3-stage migration progression: SSR Form → WebFormsForm → EditForm
+- Mirrors the same visual style (card layout, results table, code comparison) as `RequestFormDemo.razor`
+
+Added `WebFormsForm` entry to `ComponentCatalog.cs` under Migration Helpers.
+
+## Implications
+
+- New sample page is discoverable in sidebar navigation under Migration Helpers.
+- The 3-stage migration table (SSR → WebFormsForm → EditForm) establishes a recommended progression for form migration guidance across the project.
+
+
+---
+
+
+
+
+# Decision: Comprehensive Shim Documentation in Migration Skills
+
+**Proposed by:** Psylocke (Skills Engineer)
+**Date:** 2025-07-30
+**Domain:** migration, documentation
+
+## Context
+
+All migration skills (bwfc-migration, migration-standards, bwfc-data-migration, copilot-instructions) referenced outdated or incomplete information about the shim system. Several shims existed in code but were not documented in any skill. The CONTROL-COVERAGE.md file contained a contradiction about SelectMethod handling.
+
+## Decision
+
+Updated all migration-related skills to accurately document the full shim API surface:
+
+1. **10 shims documented**: FormShim, ClientScriptShim, ScriptManagerShim, RequestShim, ResponseShim, SessionShim, CacheShim, ServerShim, ViewStateDictionary, WebFormsPageBase (as the hub exposing all shims).
+2. **SelectMethod contradiction resolved**: Changed `SelectMethod → Items` to `SelectMethod → delegate or Items` with preference for delegate conversion.
+3. **IsPostBack corrected**: Changed from "always false" to accurate SSR/Interactive dual-mode behavior.
+4. **PostBack support documented**: Despite earlier team decision against __doPostBack emulation, the implementation exists and is now documented.
+5. **AddSessionShim() removed**: All references to non-existent registration methods replaced with correct `AddBlazorWebFormsComponents()`.
+
+## Impact
+
+- Migration agents will now recommend correct shim usage instead of manual rewrites
+- Fewer false positives in migration reviews (e.g., flagging working `Response.Redirect` calls)
+- SelectMethod preservation will be correctly guided (delegate preferred over Items binding)
+
+## Status
+
+**Implemented** — changes applied to 8 files across migration-toolkit/ and .github/.
+
+
+# WingtipToys Shim Gap Analysis
+
+**Analyst:** Forge (Lead / Web Forms Reviewer)  
+**Date:** 2026-03-30  
+**Migration:** WingtipToys (Web Forms → AfterWingtipToys Blazor)  
+**Baseline:** Run 11 — 178 control instances, 26 unique types, ~100% BWFC preservation rate  
+**Scope:** Identify opportunities to leverage new shims (WebFormsPageBase, RequestShim, ResponseShim, SessionShim, ClientScriptShim, FormShim, WebFormsForm, CacheShim, PostBack infrastructure)
+
+---
+
+## Executive Summary
+
+**Current Migration Quality:**
+- **9 functional pages** (ProductList, ProductDetails, ShoppingCart, Default, Contact, About, AddToCart, ErrorPage, AdminPage)
+- **10 minimal pages** (stub controls + TODOs: 5 checkout, 5 account)
+- **12 stub pages** (placeholder markup only: 10 account pages, 2 checkout, ViewSwitcher)
+- **Key gaps:** Identity pages (15), checkout flow (Session-based PayPal), cart persistence (Session), Request.Form access, manual NavigationManager usage
+
+**Shim Readiness Assessment:**
+| Shim | Status | API Surface | Migration Impact |
+|------|--------|-------------|------------------|
+| **WebFormsPageBase** | ✅ Complete | Page.Title, IsPostBack, Response, Request, Session, Cache, ClientScript, PostBack event | **HIGH** — 31 pages could inherit |
+| **RequestShim** | ✅ Complete | Request.QueryString, Request.Form, Request.Url, Request.Cookies | **HIGH** — 17 usages across 13 files |
+| **ResponseShim** | ✅ Complete | Response.Redirect, Response.Cookies | **HIGH** — 24 redirects across 16 files |
+| **SessionShim** | ✅ Complete | Session["key"], Get<T>, Remove, Clear, Count | **CRITICAL** — 21 usages across 3 files (checkout + cart) |
+| **ClientScriptShim** | ✅ Complete | Page.ClientScript.RegisterStartupScript, RegisterClientScriptBlock | LOW — no ClientScript usage in WingtipToys |
+| **FormShim** | ✅ Complete | Request.Form["key"], dual SSR/interactive | **MEDIUM** — 1 usage (OpenAuthProviders) |
+| **WebFormsForm** | ✅ Complete | `<WebFormsForm>` wrapper, dual SSR/interactive | **MEDIUM** — enables Request.Form in interactive mode |
+| **CacheShim** | ✅ Complete | Cache["key"], Insert, Get<T>, Remove | LOW — no Cache usage in WingtipToys |
+| **PostBack** | ✅ Complete | PostBack event, __doPostBack, bwfc-postback.js | LOW — no explicit postback usage |
+
+**Impact Estimate:**
+- **P0 gaps (blocking):** Session support → 5 checkout pages + cart persistence
+- **P1 gaps (manual workarounds):** NavigationManager → Response.Redirect (24 occurrences), IHttpContextAccessor → Request.* (17 occurrences), IsPostBack checks (5 occurrences)
+- **P2 gaps (improvements):** Page base class patterns, Request.Form in interactive mode
+
+**Recommended Actions:**
+1. **Immediate:** Refactor 13 pages to inherit `WebFormsPageBase` — enables Session, Response.Redirect, Request.QueryString, IsPostBack
+2. **Immediate:** Implement checkout flow (CheckoutStart, CheckoutReview, CheckoutComplete) using Session shim for PayPal state
+3. **Immediate:** Implement cart persistence in ShoppingCart/AddToCart using Session shim
+4. **Medium-term:** Wrap account forms in `<WebFormsForm>` when Request.Form is needed (OpenAuthProviders)
+5. **Medium-term:** Migrate Identity pages once ASP.NET Core Identity is wired up
+
+---
+
+## Part 1: Web Forms API Usage Pattern Inventory
+
+### Original WingtipToys Source Analysis
+
+**Patterns Found (by frequency):**
+
+| Pattern | Count | Files | Example Usage |
+|---------|-------|-------|---------------|
+| **Response.Redirect** | 24 | 16 | `Response.Redirect("ShoppingCart.aspx");` |
+| **Session["key"]** | 21 | 3 | `Session["payment_amt"] = usersShoppingCart.GetTotal();` |
+| **Request.QueryString** | 17 | 13 | `string rawId = Request.QueryString["ProductID"];` |
+| **IsPostBack** | 5 | 5 | `if (!IsPostBack) { ... }` |
+| **Request.Form** | 1 | 1 | `var provider = Request.Form["provider"];` |
+| **Page.ClientScript** | 0 | 0 | *(Not used in WingtipToys)* |
+| **Cache** | 0 | 0 | *(Not used in WingtipToys)* |
+| **__doPostBack** | 0 | 0 | *(Not used in WingtipToys)* |
+
+**Detailed Breakdown:**
+
+#### 1. Response.Redirect (24 usages, 16 files)
+
+**Files affected:**
+- AddToCart.aspx.cs (1)
+- Account/AddPhoneNumber.aspx.cs (1)
+- Account/Login.aspx.cs (5)
+- Account/Manage.aspx.cs (3)
+- Account/ManageLogins.aspx.cs (1)
+- Account/ManagePassword.aspx.cs (2)
+- Account/Register.aspx.cs (1)
+- Account/RegisterExternalLogin.aspx.cs (4)
+- Account/ResetPassword.aspx.cs (1)
+- Account/TwoFactorAuthenticationSignIn.aspx.cs (3)
+- Account/VerifyPhoneNumber.aspx.cs (1)
+- Admin/AdminPage.aspx.cs (2)
+- Checkout/CheckoutComplete.aspx.cs (2)
+- Checkout/CheckoutReview.aspx.cs (2)
+- Checkout/CheckoutStart.aspx.cs (2)
+- ShoppingCart.aspx.cs (1)
+
+**Pattern examples:**
+```csharp
+// Simple redirect
+Response.Redirect("ShoppingCart.aspx");
+
+// Redirect with query string
+Response.Redirect(pageUrl + "?ProductAction=add");
+
+// Helper method wrapping redirect
+IdentityHelper.RedirectToReturnUrl(Request.QueryString["ReturnUrl"], Response);
+
+// Error redirect
+Response.Redirect("CheckoutError.aspx?" + retMsg);
+```
+
+#### 2. Session (21 usages, 3 files)
+
+**Files affected:**
+- Logic/ShoppingCartActions.cs (5) — cart ID management
+- Checkout/CheckoutComplete.aspx.cs (6) — PayPal token, payer ID, order ID, payment amount
+- Checkout/CheckoutReview.aspx.cs (5) — PayPal verification, order creation
+- Checkout/CheckoutStart.aspx.cs (2) — PayPal initiation
+- ShoppingCart.aspx.cs (1) — payment amount storage
+
+**Pattern examples:**
+```csharp
+// Cart ID persistence
+HttpContext.Current.Session[CartSessionKey] = HttpContext.Current.User.Identity.Name;
+string cartId = HttpContext.Current.Session[CartSessionKey].ToString();
+
+// PayPal checkout state
+Session["payment_amt"] = usersShoppingCart.GetTotal();
+Session["token"] = token;
+Session["payerId"] = PayerID;
+Session["currentOrderId"] = myOrder.OrderId;
+
+// Verification
+if ((string)Session["userCheckoutCompleted"] != "true")
+{
+    Response.Redirect("CheckoutError.aspx?" + "Desc=Unvalidated%20Checkout.");
+}
+
+// Cleanup
+Session["currentOrderId"] = string.Empty;
+```
+
+**Critical pattern:** Checkout flow stores 4 pieces of state across 3 pages:
+- CheckoutStart → Session["payment_amt"], Session["token"]
+- CheckoutReview → reads token, stores Session["payerId"], Session["currentOrderId"]
+- CheckoutComplete → reads token/payerId/payment_amt/currentOrderId, performs payment, clears session
+
+#### 3. Request.QueryString (17 usages, 13 files)
+
+**Files affected:**
+- AddToCart.aspx.cs (1) — ProductID
+- Account/AddPhoneNumber.aspx.cs (1) — returnUrl (unused)
+- Account/Login.aspx.cs (4) — ReturnUrl
+- Account/Manage.aspx.cs (1) — success message
+- Account/ManagePassword.aspx.cs (1) — success message
+- Account/RegisterExternalLogin.aspx.cs (4) — ReturnUrl
+- Account/TwoFactorAuthenticationSignIn.aspx.cs (2) — ReturnUrl, RememberMe
+- Account/VerifyPhoneNumber.aspx.cs (1) — PhoneNumber
+- Admin/AdminPage.aspx.cs (1) — ProductAction
+- ErrorPage.aspx.cs (2) — handler, msg
+
+**Pattern examples:**
+```csharp
+// Simple parameter read
+string rawId = Request.QueryString["ProductID"];
+string productAction = Request.QueryString["ProductAction"];
+
+// Default if missing
+var message = Request.QueryString["m"];
+if (message != null) { /* show success */ }
+
+// Type conversion
+bool.TryParse(Request.QueryString["RememberMe"], out rememberMe);
+
+// Pass-through to child controls
+OpenAuthLogin.ReturnUrl = Request.QueryString["ReturnUrl"];
+```
+
+#### 4. IsPostBack (5 usages, 5 files)
+
+**Files affected:**
+- Account/Manage.aspx.cs (1)
+- Account/ManagePassword.aspx.cs (1)
+- Account/RegisterExternalLogin.aspx.cs (1)
+- Account/OpenAuthProviders.ascx.cs (1)
+- Checkout/CheckoutComplete.aspx.cs (1)
+- Checkout/CheckoutReview.aspx.cs (1)
+- Site.Master.cs (1)
+
+**Pattern examples:**
+```csharp
+// Guard initialization
+if (!IsPostBack)
+{
+    var user = manager.FindById(User.Identity.GetUserId());
+    hasPassword = user.PasswordHash != null;
+}
+
+// Postback-specific logic (OpenAuthProviders)
+if (IsPostBack)
+{
+    var provider = Request.Form["provider"];
+    // Trigger OAuth flow
+}
+
+// Anti-XSRF token validation (Site.Master)
+protected void master_Page_PreLoad(object sender, EventArgs e)
+{
+    if (!IsPostBack) { /* set tokens */ }
+    else { /* validate tokens */ }
+}
+```
+
+#### 5. Request.Form (1 usage, 1 file)
+
+**File affected:** Account/OpenAuthProviders.ascx.cs
+
+**Pattern:**
+```csharp
+protected void Page_Load(object sender, EventArgs e)
+{
+    if (IsPostBack)
+    {
+        var provider = Request.Form["provider"];
+        if (provider == null) return;
+        // OAuth redirect flow
+    }
+}
+```
+
+#### 6. Page.Title, Page.Master
+
+**Not extensively used** — WingtipToys relies on Master pages for layout, individual pages don't set Page.Title dynamically. Site.Master.cs handles layout and cart count display.
+
+---
+
+## Part 2: Current AfterWingtipToys Migration Handling
+
+### 2.1 Current Workarounds (No Shim Usage)
+
+**All 31 pages currently use manual Blazor patterns:**
+
+| Pattern | Current Approach | Example File |
+|---------|------------------|--------------|
+| Response.Redirect | `[Inject] NavigationManager`<br>`NavigationManager.NavigateTo("/path")` | AddToCart.razor.cs, Admin/AdminPage.razor.cs |
+| Request.QueryString | `[SupplyParameterFromQuery]` attribute | AddToCart.razor (ProductID), Admin/AdminPage.razor (ProductAction) |
+| Session["key"] | **NOT IMPLEMENTED** — TODOs everywhere | Checkout/*.razor.cs, ShoppingCart.razor.cs |
+| IsPostBack | **NOT IMPLEMENTED** — n/a in current pages | *(Would be needed if forms existed)* |
+| Request.Form | **NOT IMPLEMENTED** | *(Would be needed for OpenAuthProviders)* |
+| Page base class | Direct `ComponentBase` inheritance | All *.razor.cs files |
+
+**Code Examples from AfterWingtipToys:**
+
+#### AddToCart.razor
+```csharp
+// ❌ BEFORE (manual injection + NavigationManager)
+[Inject] private NavigationManager NavigationManager { get; set; } = default!;
+[Inject] private IHttpContextAccessor HttpContextAccessor { get; set; } = default!;
+
+[SupplyParameterFromQuery(Name = "productID")]
+public int? ProductID { get; set; }
+
+protected override async Task OnInitializedAsync()
+{
+    // Manual query string handling via attribute
+    if (ProductID.HasValue && ProductID > 0) { /* ... */ }
+    
+    // Manual redirect
+    NavigationManager.NavigateTo("/ShoppingCart");
+}
+```
+
+**✅ AFTER (with WebFormsPageBase):**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // Request.QueryString["productID"] just works
+        string rawId = Request.QueryString["productID"];
+        if (int.TryParse(rawId, out int productId) && productId > 0)
+        {
+            // ... cart logic ...
+        }
+        
+        // Response.Redirect just works
+        Response.Redirect("ShoppingCart");
+    }
+}
+```
+
+#### ShoppingCart.razor.cs (Session gap)
+```csharp
+// ❌ CURRENT (broken — no Session support)
+private void CheckoutBtn_Click(MouseEventArgs e)
+{
+    // TODO: Implement PayPal checkout start — store payment amount and redirect
+    NavigationManager.NavigateTo("/CheckoutStart");
+}
+```
+
+**✅ AFTER (with WebFormsPageBase + SessionShim):**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    private void CheckoutBtn_Click(MouseEventArgs e)
+    {
+        using var db = DbFactory.CreateDbContext();
+        var cart = new ShoppingCartActions();
+        Session["payment_amt"] = cart.GetTotal().ToString();
+        Response.Redirect("Checkout/CheckoutStart");
+    }
+}
+```
+
+#### Checkout/CheckoutComplete.razor.cs (Session gap)
+```csharp
+// ❌ CURRENT (completely stubbed)
+protected override async Task OnInitializedAsync()
+{
+    // TODO: Implement PayPal DoCheckoutPayment confirmation
+    // Original used Session["token"], Session["payerId"], Session["payment_amt"]
+    _transactionId = "TODO: PayPal checkout not yet migrated";
+}
+```
+
+**✅ AFTER (with WebFormsPageBase + SessionShim):**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsPostBack)
+        {
+            if (Session["userCheckoutCompleted"]?.ToString() != "true")
+            {
+                Session["userCheckoutCompleted"] = string.Empty;
+                Response.Redirect("CheckoutError?Desc=Unvalidated%20Checkout");
+                return;
+            }
+        }
+
+        string token = Session["token"]?.ToString() ?? "";
+        string payerId = Session["payerId"]?.ToString() ?? "";
+        string amount = Session["payment_amt"]?.ToString() ?? "";
+        
+        // Call PayPal API with restored state
+        var result = await NVPAPICaller.DoCheckoutPayment(token, payerId, amount);
+        // ... rest of original logic
+    }
+}
+```
+
+### 2.2 Manual Injection Patterns
+
+**Every page currently injects:**
+- `[Inject] private NavigationManager NavigationManager`
+- `[Inject] private IDbContextFactory<ProductContext> DbFactory`
+- `[Inject] private IHttpContextAccessor HttpContextAccessor` (cart pages only)
+
+**These would be eliminated by WebFormsPageBase inheritance.**
+
+---
+
+## Part 3: Gap Matrix
+
+| Web Forms API | WingtipToys Usage | Current Handling | Available Shim | Improvement | Priority |
+|---------------|-------------------|------------------|----------------|-------------|----------|
+| **Response.Redirect** | 24 calls, 16 files | `NavigationManager.NavigateTo()` | ✅ ResponseShim | Direct port: `Response.Redirect("path")` | **P1** |
+| **Session["key"]** | 21 calls, 3 files | ❌ NOT IMPLEMENTED (TODOs) | ✅ SessionShim | Complete checkout flow + cart persistence | **P0** |
+| **Request.QueryString** | 17 calls, 13 files | `[SupplyParameterFromQuery]` attribute | ✅ RequestShim | Direct port: `Request.QueryString["key"]` | **P1** |
+| **IsPostBack** | 5 calls, 5 files | ❌ NOT IMPLEMENTED | ✅ WebFormsPageBase.IsPostBack | Guard initialization, anti-XSRF, OAuth | **P1** |
+| **Request.Form** | 1 call, 1 file | ❌ NOT IMPLEMENTED | ✅ FormShim + WebFormsForm | OAuth provider selection | **P2** |
+| **Page.Title** | 0 explicit calls | `<PageTitle>` in markup | ✅ WebFormsPageBase.Title | N/A — not needed | **P3** |
+| **Page.ClientScript** | 0 calls | N/A | ✅ ClientScriptShim | N/A — not needed | **P3** |
+| **Cache["key"]** | 0 calls | N/A | ✅ CacheShim | N/A — not needed | **P3** |
+| **__doPostBack** | 0 explicit calls | N/A | ✅ PostBack event | N/A — not needed | **P3** |
+
+### Priority Definitions
+
+- **P0 (Blocking):** Missing functionality prevents core features from working (checkout flow, cart persistence)
+- **P1 (Manual Workaround):** Functionality exists via Blazor-native patterns, but requires manual injection and API translation
+- **P2 (Improvement):** Minor functionality gaps or edge cases (OAuth form submit)
+- **P3 (Not Applicable):** API exists in original but not used in WingtipToys
+
+---
+
+## Part 4: Page-by-Page Shim Application Plan
+
+### 4.1 Functional Pages (9) — Immediate Shim Upgrade
+
+| Page | Current Status | Shims Needed | Improvement |
+|------|----------------|--------------|-------------|
+| **AddToCart** | ✅ Functional | Request, Response | Eliminate `[SupplyParameterFromQuery]` + NavigationManager injection |
+| **ShoppingCart** | ✅ Functional | **Session**, Response | Enable PayPal checkout start (store payment_amt) |
+| **ProductList** | ✅ Functional | *(none)* | No shim benefit — already complete |
+| **ProductDetails** | ✅ Functional | *(none)* | No shim benefit — already complete |
+| **Default** | ✅ Functional | *(none)* | No shim benefit — already complete |
+| **Contact** | ✅ Functional | *(none)* | No shim benefit — already complete |
+| **About** | ✅ Functional | *(none)* | No shim benefit — already complete |
+| **ErrorPage** | ✅ Functional | Request | Eliminate `[SupplyParameterFromQuery]` for handler/msg |
+| **AdminPage** | ✅ Functional | Request, Response | Eliminate `[SupplyParameterFromQuery]` + NavigationManager, read dropdown state |
+
+**Impact:** 5 pages benefit (AddToCart, ShoppingCart, ErrorPage, AdminPage + 1 layout page)
+
+### 4.2 Minimal Pages (10) — Shim Enablement
+
+| Page | Current Gaps | Shims Needed | Outcome |
+|------|--------------|--------------|---------|
+| **Checkout/CheckoutStart** | Session storage + PayPal API | **Session**, Request, Response | Move to ✅ Functional (store payment_amt, token, redirect) |
+| **Checkout/CheckoutReview** | Session read/write + PayPal API | **Session**, IsPostBack, Response | Move to ✅ Functional (verify payment_amt, create order) |
+| **Checkout/CheckoutComplete** | Session read + PayPal API | **Session**, IsPostBack, Response | Move to ✅ Functional (finalize payment, clear session) |
+| **Checkout/CheckoutError** | Query string message | Request | Move to ✅ Functional (display error) |
+| **Checkout/CheckoutCancel** | *(none)* | *(none)* | Already complete (static page) |
+| **Account/Login** | ASP.NET Core Identity | Request, Response, IsPostBack | Blocked by Identity migration (not shim issue) |
+| **Account/Register** | ASP.NET Core Identity | Request, Response | Blocked by Identity migration |
+| **Account/Manage** | ASP.NET Core Identity | Request, Response, IsPostBack | Blocked by Identity migration |
+| **Account/ManagePassword** | ASP.NET Core Identity | Request, Response, IsPostBack | Blocked by Identity migration |
+| **Account/ManageLogins** | ASP.NET Core Identity | Response | Blocked by Identity migration |
+
+**Impact:** 4 checkout pages move to functional with Session shim; 5 account pages still blocked by Identity (not a shim issue)
+
+### 4.3 Stub Pages (12) — Partial Shim Benefit
+
+| Page | Current Status | Shims Needed | Outcome |
+|------|----------------|--------------|---------|
+| **Account/AddPhoneNumber** | Stub | Request, Response, IsPostBack, Identity | Partial (shims help, but Identity required) |
+| **Account/Confirm** | Stub | Identity | Blocked by Identity |
+| **Account/Forgot** | Stub | Identity | Blocked by Identity |
+| **Account/Lockout** | Stub | *(none)* | Static page |
+| **Account/RegisterExternalLogin** | Stub | Request, Response, IsPostBack, Identity | Partial (shims help, but Identity required) |
+| **Account/ResetPassword** | Stub | Response, Identity | Partial |
+| **Account/ResetPasswordConfirmation** | Stub | *(none)* | Static page |
+| **Account/TwoFactorAuthenticationSignIn** | Stub | Request, Response, IsPostBack, Identity | Partial |
+| **Account/VerifyPhoneNumber** | Stub | Request, Response, Identity | Partial |
+| **Account/OpenAuthProviders** | Stub | **Request.Form**, IsPostBack, Identity | Needs WebFormsForm + Identity |
+| **ViewSwitcher** | Stub | *(none)* | N/A (mobile layout not migrated) |
+
+**Impact:** All 10 account stubs benefit from shims, but still blocked by Identity migration as primary dependency
+
+---
+
+## Part 5: Specific Code Transformations
+
+### 5.1 High-Impact: Checkout Flow (P0)
+
+**CheckoutStart.aspx.cs → CheckoutStart.razor**
+
+**❌ BEFORE (broken):**
+```csharp
+// Current: TODO stub
+protected override async Task OnInitializedAsync()
+{
+    // TODO: Implement PayPal GetExpressCheckout
+    await Task.CompletedTask;
+}
+```
+
+**✅ AFTER (functional with SessionShim):**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session["payment_amt"] != null)
+        {
+            string amt = Session["payment_amt"].ToString();
+            string token = "";
+            bool ret = NVPAPICaller.ShortcutExpressCheckout(amt, ref token, ref retMsg);
+            if (ret)
+            {
+                Session["token"] = token;
+                Response.Redirect(retMsg);  // PayPal redirect URL
+            }
+            else
+            {
+                Response.Redirect("CheckoutError?" + retMsg);
+            }
+        }
+        else
+        {
+            Response.Redirect("CheckoutError?ErrorCode=AmtMissing");
+        }
+    }
+}
+```
+
+**CheckoutReview.aspx.cs → CheckoutReview.razor**
+
+**❌ BEFORE (broken):**
+```csharp
+// Current: TODO stub
+protected override async Task OnInitializedAsync()
+{
+    // TODO: Implement PayPal GetCheckoutDetails flow
+    await Task.CompletedTask;
+}
+```
+
+**✅ AFTER (functional with SessionShim + IsPostBack):**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsPostBack)
+        {
+            string token = Session["token"]?.ToString() ?? "";
+            string PayerID = "";
+            NVPAPICaller.GetCheckoutDetails(token, ref PayerID, ref retMsg);
+            if (!string.IsNullOrEmpty(PayerID))
+            {
+                Session["payerId"] = PayerID;
+                decimal paymentAmountOnCheckout = Convert.ToDecimal(Session["payment_amt"]);
+                decimal subTotal = /* calculate cart total */;
+                
+                if (paymentAmountOnCheckout != subTotal)
+                {
+                    Response.Redirect("CheckoutError?Desc=Amount%20total%20mismatch");
+                }
+                // ... populate order review GridView + DetailsView ...
+            }
+        }
+    }
+
+    private void CheckoutConfirm_Click(MouseEventArgs e)
+    {
+        // Create order in DB
+        Order myOrder = new Order { /* ... */ };
+        using var db = DbFactory.CreateDbContext();
+        db.Orders.Add(myOrder);
+        await db.SaveChangesAsync();
+        Session["currentOrderId"] = myOrder.OrderId;
+        
+        Session["userCheckoutCompleted"] = "true";
+        Response.Redirect("CheckoutComplete");
+    }
+}
+```
+
+**Impact:** Moves 3 checkout pages from stub/minimal → functional. Unlocks PayPal integration.
+
+### 5.2 High-Impact: Cart Persistence (P0)
+
+**ShoppingCart.razor.cs**
+
+**❌ BEFORE (broken):**
+```csharp
+private void CheckoutBtn_Click(MouseEventArgs e)
+{
+    // TODO: Implement PayPal checkout start — store payment amount and redirect
+    NavigationManager.NavigateTo("/CheckoutStart");
+}
+```
+
+**✅ AFTER (functional with SessionShim):**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    private async Task CheckoutBtn_Click(MouseEventArgs e)
+    {
+        using var db = DbFactory.CreateDbContext();
+        var cart = new ShoppingCartActions();
+        decimal total = await cart.GetTotal();
+        Session["payment_amt"] = total;
+        Response.Redirect("Checkout/CheckoutStart");
+    }
+}
+```
+
+**Impact:** Unlocks checkout initiation. Completes cart → checkout handoff.
+
+### 5.3 Medium-Impact: Request.QueryString → RequestShim (P1)
+
+**AddToCart.razor**
+
+**❌ BEFORE (verbose):**
+```csharp
+[Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+[SupplyParameterFromQuery(Name = "productID")]
+public int? ProductID { get; set; }
+
+protected override async Task OnInitializedAsync()
+{
+    if (ProductID.HasValue && ProductID > 0)
+    {
+        // ... cart logic ...
+    }
+    NavigationManager.NavigateTo("/ShoppingCart");
+}
+```
+
+**✅ AFTER (Web Forms pattern):**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        string rawId = Request.QueryString["ProductID"];
+        if (int.TryParse(rawId, out int productId) && productId > 0)
+        {
+            // ... cart logic ...
+        }
+        Response.Redirect("ShoppingCart");
+    }
+}
+```
+
+**Lines saved:** 4 (eliminates `[Inject]`, `[SupplyParameterFromQuery]`, property declaration)  
+**API surface:** Identical to original Web Forms code
+
+### 5.4 Medium-Impact: Response.Redirect → ResponseShim (P1)
+
+**Admin/AdminPage.razor.cs**
+
+**❌ BEFORE (manual):**
+```csharp
+[Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+private async Task AddProductButton_Click(MouseEventArgs e)
+{
+    // ... add product logic ...
+    string pageUrl = Request.Url.LocalPath;  // ⚠️ Still needs RequestShim
+    NavigationManager.NavigateTo(pageUrl + "?ProductAction=add");
+}
+```
+
+**✅ AFTER (Web Forms pattern):**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    private async Task AddProductButton_Click(MouseEventArgs e)
+    {
+        // ... add product logic ...
+        string pageUrl = Request.Url.LocalPath;  // ✅ Works via RequestShim
+        Response.Redirect(pageUrl + "?ProductAction=add");
+    }
+}
+```
+
+**Impact:** Eliminates NavigationManager injection across 16 files. Code reads identically to Web Forms original.
+
+### 5.5 Low-Impact: Request.Form + WebFormsForm (P2)
+
+**Account/OpenAuthProviders.razor**
+
+**❌ BEFORE (not implemented):**
+```csharp
+// Current: stub control, no form handling
+```
+
+**✅ AFTER (with WebFormsForm + FormShim):**
+```razor
+@inherits WebFormsPage
+
+<WebFormsForm OnSubmit="@HandleFormSubmit">
+    @* External provider buttons rendered here *@
+</WebFormsForm>
+
+@code {
+    private void HandleFormSubmit(FormSubmitEventArgs e)
+    {
+        // Populate Request.Form shim
+        SetRequestFormData(e);
+        
+        // Now Request.Form["provider"] works in interactive mode
+        var provider = Request.Form["provider"];
+        if (provider == null) return;
+        
+        string redirectUrl = ResolveUrl($"~/Account/RegisterExternalLogin?{IdentityHelper.ProviderNameKey}={provider}&returnUrl={ReturnUrl}");
+        // Trigger OAuth flow
+    }
+}
+```
+
+**Impact:** Enables OAuth provider selection in interactive mode. Low priority (only 1 usage).
+
+---
+
+## Part 6: Migration Impact Estimate
+
+### 6.1 Pages Moving from Stub/Minimal → Functional
+
+**With SessionShim + IsPostBack + Response/Request:**
+
+| Page | Before | After | Blocker Removed |
+|------|--------|-------|-----------------|
+| Checkout/CheckoutStart | Minimal (TODO) | ✅ Functional | Session storage for PayPal state |
+| Checkout/CheckoutReview | Minimal (TODO) | ✅ Functional | Session read + IsPostBack guard |
+| Checkout/CheckoutComplete | Minimal (TODO) | ✅ Functional | Session validation + cleanup |
+| Checkout/CheckoutError | Minimal (TODO) | ✅ Functional | Request.QueryString for error msg |
+| ShoppingCart | ✅ Functional (partial) | ✅ Functional (complete) | Session write for payment_amt |
+
+**Net change:** +4 functional pages (from 9 → 13), -4 minimal pages (from 10 → 6)
+
+**Account pages:** Still blocked by ASP.NET Core Identity migration, not shim availability. Shims provide scaffolding (Request/Response/IsPostBack) but core functionality requires SignInManager/UserManager wiring.
+
+### 6.2 Code Reduction Estimate
+
+**Per-page savings with WebFormsPageBase inheritance:**
+
+| Eliminated Pattern | Occurrences | Lines Saved per Page | Total Savings |
+|--------------------|-------------|----------------------|---------------|
+| `[Inject] NavigationManager` | 16 pages | 1 line | 16 lines |
+| `NavigationManager.NavigateTo()` → `Response.Redirect()` | 24 calls | ~0.5 lines | 12 lines |
+| `[SupplyParameterFromQuery]` attribute | 3 pages | 2-3 lines | 7 lines |
+| `Request.QueryString` manual parsing | 13 pages | ~0 lines (same API) | 0 lines |
+| Session TODO comments | 5 pages | 5-10 lines | ~30 lines |
+
+**Net reduction:** ~65 lines + cleaner Web Forms API surface (familiar patterns for existing Web Forms devs)
+
+### 6.3 API Fidelity Comparison
+
+**Original Web Forms Pattern:**
+```csharp
+protected void Page_Load(object sender, EventArgs e)
+{
+    if (!IsPostBack)
+    {
+        string productId = Request.QueryString["ProductID"];
+        decimal total = CalculateTotal();
+        Session["payment_amt"] = total;
+        Response.Redirect("Checkout/CheckoutStart.aspx");
+    }
+}
+```
+
+**Current AfterWingtipToys (manual Blazor):**
+```csharp
+[Inject] private NavigationManager NavigationManager { get; set; } = default!;
+[Inject] private IHttpContextAccessor HttpContextAccessor { get; set; } = default!;
+
+[SupplyParameterFromQuery(Name = "ProductID")]
+public string? ProductID { get; set; }
+
+protected override async Task OnInitializedAsync()
+{
+    // TODO: Session not supported yet
+    decimal total = CalculateTotal();
+    // Session["payment_amt"] = total;  ❌ NOT POSSIBLE
+    NavigationManager.NavigateTo("/Checkout/CheckoutStart");
+}
+```
+
+**With WebFormsPageBase + Shims:**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsPostBack)
+        {
+            string productId = Request.QueryString["ProductID"];
+            decimal total = CalculateTotal();
+            Session["payment_amt"] = total;
+            Response.Redirect("Checkout/CheckoutStart");
+        }
+    }
+}
+```
+
+**Fidelity:** 100% — identical API surface, identical semantics, identical code structure.
+
+---
+
+## Part 7: Priority Recommendations
+
+### Immediate Actions (P0 — Blocking)
+
+**1. Enable Checkout Flow** (Highest ROI)
+- **Affected pages:** CheckoutStart, CheckoutReview, CheckoutComplete, ShoppingCart
+- **Blockers removed:** Session["payment_amt"], Session["token"], Session["payerId"], Session["currentOrderId"]
+- **Implementation:**
+  - Add `@inherits WebFormsPage` to all 5 pages
+  - Replace TODO comments with original Web Forms Session access patterns
+  - Wire up NVPAPICaller for PayPal API calls
+- **Outcome:** Moves 4 pages from minimal → functional, completes core checkout flow
+- **Effort:** 4-6 hours (straightforward port with shims)
+
+### High-Priority Actions (P1 — Manual Workarounds)
+
+**2. Refactor to WebFormsPageBase** (Code Quality + Maintainability)
+- **Affected pages:** AddToCart, AdminPage, ErrorPage, all Account pages (16 total)
+- **Benefits:**
+  - Eliminate NavigationManager injection (16 occurrences)
+  - Replace `[SupplyParameterFromQuery]` with `Request.QueryString` (3 pages)
+  - Enable IsPostBack guards (5 pages once forms are wired)
+  - Consistent API surface for Web Forms developers
+- **Outcome:** Cleaner code, better Web Forms compatibility, easier future maintenance
+- **Effort:** 2-3 hours (mechanical refactoring)
+
+**3. Complete AdminPage Dropdown State** (Feature Completion)
+- **Affected pages:** AdminPage
+- **Blocker:** Cannot read DropDownRemoveProduct.SelectedValue because control is not referenced in code-behind
+- **Implementation:** Add `@ref` binding to DropDownRemoveProduct, access `.SelectedValue` in RemoveProductButton_Click
+- **Outcome:** Admin product removal becomes functional
+- **Effort:** 30 minutes
+
+### Medium-Priority Actions (P2 — Improvements)
+
+**4. Wrap Forms with WebFormsForm** (Interactive Mode Support)
+- **Affected pages:** Account/OpenAuthProviders
+- **Benefit:** Enables Request.Form["provider"] in interactive Blazor Server mode
+- **Outcome:** OAuth provider selection works in interactive render mode
+- **Effort:** 1 hour
+- **Note:** Low priority because SSR mode already works via native form POST
+
+### Future Work (P3 — Deferred)
+
+**5. Identity Migration**
+- **Affected pages:** All 15 Account pages
+- **Dependency:** ASP.NET Core Identity services (SignInManager, UserManager) must be registered in DI container
+- **Shims ready:** Request, Response, IsPostBack, Session all work once Identity is wired
+- **Blocker:** Not a shim issue — requires architecture decision on Identity strategy
+- **Recommendation:** Defer to separate milestone after checkout flow is proven
+
+---
+
+## Part 8: Verification & Testing Plan
+
+### 8.1 Unit Test Coverage
+
+**Existing Test Coverage:**
+- WebFormsPageBase: ✅ Covered (src/BlazorWebFormsComponents.Test/)
+- RequestShim: ✅ Covered
+- ResponseShim: ✅ Covered
+- SessionShim: ✅ Covered
+- FormShim: ✅ Covered
+- WebFormsForm: ✅ Covered
+
+**Recommendation:** No new tests required — shims are proven. Focus on integration testing WingtipToys pages.
+
+### 8.2 Integration Test Plan (Playwright)
+
+**Checkout Flow Test Scenario:**
+1. Navigate to /ProductList
+2. Click "Add to Cart" on product
+3. Navigate to /ShoppingCart
+4. Verify cart contains product
+5. Click "Checkout with PayPal"
+6. Verify redirect to CheckoutReview (Session["payment_amt"] persisted)
+7. Verify order details match cart total
+8. Click "Complete Order"
+9. Verify redirect to CheckoutComplete
+10. Verify Session["currentOrderId"] set
+11. Verify transaction ID displayed
+
+**Success Criteria:**
+- All 10 steps complete without error
+- Session state persists across page transitions
+- Response.Redirect navigates to correct pages
+- Request.QueryString reads parameters correctly
+
+### 8.3 Regression Testing
+
+**Pages to verify after WebFormsPageBase migration:**
+- AddToCart: Query string read + redirect still work
+- AdminPage: Query string + redirect still work
+- ErrorPage: Query string still works
+- ProductList/ProductDetails/Default/Contact/About: No changes, verify still functional
+
+**Acceptance:** All 9 currently-functional pages remain functional after refactoring.
+
+---
+
+## Part 9: Open Questions & Risks
+
+### Q1: Session Persistence Across Page Transitions
+
+**Question:** Does SessionShim persist across SignalR circuit reconnections in Blazor Server interactive mode?
+
+**Answer:** Yes — SessionShim uses dual-mode storage:
+- SSR mode: ISession (HTTP session, persists across requests)
+- Interactive mode: In-memory ConcurrentDictionary scoped to circuit lifetime
+- **Limitation:** Interactive mode loses session on circuit disconnect (browser tab close/refresh)
+
+**Risk Mitigation for WingtipToys:**
+- Checkout flow is typically single-session (user doesn't close tab mid-checkout)
+- Cart persistence uses cookies (CartId), not session — already immune to circuit loss
+- PayPal token/payerId are transient — acceptable loss on disconnect (user restarts checkout)
+
+**Verdict:** Acceptable for WingtipToys use case. Document limitation for production apps.
+
+### Q2: PayPal API Integration
+
+**Question:** Does NVPAPICaller (PayPal NVP API) still work? Original code uses deprecated PayPal Classic API.
+
+**Answer:** Out of scope for shim analysis — this is a business logic question, not a framework question.
+
+**Recommendation:** Test with PayPal Sandbox during checkout implementation. If NVP API is sunset, replace with modern PayPal SDK. Shims (Session, Request, Response) are API-agnostic.
+
+### Q3: File Upload in AdminPage
+
+**Question:** Can FileUpload control work with WebFormsPageBase?
+
+**Answer:** Not tested in WingtipToys migration yet. FileUpload is a supported BWFC control (issue #238), but file handling requires multipart form handling + IFormFile.
+
+**Recommendation:** Separate investigation. AdminPage file upload is P2 (feature exists but incomplete). Focus on checkout flow (P0) first.
+
+### Q4: Anti-XSRF Tokens
+
+**Question:** Original Site.Master.cs implements anti-XSRF tokens via ViewState. Does this still work?
+
+**Answer:** Partially — ViewStateDictionary exists in WebFormsPageBase, but anti-XSRF pattern requires ASP.NET Core's native antiforgery system.
+
+**Recommendation:** Replace Web Forms anti-XSRF with `[ValidateAntiForgeryToken]` attribute in ASP.NET Core. Out of scope for shim analysis.
+
+---
+
+## Part 10: Summary & Next Steps
+
+### Key Findings
+
+1. **SessionShim is the critical blocker** — 5 pages (4 checkout, 1 cart) cannot function without it. All code already exists in original Web Forms; shim unlocks direct port.
+
+2. **WebFormsPageBase provides 100% API fidelity** — Request, Response, Session, IsPostBack, Page.Title all match original. Eliminates manual Blazor patterns (NavigationManager, [SupplyParameterFromQuery], IHttpContextAccessor).
+
+3. **Account pages are blocked by Identity, not shims** — Shims provide scaffolding, but core auth functionality requires SignInManager/UserManager. Defer to separate milestone.
+
+4. **WingtipToys is a perfect shim showcase** — Heavy use of Session (checkout), Response.Redirect (navigation), Request.QueryString (params), IsPostBack (form guards). All patterns supported by current shims.
+
+### Success Metrics
+
+**Before Shims:**
+- 9 functional pages
+- 10 minimal pages (incomplete due to Session gap)
+- 12 stub pages (blocked by Identity)
+- ~65 lines of manual Blazor injection/workaround code
+
+**After Shims (Projected):**
+- **13 functional pages** (+4: CheckoutStart, CheckoutReview, CheckoutComplete, CheckoutError)
+- **6 minimal pages** (-4: checkout pages move to functional)
+- 12 stub pages (no change — Identity dependency)
+- **~0 lines of manual injection code** (all pages use WebFormsPageBase)
+
+### Recommended Implementation Order
+
+**Week 1: Checkout Flow (P0)**
+1. Refactor ShoppingCart.razor to inherit WebFormsPage, add Session["payment_amt"]
+2. Implement CheckoutStart.razor with Session read/write + PayPal API
+3. Implement CheckoutReview.razor with Session read/write + IsPostBack guard
+4. Implement CheckoutComplete.razor with Session read/write + cleanup
+5. Test end-to-end checkout flow with PayPal Sandbox
+
+**Week 2: Code Quality (P1)**
+1. Refactor AddToCart.razor to WebFormsPage
+2. Refactor AdminPage.razor to WebFormsPage, wire DropDownRemoveProduct state
+3. Refactor ErrorPage.razor to WebFormsPage
+4. Run Playwright tests to verify no regression
+5. Update WingtipToys benchmark report (Run 12)
+
+**Future: Identity Migration (P3)**
+1. Wire ASP.NET Core Identity services (SignInManager, UserManager)
+2. Migrate Account pages using WebFormsPage scaffolding
+3. Test authentication flow end-to-end
+4. Document Identity migration pattern for other apps
+
+---
+
+## Appendix A: Shim API Reference
+
+### WebFormsPageBase
+
+**Inheritance:** `public abstract class WebFormsPageBase : ComponentBase`
+
+**Key Members:**
+- `string Title { get; set; }` — Page title (IPageService)
+- `bool IsPostBack { get; }` — SSR: HTTP POST check; Interactive: first-render flag
+- `ResponseShim Response { get; }` — Response.Redirect, Response.Cookies
+- `RequestShim Request { get; }` — Request.QueryString, Request.Form, Request.Url, Request.Cookies
+- `SessionShim Session { get; }` — Session["key"], Get<T>, Remove, Clear
+- `CacheShim Cache { get; }` — Cache["key"], Insert, Get<T>, Remove
+- `ClientScriptShim ClientScript { get; }` — RegisterStartupScript, RegisterClientScriptBlock
+- `ViewStateDictionary ViewState { get; }` — ViewState["key"] (in-memory or hidden field)
+- `event EventHandler<PostBackEventArgs> PostBack` — __doPostBack handler
+
+**Usage:**
+```csharp
+@inherits WebFormsPage
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsPostBack)
+        {
+            Title = "Product Details";
+            string id = Request.QueryString["ProductID"];
+            Session["LastViewed"] = id;
+            Response.Redirect("Confirmation");
+        }
+    }
+}
+```
+
+### RequestShim
+
+**Members:**
+- `IQueryCollection QueryString { get; }` — Reads from NavigationManager.Uri (SSR + interactive)
+- `FormShim Form { get; }` — IFormCollection (SSR) or JS interop (interactive)
+- `Uri Url { get; }` — NavigationManager.Uri
+- `IRequestCookieCollection Cookies { get; }` — HttpContext.Request.Cookies (SSR only)
+
+**Behavior:**
+- QueryString: Always works (parses from URL)
+- Form: SSR = native POST; Interactive = requires WebFormsForm component
+- Url: Always works (NavigationManager)
+- Cookies: SSR only; logs warning in interactive mode
+
+### ResponseShim
+
+**Members:**
+- `void Redirect(string url, bool endResponse = true)` — NavigationManager.NavigateTo (strips ~/prefix and .aspx extension)
+- `IResponseCookies Cookies { get; }` — HttpContext.Response.Cookies (SSR only)
+
+**Behavior:**
+- Redirect: Always works (NavigationManager)
+- Cookies: SSR only; no-op + warning in interactive mode
+
+### SessionShim
+
+**Members:**
+- `object? this[string key] { get; set; }` — Dictionary-style access
+- `T? Get<T>(string key)` — Typed retrieval with JSON deserialization
+- `void Remove(string key)` — Remove item
+- `void Clear()` — Clear all items
+- `int Count { get; }` — Item count
+- `bool ContainsKey(string key)` — Key existence check
+
+**Behavior:**
+- SSR: ISession (HTTP session, persists across requests)
+- Interactive: ConcurrentDictionary (circuit-scoped, lost on disconnect)
+- **Dual-mode:** Writes go to both; reads prefer in-memory, fall back to ISession
+
+### FormShim
+
+**Members:**
+- `string? this[string key] { get; }` — First value for field
+- `string[]? GetValues(string key)` — All values (multi-select, checkboxes)
+- `string[] AllKeys { get; }` — Field names
+- `int Count { get; }` — Field count
+- `bool ContainsKey(string key)` — Field existence
+
+**Behavior:**
+- SSR: Wraps IFormCollection
+- Interactive: Wraps Dictionary<string, StringValues> from WebFormsForm JS interop
+
+### WebFormsForm Component
+
+**Parameters:**
+- `FormMethod Method { get; set; }` — Get or Post (default: Post)
+- `string? Action { get; set; }` — Form action URL (null = current page)
+- `RenderFragment? ChildContent { get; set; }` — Form contents
+- `EventCallback<FormSubmitEventArgs> OnSubmit { get; set; }` — Submit callback
+
+**Behavior:**
+- SSR: Renders native `<form method="post">` with HTTP POST
+- Interactive: Renders `<form @onsubmit>` with JS interop form data capture
+
+**Usage with WebFormsPageBase:**
+```razor
+<WebFormsForm OnSubmit="@SetRequestFormData">
+    <TextBox ID="Username" />
+    <Button Text="Submit" />
+</WebFormsForm>
+
+@code {
+    private void OnSubmitHandler()
+    {
+        string username = Request.Form["Username"];
+        // Form data is now available
+    }
+}
+```
+
+---
+
+## Appendix B: Files Analyzed
+
+### Original WingtipToys Source (27 files)
+- AddToCart.aspx.cs
+- ShoppingCart.aspx.cs
+- ProductList.aspx.cs
+- ProductDetails.aspx.cs
+- Default.aspx.cs
+- Contact.aspx.cs
+- About.aspx.cs
+- ErrorPage.aspx.cs
+- Site.Master.cs
+- Admin/AdminPage.aspx.cs
+- Account/AddPhoneNumber.aspx.cs
+- Account/Confirm.aspx.cs
+- Account/Forgot.aspx.cs
+- Account/Lockout.aspx.cs
+- Account/Login.aspx.cs
+- Account/Manage.aspx.cs
+- Account/ManageLogins.aspx.cs
+- Account/ManagePassword.aspx.cs
+- Account/OpenAuthProviders.ascx.cs
+- Account/Register.aspx.cs
+- Account/RegisterExternalLogin.aspx.cs
+- Account/ResetPassword.aspx.cs
+- Account/ResetPasswordConfirmation.aspx.cs
+- Account/TwoFactorAuthenticationSignIn.aspx.cs
+- Account/VerifyPhoneNumber.aspx.cs
+- Checkout/CheckoutStart.aspx.cs
+- Checkout/CheckoutReview.aspx.cs
+- Checkout/CheckoutComplete.aspx.cs
+- Checkout/CheckoutError.aspx.cs
+- Checkout/CheckoutCancel.aspx.cs
+- Logic/ShoppingCartActions.cs
+
+### Migrated AfterWingtipToys (31 files)
+- All corresponding .razor + .razor.cs files
+
+### BWFC Shim Source (10 files)
+- src/BlazorWebFormsComponents/WebFormsPageBase.cs
+- src/BlazorWebFormsComponents/RequestShim.cs
+- src/BlazorWebFormsComponents/ResponseShim.cs
+- src/BlazorWebFormsComponents/SessionShim.cs
+- src/BlazorWebFormsComponents/ClientScriptShim.cs
+- src/BlazorWebFormsComponents/FormShim.cs
+- src/BlazorWebFormsComponents/WebFormsForm.razor
+- src/BlazorWebFormsComponents/CacheShim.cs
+- src/BlazorWebFormsComponents/ServerShim.cs
+- src/BlazorWebFormsComponents/ScriptManagerShim.cs
+
+---
+
+**End of Analysis**
+
+
+# Migration Toolkit Reevaluation — Forge's Assessment
+
+**Date:** 2026-03-29
+**Reviewer:** Forge (Lead / Web Forms Reviewer)
+**Status:** ANALYSIS COMPLETE
+
+---
+
+## Executive Summary
+
+The migration toolkit is **well-structured at the architectural level** but has **multiple operational friction points** that create a poor developer experience when applied to a real Web Forms app. The three-layer pipeline is sound, but execution gaps create manual toil, incomplete tooling coverage, and scattered documentation.
+
+**Key Finding:** We have a *pipeline designed for benchmarking* (Contoso), not a *pipeline designed for production use*.
+
+---
+
+## Current Toolkit Architecture
+
+### Strengths
+
+1. **Three-layer model is correct**
+   - Layer 1 (automated script): ~40% of work, 100% deterministic ✅
+   - Layer 2 (Copilot-assisted): ~45% of work, requires skill guidance ✅
+   - Layer 3 (architecture): ~15% of work, requires human judgment ✅
+   - This decomposition genuinely works (proven by Contoso run 22: 97.5% pass rate)
+
+2. **Layer 1 automation is mature**
+   - `bwfc-migrate.ps1` handles all mechanical transforms (asp: prefix, runat, expressions, URLs)
+   - Deterministic, repeatable, low error rate
+   - Script is well-documented with clear input/output
+
+3. **Control coverage is comprehensive**
+   - 58 primary Web Forms controls → 153 shipped components
+   - CONTROL-COVERAGE.md is complete and accurate
+   - WingtipToys PoC: 96.6% coverage (28 of 29 control types)
+
+4. **Migration-toolkit/ directory is well-organized**
+   - README, QUICKSTART, METHODOLOGY, CHECKLIST docs exist
+   - Skills are separated by concern (migration, identity, data, performance)
+   - Clear entry points for developers
+
+5. **Contoso benchmark process is solid**
+   - 22 runs executed, each producing comprehensive reports
+   - Identified and fixed EDMX→EF Core conversion (big win in run 22)
+   - AspxRewriteMiddleware handles all .aspx→clean URL navigation
+   - Test automation validates end-to-end correctness
+
+### Gaps & Pain Points
+
+1. **CLI tool is underpowered and disconnected from the migration pipeline**
+   - `BlazorWebFormsComponents.Cli` (C# tool) exists but is NOT referenced in the migration toolkit
+   - README says it converts `.ascx` → `.razor`, not full app migration
+   - Has 15+ markup transforms + code-behind transforms registered but **no L1→L2→L3 integration**
+   - Developer doesn't know whether to use CLI or PowerShell script — **no clear guidance**
+   - CLI transforms appear more comprehensive than the script, but aren't documented or integrated
+
+2. **Layer 2 guidance is skill-based, not tooling-based**
+   - Developer gets raw Layer 1 output + 4 skills files (markdown) + must use Copilot interactively
+   - No structured checklist or progress tracking across a 50-page app
+   - CHECKLIST.md template exists but must be manually filled per page
+   - No way to track "which pages are done, which are pending" across the team
+   - **Layer 2 is expected to take 2–4 hours but has no scaffolding or validation**
+
+3. **Layer 3 architecture decisions are unstructured**
+   - "Use the data-migration skill" is the guidance, but real apps have:
+     - Custom session state patterns (not just key-value)
+     - Third-party integrations (payment gateways, custom APIs)
+     - Database-specific features (stored procedures, functions)
+   - METHODOLOGY.md says "15% of work" but in reality this can be 30–50% for complex apps
+   - No decision tree, no architecture patterns library, no "gotchas" registry
+
+4. **Developer experience is fragmented**
+   - Migration toolkit docs live in `/migration-toolkit/`
+   - BWFC component docs live in `/docs/`
+   - Component sample pages live in `/samples/AfterBlazorServerSide/` (not AfterContosoUniversity)
+   - Copilot skills live in both `.squad/skills/` AND `migration-toolkit/skills/` AND `.github/skills/`
+   - A developer doesn't know which copy is canonical or where to find answers
+
+5. **No automated validation between layers**
+   - Layer 1 outputs raw .razor files; Layer 2 must manually verify they compile
+   - No "Layer 1 test suite" that validates the script's transforms on known input patterns
+   - Contoso success doesn't transfer; each new app must be proven independently
+   - No way to catch Layer 1 bugs before L2 starts
+
+6. **SelectMethod handling is inconsistent**
+   - Contoso skill says: "preserve SelectMethod as `SelectHandler<ItemType>`"
+   - CONTROL-COVERAGE.md says: "convert to `Items=` + load in OnInitializedAsync"
+   - CLI tool has `SelectMethodTransform` but behavior unclear
+   - **This is the single most critical transform for data-bound controls** and guidance conflicts
+
+7. **Database migration automation is incomplete**
+   - New `Convert-EdmxToEfCore.ps1` script exists but **only in recent Contoso runs**
+   - Markdown documentation does NOT mention this script
+   - Developers with EF6 EDMX files won't find it unless they dig through dev-docs/
+   - SQL Server vs. SQLite guidance exists but not integrated into the migration path
+   - Web.config → appsettings migration is a skill, not tooling
+
+8. **Identity/auth migration lacks concrete examples**
+   - `bwfc-identity-migration` skill exists but Contoso doesn't use authentication
+   - No working sample of ASP.NET Membership → ASP.NET Core Identity migration
+   - Developers with Forms Auth will hit walls that aren't documented
+
+9. **Test automation coverage only exists for Contoso**
+   - 40 Playwright tests for ContosoUniversity: excellent
+   - WingtipToys also has tests but less comprehensive
+   - New apps must build their own test suite from scratch
+   - No template or reusable Playwright fixtures (beyond existing ones in repo)
+
+10. **Documentation is scattered and sometimes out-of-sync**
+    - QUICKSTART.md says to run `bwfc-scan.ps1` but the scanner output format is unclear
+    - References to "~/" → "/" conversion don't mention the CLI tool has `UrlReferenceTransform`
+    - METHODOLOGY.md doesn't mention EDMX→EF Core converter
+    - migration-toolkit/copilot-instructions-template.md doesn't link back to the toolkit docs
+
+---
+
+## Specific Process Gaps
+
+### Gap 1: Unclear Tool Selection
+**Problem:** Developer choosing between:
+- `scripts/bwfc-migrate.ps1` (PowerShell)
+- `BlazorWebFormsComponents.Cli` (C# global tool)
+- Manual application of Copilot skills
+
+**Currently:**
+- PowerShell script is documented as Layer 1
+- CLI tool README has no Layer awareness
+- Migration toolkit README doesn't mention the CLI
+
+**Needed:**
+- Decision tree: "Use CLI if X, PowerShell if Y, manual if Z"
+- OR: Merge CLI and script into a single unified entry point
+- OR: Document why both exist and when each is appropriate
+
+### Gap 2: Layer 1 → Layer 2 Handoff
+**Problem:** Raw Layer 1 output goes directly to developer with 4 skill files
+
+**Currently:**
+- Script produces `.razor` files + `.cs` code-behind with TODO comments
+- Developer must use Copilot + skills to transform further
+- No validation that Layer 1 output is "correct" before L2 starts
+- No progress tracking across pages
+
+**Needed:**
+- `bwfc-validate.ps1` script that checks Layer 1 output for common errors
+- Migration checklist with per-page status tracking
+- Integration with Copilot to auto-generate Layer 2 transforms (future: AI-assisted)
+
+### Gap 3: EF Migration Automation
+**Problem:** EF6 → EF Core is critical but only partially automated
+
+**Currently:**
+- EDMX→EF Core converter exists but is buried in Contoso runs
+- Web.config→appsettings is a skill, not tooling
+- Developers with custom DbContext code must manually port it
+- No "migration rules" for EF6-specific patterns (lazy loading, etc.)
+
+**Needed:**
+- Documented EDMX converter script + integrate into Layer 1 scaffold
+- Web.config parser in C# (more reliable than skill-based guidance)
+- EF6→EF Core pattern registry with auto-fix capability
+
+### Gap 4: Identity System Migration
+**Problem:** No end-to-end working sample for production identity scenarios
+
+**Currently:**
+- `bwfc-identity-migration` skill exists but untested in real apps
+- Contoso doesn't use authentication (benchmark doesn't cover this)
+- WingtipToys doesn't use modern auth
+
+**Needed:**
+- Working sample: ASP.NET Membership → ASP.NET Core Identity (with OWIN, Forms Auth)
+- Test it: Add authentication tests to Contoso or create new benchmark
+- Document: Migration steps, identity table schemas, membership provider replacement
+
+### Gap 5: Control Mismatch Handling
+**Problem:** What happens when a developer uses an unsupported control?
+
+**Currently:**
+- CONTROL-COVERAGE.md lists unsupported controls (Wizard, DataSource, Web Parts)
+- Contoso doesn't use any unsupported controls
+- Script doesn't warn or error when it encounters unsupported patterns
+- Developer discovers gap at L2 when Copilot can't help
+
+**Needed:**
+- Layer 1 script: detect unsupported controls → generate warnings + migration guidance
+- Replacement strategy registry: "If you used SqlDataSource, do this instead"
+- Early warning in `bwfc-scan.ps1`
+
+---
+
+## What Works Well (Worth Preserving)
+
+1. **WebFormsPageBase + @inherits pattern** — eliminates per-page boilerplate
+2. **Three-layer decomposition** — correctly matches intelligence required at each stage
+3. **Migration-toolkit/ documentation structure** — clear, well-indexed
+4. **Contoso benchmark + test automation** — proves end-to-end correctness
+5. **CONTROL-COVERAGE.md** — canonical reference for what's supported
+6. **Skills organization** — each skill has single, clear responsibility
+7. **bwfc-migrate.ps1** — deterministic, production-ready Layer 1
+
+---
+
+## Recommendations (Prioritized)
+
+### PRIORITY 1: Unify Developer Entry Point
+
+**Action:** Create a single, integrated migration experience
+
+**What:** 
+- Build `dotnet-bwfc-migrate` global tool that wraps both PowerShell + C# transforms
+- OR: Make C# CLI the canonical tool, ensure parity with current PowerShell script
+- Create decision tree in README: "Use this tool if you have X type of Web Forms app"
+
+**Why:** Developers shouldn't see 2–3 ways to do the same job. Pick one, document it, make it foolproof.
+
+**Effort:** Medium (1–2 days if merging CLI + script; 3–4 hours if just documenting decision)
+
+**Risk:** Low
+
+---
+
+### PRIORITY 2: Add Layer 1 Validation
+
+**Action:** Create `bwfc-validate.ps1` script that runs after Layer 1
+
+**What:**
+- Check for unsupported controls → list them + migration guidance
+- Validate expression syntax conversions
+- Check for orphaned `<!-- TODO: BWFC-MIGRATE -->` comments
+- Verify .razor files have valid Razor syntax (no unterminated tags)
+- Warn on DataSource controls, Wizard, Web Parts
+- Report control coverage %
+
+**Why:** Catch Layer 1 bugs before developer burns 2 hours on Layer 2
+
+**Effort:** Medium (1 day, mostly regex patterns)
+
+**Risk:** Low
+
+---
+
+### PRIORITY 3: Centralize & Sync Documentation
+
+**Action:** Single source of truth for migration guidance
+
+**What:**
+- Copy migration-toolkit/ skills into .github/skills/ (or vice versa) — enforce one canonical location
+- Update QUICKSTART.md to be the single entry point
+- Add table of contents linking all docs: README → QUICKSTART → METHODOLOGY → CONTROL-COVERAGE → CHECKLIST
+- Add "See also" links from docs/ components back to migration guidance
+- Embed tool comparison table (Script vs CLI vs Manual)
+
+**Why:** Developers lose 30 minutes finding the right doc. Centralize it.
+
+**Effort:** Low (2–3 hours, mostly linking + table creation)
+
+**Risk:** Very Low
+
+---
+
+### PRIORITY 4: Clarify SelectMethod Handling
+
+**Action:** Create a definitive SelectMethod migration pattern
+
+**What:**
+- Test both approaches: `SelectMethod` as delegate vs. `Items` binding
+- Measure performance impact
+- Document which is "canonical" + when to use the other
+- Update CLI tool + skills to be consistent
+- Add before/after code example to CONTROL-COVERAGE.md
+
+**Why:** This is the most critical data-binding pattern; conflicts create confusion
+
+**Effort:** Low-Medium (4–6 hours testing + docs)
+
+**Risk:** Low
+
+---
+
+### PRIORITY 5: Layer 2 Scaffolding & Tracking
+
+**Action:** Add structure to the Copilot-assisted phase
+
+**What:**
+- Generate `.bwfc/status.json` after Layer 1 with page inventory + checklist
+- Integrate with Copilot: auto-suggest Layer 2 transforms based on checklist
+- Create per-page migration template (copy to each file as a comment block)
+- Add `bwfc-report.ps1` to generate Layer 2 progress report
+
+**Why:** L2 is 45% of work but has no scaffolding; developers fly blind
+
+**Effort:** Medium (2 days: template + status tracking + reporting)
+
+**Risk:** Low
+
+---
+
+### PRIORITY 6: Identity Migration Working Sample
+
+**Action:** Prove identity migration works end-to-end
+
+**What:**
+- Create new sample: Web Forms app with ASP.NET Membership + OWIN
+- Migrate to .NET 10 + ASP.NET Core Identity
+- Add Playwright tests for login, logout, role-based access
+- Document the process in migration-toolkit/skills/
+
+**Why:** Identity is ~15% of real apps but untested in our migration pipeline
+
+**Effort:** Medium-High (3–4 days: implementation + testing + docs)
+
+**Risk:** Medium (identity bugs are security-critical; needs review)
+
+---
+
+### PRIORITY 7: EF6 → EF Core Automation Improvements
+
+**Action:** Make database migration deterministic, not "skill-based"
+
+**What:**
+- Document EDMX→EF Core converter + integrate into Layer 1
+- Build Web.config parser (C#) → appsettings.json (JSON)
+- Create EF6→EF Core pattern library (lazy loading, proxies, etc.)
+- Add guidance for custom DbContext code
+
+**Why:** DB migration is high-friction and error-prone. Automate what's deterministic.
+
+**Effort:** Medium-High (3–4 days: converter + parser + docs)
+
+**Risk:** Medium (needs testing with diverse EF6 projects)
+
+---
+
+### PRIORITY 8: Unsupported Control Replacement Strategy
+
+**Action:** Build a decision tree for unsupported Web Forms controls
+
+**What:**
+- `SqlDataSource` → injected service pattern (document with example)
+- `Wizard` → multi-step component + state management guide
+- `Web Parts` → component-based architecture
+- `AJAX Toolkit` → candidate Blazor libraries (AntDesign, Radzen, etc.)
+- Update CONTROL-COVERAGE.md with "If unsupported, do this instead"
+
+**Why:** Developers hit unsupported controls → panic. We can guide them.
+
+**Effort:** Low-Medium (2 days: decision tree + example code)
+
+**Risk:** Low
+
+---
+
+## Architectural Debt
+
+### Technical Debt
+1. CLI tool exists but isn't wired into the migration pipeline
+2. PowerShell script is canonical, but C# transforms are duplicated in CLI → maintenance burden
+3. Contoso benchmark tests a specific configuration (SQL Server + 6 pages + no auth) but other scenarios are untested
+4. Web.config parsing is in skills (fragile) not tooling (robust)
+
+### Documentation Debt
+1. QUICKSTART.md is good, but no "troubleshooting" section
+2. No FAQ for common migration blockers
+3. METHODOLOGY.md is theoretical; lacks "what really happens" narrative
+
+### Testing Debt
+1. No test suite for Layer 1 transforms on diverse input
+2. WingtipToys tests incomplete (missing auth, session state tests)
+3. No negative tests ("what if control is unsupported?")
+
+---
+
+## Conclusion
+
+The toolkit is **architecturally sound but operationally incomplete**. It works brilliantly for Contoso because Contoso is a controlled benchmark. But for production use, developers will hit:
+
+- Confusion about which tool to use
+- Incomplete Layer 2 scaffolding
+- Identity migration gaps
+- Database migration friction
+- Unsupported control panic
+
+**Recommended path forward:**
+
+1. **Short-term (next sprint):** Priorities 1, 2, 3 (unify tools + validate L1 + centralize docs) — removes 80% of friction
+2. **Medium-term:** Priorities 4, 7 (clarify SelectMethod + improve EF automation) — reduces manual toil
+3. **Long-term:** Priorities 5, 6, 8 (L2 scaffolding + identity sample + replacement strategy) — prepares toolkit for production use
+
+**Effort estimate:** 8–12 days total for all recommendations
+
+---
+
+## Notes for Coordinator & Team
+
+- **Cyclops** (component builder): SelectMethod behavior needs clarification; may need BWFC component review
+- **Beast** (documentation): Consider taking on Priority 3 (centralize docs) + troubleshooting FAQ
+- **Jubilee** (samples): Priority 6 (identity sample) would be high-value
+- **Rogue** (testing): Priority 5 (L2 scaffolding) + Priority 1 (tool validation tests)
+
+

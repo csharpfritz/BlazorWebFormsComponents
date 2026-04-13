@@ -5,15 +5,191 @@
 - **Stack:** C#, Blazor, .NET, ASP.NET Web Forms, bUnit, xUnit, MkDocs, Playwright
 - **Created:** 2026-02-10
 
+## Core Context
+
+Forge has been Lead/Web Forms Reviewer since 2026-02-10. Key historical context:
+
+- **Milestones (M1-M17+):** 50/53 controls shipped (M2-M3), Chart.js for Chart, DataBoundStyledComponent<T> pattern established, HTML audit framework (3-tier), M15 fidelity 132→131 divergences, M17 AJAX 6 controls, M19 custom controls strategy.
+- **Architecture patterns:** Enums/ folder with int values, On-prefix events, feature branches→upstream/dev, ComponentCatalog.cs, WebFormsPageBase as canonical page base, IPageService for head rendering.
+- **Deployment:** Docker+NBGV, dual NuGet (prerelease + GA), Azure webhook, multi-targeting (net8.0;net9.0;net10.0) with 7818 tests.
+- **Recent milestones:** Multi-targeting #516 validated (3/27), ViewState Phase 1 architecture (3/24), Git workflow established (main=production only, dev=active branch).
+- **DepartmentPortal insights (3/8):** Exposed 5 gaps (DataBoundWebControl<T>, TagKey/AddAttributesToRender, HTML5 enums, CompositeControl children, ITemplate→RenderFragment). Custom control migration patterns documented locally; upstream issue creation blocked by token permissions.
+
 ## Active Decisions & Alerts
 
-📌 **Team update (2026-03-27):** Multi-targeting #516 implemented and validated. BlazorWebFormsComponents now ships net8.0;net9.0;net10.0. All 2606 tests pass × 3 TFMs = 7818 total. Zero code changes, conditional package versions only. CI matrix configured. Ready for GA release. — decided by Forge & Cyclops
-
-📌 **Team update (2026-03-24):** ViewState Phase 1 architecture implemented — ViewStateDictionary (SSR + Interactive modes), mode-adaptive IsPostBack, hidden form field encryption, IDataProtectionProvider optional integration, CryptographicException fail-safe. Phase 2 (SSR persistence, AutoPostBack, analyzers, docs) planned for 7 weeks. Cyclops implementation validated; all 2588 tests pass. — decided by Forge
-
-M1–M16: 6 PRs reviewed, Calendar/FileUpload rejected, ImageMap/PageService approved, ASCX/Snippets shelved. M2–M3 shipped (50/53 controls, 797 tests). Chart.js for Chart. DataBoundStyledComponent<T> recommended. Key patterns: Enums/ with int values, On-prefix events, feature branches→upstream/dev, ComponentCatalog.cs. Deployment: Docker+NBGV, dual NuGet, Azure webhook. M7–M14 milestone plans. HTML audit: 3 tiers, M11–M13. M15 fidelity: 132→131 divergences, 5 fixable bugs. Data controls: 90%+ sample parity, 4 remaining bugs. M17 AJAX: 6 controls shipped.
+📌 **Team update (2026-04-12):** Shim documentation comprehensive across skills & CLI — SelectMethod contradiction resolved (prefer delegate), IsPostBack/PostBack clarified, SessionShim confirmed P0 blocker for WingtipToys, 3 CLI transforms added (ConfigurationManager, RequestForm, ServerShim), 373/373 tests passing. — decided by Psylocke, Forge, Bishop
 
 ## Learnings
+
+📌 **Team update (2026-04-12):** Shim documentation comprehensive across skills & CLI — SelectMethod contradiction resolved (prefer delegate), IsPostBack/PostBack clarified, SessionShim confirmed P0 blocker for WingtipToys, 3 CLI transforms added (ConfigurationManager, RequestForm, ServerShim), 373/373 tests passing. — decided by Psylocke, Forge, Bishop
+
+### WingtipToys Shim Gap Analysis (2026-03-30)
+
+**Migration Impact Assessment Complete — SessionShim is the Critical Blocker**
+
+Completed comprehensive gap analysis of WingtipToys migration (Run 11 baseline: 178 control instances, 26 unique types, 9 functional pages, 10 minimal pages, 12 stub pages) against the full suite of new BWFC shims (WebFormsPageBase, RequestShim, ResponseShim, SessionShim, ClientScriptShim, FormShim, WebFormsForm, CacheShim, PostBack infrastructure).
+
+**Key Findings:**
+
+1. **Session["key"] is the blocking gap (P0)** — 21 usages across 3 files (CheckoutStart, CheckoutReview, CheckoutComplete, ShoppingCartActions, ShoppingCart) prevent PayPal checkout flow and cart persistence. All original Web Forms code uses Session for checkout state (payment_amt, token, payerId, currentOrderId). SessionShim unlocks direct code port with zero changes.
+
+2. **Response.Redirect + Request.QueryString are high-impact (P1)** — 24 Response.Redirect calls across 16 files currently use manual NavigationManager.NavigateTo(). 17 Request.QueryString calls across 13 files use [SupplyParameterFromQuery] attributes. ResponseShim + RequestShim enable 100% API-fidelity code (identical to Web Forms original).
+
+3. **IsPostBack is underutilized (P1)** — 5 original usages (Manage, ManagePassword, RegisterExternalLogin, OpenAuthProviders, CheckoutComplete) not migrated yet due to stub status. WebFormsPageBase.IsPostBack enables guard patterns for form initialization and anti-XSRF token validation.
+
+4. **WebFormsForm + FormShim are low-impact (P2)** — Only 1 Request.Form usage in entire codebase (OpenAuthProviders OAuth provider selection). WebFormsForm enables this pattern in interactive mode, but SSR already works via native POST.
+
+5. **ClientScriptShim, CacheShim, PostBack unused** — WingtipToys doesn't use Page.ClientScript, Cache["key"], or explicit __doPostBack. Shims exist but provide zero benefit for this migration.
+
+6. **Identity is the primary blocker, not shims** — 15 account pages (10 stub, 5 minimal) are blocked by ASP.NET Core Identity migration (SignInManager/UserManager wiring), not by missing shims. Shims provide scaffolding (Request/Response/IsPostBack) but cannot replace authentication services.
+
+**Quantified Impact:**
+
+- **Pages moving to functional:** +4 (CheckoutStart, CheckoutReview, CheckoutComplete, CheckoutError) from minimal→functional with SessionShim
+- **Code reduction:** ~65 lines eliminated (NavigationManager injections, [SupplyParameterFromQuery] attributes, Session TODO comments)
+- **API fidelity:** 100% — WebFormsPageBase + shims produce byte-for-byte identical code to Web Forms original (IsPostBack, Request.QueryString["key"], Response.Redirect("path"), Session["key"])
+
+**Architecture Decisions:**
+
+- WebFormsPageBase is the canonical migration base class — eliminates all manual Blazor patterns (NavigationManager, IHttpContextAccessor, [SupplyParameterFromQuery])
+- SessionShim dual-mode design (ISession in SSR, ConcurrentDictionary in interactive) is correct for WingtipToys use case (checkout is single-session, cart uses cookies)
+- Checkout flow implementation is highest ROI (P0) — 4 pages move functional, completes core e-commerce feature
+- Identity migration is separate concern (P3) — defer to post-checkout milestone
+
+**Implementation Priority:**
+
+1. **P0 (Immediate):** Enable checkout flow (ShoppingCart, CheckoutStart, CheckoutReview, CheckoutComplete) with SessionShim — unlocks PayPal integration
+2. **P1 (High):** Refactor 16 pages to WebFormsPageBase — code quality, maintainability, Web Forms API fidelity
+3. **P2 (Medium):** Wrap forms with WebFormsForm for interactive Request.Form — enables OAuth provider selection
+4. **P3 (Deferred):** Identity migration — blocked by SignInManager/UserManager architecture decision
+
+**Files analyzed:**
+- Original: 31 Web Forms files (27 pages + 4 logic/master files)
+- Migrated: 31 Blazor files (corresponding .razor + .razor.cs)
+- Shims: 10 BWFC infrastructure files (WebFormsPageBase, RequestShim, ResponseShim, SessionShim, ClientScriptShim, FormShim, WebFormsForm, CacheShim, ServerShim, ScriptManagerShim)
+
+**Outcome:** Gap analysis report written to .squad/decisions/inbox/forge-wingtip-shim-analysis.md with complete code examples, before/after comparisons, page-by-page recommendations, and verification plan. Ready for team review and implementation prioritization.
+
+### Migration Toolkit Architecture (2026-03-29)
+
+**Key Finding:** Three-layer pipeline model is correct and proven (Contoso run 22: 97.5% pass rate), but operational execution has multiple friction points. The toolkit is designed for *benchmarking* (Contoso), not *production use*.
+
+**Strengths identified:**
+- Layer 1 (bwfc-migrate.ps1) is mature, deterministic, ~40% of work
+- Layer 2 (Copilot + 4 skills) is well-structured, ~45% of work
+- Layer 3 (architecture decisions) requires human judgment, ~15% of work
+- Control coverage is comprehensive (58 primary → 153 components, 96.6% WingtipToys coverage)
+- Contoso benchmark + acceptance tests prove end-to-end correctness
+- migration-toolkit/ docs are well-organized (README, QUICKSTART, METHODOLOGY, CHECKLIST)
+
+**Critical gaps identified:**
+1. **Tool confusion:** CLI tool (C#) exists but disconnected from PowerShell script — no guidance on which to use
+2. **Layer 1→L2 handoff:** No automated validation; Layer 1 bugs discovered mid-L2
+3. **Layer 2 unstructured:** No checklist tracking, progress reporting, or scaffolding for 50-page apps
+4. **SelectMethod handling:** Conflicting guidance (skill says use delegate; coverage doc says use Items binding)
+5. **Database migration:** EDMX→EF Core converter exists but buried in Contoso; Web.config parsing is skill-based, not tooling
+6. **Identity migration:** Untested in production; Contoso doesn't use authentication
+7. **Documentation scattered:** Skills in 3 locations (.squad/, migration-toolkit/, .github/); not synced
+8. **Unsupported controls:** Script doesn't warn when encountering unsupported patterns (Wizard, DataSource, etc.)
+9. **No Layer 1 test suite:** Script transforms untested on diverse input; Contoso success doesn't transfer to other apps
+10. **Developer experience fragmented:** Docs, samples, skills spread across 5+ locations
+
+**Architecture decisions:**
+- Three-layer model will persist; it's architecturally correct
+- PowerShell script is canonical for Layer 1; CLI tool will be integrated or sunsetted
+- CONTROL-COVERAGE.md and WebFormsPageBase pattern are keepers
+- Contoso benchmark is gold standard; future benchmarks should test identity + session + complex data
+
+**Priority improvements (in order):**
+1. Unify developer entry point (CLI vs script confusion)
+2. Add Layer 1 validation script (catch bugs before L2)
+3. Centralize + sync documentation (single source of truth)
+4. Clarify SelectMethod handling (test both approaches)
+5. Layer 2 scaffolding + tracking (progress reporting)
+6. Identity migration working sample (prove it works)
+7. EF6→EF Core automation (make DB migration deterministic)
+8. Unsupported control replacement strategy (decision tree)
+
+**Files affected by this analysis:**
+- migration-toolkit/README.md, QUICKSTART.md, METHODOLOGY.md
+- src/BlazorWebFormsComponents.Cli/README.md (CLI tool positioning)
+- .squad/skills/ (select migration skills are canonical)
+- dev-docs/migration-tests/ (Contoso benchmark reports as evidence)
+- scripts/bwfc-migrate.ps1 (Layer 1 canonical entry point)
+- migration-toolkit/skills/bwfc-migration/SKILL.md (SelectMethod guidance)
+
+## Learnings
+
+### WebFormsForm Architecture Design — Issue #533 (2026-03-28)
+
+**Architecture Design Complete — Dual-Mode FormShim + Interactive JS Interop**
+
+Designed the complete architecture for the `<WebFormsForm>` component to enable `Request.Form` support in interactive (ServerInteractive) render mode. Issue #533 identified a critical gap: in interactive Blazor Server, `Request.Form` returns empty because there's no HTTP POST — all interactions flow through SignalR WebSocket.
+
+**Key Architectural Decisions:**
+
+1. **FormShim Dual-Mode Support** — Refactored to wrap either `IFormCollection` (SSR) or `Dictionary<string, StringValues>` (interactive).
+   - Added new constructor: `FormShim(Dictionary<string, StringValues> interopData)`
+   - Added `SetFormData(Dictionary<string, StringValues>)` method for JS interop population
+   - All accessors (indexer, GetValues, AllKeys, Count, ContainsKey) check both sources
+   - Preserves SSR stateless HTTP semantics; enables mutable state in interactive mode
+
+2. **RequestShim Caching Strategy** — Only cache FormShim in interactive mode.
+   - SSR creates fresh FormShim on each access (stateless)
+   - Interactive caches single instance so WebFormsForm mutations persist across `Request.Form` accesses
+   - Added `SetFormData()` method for WebFormsForm to populate the cached instance
+   - Enhanced warning log message guides developers to use WebFormsForm
+
+3. **WebFormsForm Razor Component** — Conditional rendering based on render mode.
+   - SSR mode: renders native `<form method="post" action="...">` with natural POST
+   - Interactive mode: renders `<form @onsubmit="HandleSubmit" @onsubmit:preventDefault>`
+   - Supports `Method` (FormMethod enum: Get/Post), `Action`, `ChildContent`, HTML attributes, `OnSubmit` callback
+   - `OnSubmit` callback fires with `Dictionary<string, StringValues>` after form submission
+   - Uses `@ref _formElement` to obtain DOM reference for JS interop
+
+4. **JavaScript Interop Module** (`bwfc-webformsform.js`) — Three key functions:
+   - `registerForm(dotnetRef, formElement)` — Track component for cleanup
+   - `readFormData(formElement)` — Extract `FormData` from DOM, convert to key-value pairs, handle multi-value fields
+   - `unregisterForm(dotnetRef)` — Cleanup on component dispose
+   - Multi-value fields (checkboxes, multi-select) preserved as arrays in `Dictionary<string, StringValues>`
+
+5. **WebFormsPageBase Integration** — Minimal coupling.
+   - Already has `RequestShim` as injected dependency
+   - Page components bind `<WebFormsForm OnSubmit="HandleSubmitHandler">`
+   - Handler calls `_requestShim.SetFormData(formData)` (or WebFormsForm's `OnSubmit` automatically does it)
+   - After `SetFormData()`, subsequent `Request.Form["field"]` accesses see populated data
+
+6. **FormMethod Enum** — Simple enum `FormMethod { Get = 0, Post = 1 }` for API completeness.
+
+**Key Design Principles:**
+
+- **Minimal Surface Changes** — FormShim and RequestShim already existed; new constructors/methods are additive, not breaking.
+- **Graceful Degradation** — Empty form in interactive mode if developer forgets WebFormsForm; no exceptions.
+- **Idiomatic Blazor** — Uses `@onsubmit`, `EventCallback`, `IJSRuntime`, standard component patterns.
+- **Stateless HTTP (SSR) vs Stateful WebSocket (Interactive)** — Architecture cleanly separates the two models.
+- **Multi-value Field Support** — `FormShim.GetValues("field")` works correctly for checkboxes, multi-selects via `StringValues` (IEnumerable<string>).
+
+**Design Artifacts:**
+
+- Comprehensive architecture document: `.squad/decisions/inbox/forge-webformsform-architecture.md` (25KB, 8 sections covering FormShim/RequestShim/Component/JS/Integration/Migration/Decisions/Checklists)
+- Includes open questions, implementation checklist, and success criteria
+- Testing strategy: 8–10 bUnit tests + 5 Playwright integration tests outlined
+
+**Next Steps for Implementation:**
+
+1. Create `Enums/FormMethod.cs`
+2. Update `FormShim.cs` with dual-mode constructor and `SetFormData()` method
+3. Update `RequestShim.cs` with FormShim caching and `SetFormData()` method
+4. Create `Components/WebFormsForm.razor` component
+5. Create `wwwroot/js/bwfc-webformsform.js` JavaScript module
+6. Update `WebFormsPageBase.cs` to expose public method for form data population (optional, if tighter integration desired)
+7. Write comprehensive bUnit and Playwright tests
+8. Create sample page demonstrating form submission and `Request.Form` access
+9. Update documentation and navigation
+
+**Key Insight:** The architecture cleanly bridges Web Forms' stateless HTTP POST model with Blazor's stateful WebSocket model. Migrators can use identical `Request.Form["field"]` patterns in both SSR and ServerInteractive render modes — the component handles the transport differences transparently.
+
+---
 
 ### Migration Shim Gap Analysis (2026-03-27)
 

@@ -21,6 +21,7 @@ public class RequestShim
 	private readonly ILogger _logger;
 	private bool _cookieWarned;
 	private bool _formWarned;
+	private FormShim? _cachedFormShim;
 
 	internal RequestShim(
 		HttpContext? httpContext,
@@ -66,6 +67,13 @@ public class RequestShim
 	{
 		get
 		{
+			// If SetFormData() was called (WebFormsForm submit), return the cached
+			// interop-backed shim even when HttpContext is available (Blazor Server
+			// SignalR circuits always have an HttpContext, but its Request.Form is
+			// from the original WebSocket upgrade, not the interactive form submit).
+			if (_cachedFormShim != null)
+				return _cachedFormShim;
+
 			if (_httpContext != null)
 			{
 				try
@@ -75,19 +83,21 @@ public class RequestShim
 				catch (InvalidOperationException)
 				{
 					// Request body is not form-encoded (e.g., JSON or empty).
-					return new FormShim(null);
+					return new FormShim((IFormCollection?)null);
 				}
 			}
 
+			// Interactive mode without prior SetFormData call
 			if (!_formWarned)
 			{
 				_logger.LogWarning(
 					"Request.Form accessed without HttpContext (interactive render mode). " +
-					"Returning empty FormShim. Form-dependent logic will not function.");
+					"Use <WebFormsForm> component to enable form data in interactive mode.");
 				_formWarned = true;
 			}
 
-			return new FormShim(null);
+			_cachedFormShim = new FormShim((IFormCollection?)null);
+			return _cachedFormShim;
 		}
 	}
 
@@ -123,5 +133,19 @@ public class RequestShim
 			// SignalR connection URL (/_blazor), not the page URL.
 			return new Uri(_nav.Uri);
 		}
+	}
+
+	/// <summary>
+	/// Updates the cached <see cref="FormShim"/> with form data captured via
+	/// JS interop. Called by <see cref="WebFormsForm"/> during interactive
+	/// mode form submissions.
+	/// </summary>
+	/// <param name="formData">Dictionary of field names to values.</param>
+	internal void SetFormData(Dictionary<string, StringValues> formData)
+	{
+		if (_cachedFormShim == null)
+			_cachedFormShim = new FormShim(formData);
+		else
+			_cachedFormShim.SetFormData(formData);
 	}
 }

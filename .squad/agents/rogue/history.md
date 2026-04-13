@@ -5,6 +5,8 @@
 - **Stack:** C#, Blazor, .NET, ASP.NET Web Forms, bUnit, xUnit, MkDocs, Playwright
 - **Created:** 2026-02-10
 
+📌 **Team update (2026-04-11):** WebFormsForm (Issue #533) testing complete — 39 bUnit tests delivered (FormShimTests.cs + WebFormsFormTests.razor). All passing. Bugs found & fixed: (1) WebFormsForm @inherits ComponentBase conflict resolved, (2) RequestShim.cs FormShim constructor ambiguity (explicit cast). Event callback integration verified with Coordinator's FormSubmitEventArgs. Wave 2 agents ready to consume. — decided by Rogue
+
 📌 Team update (2026-04-02): Phase 5 unit test backfill complete — 105 new tests (208→313) for 9 untested transforms (GetRouteUrl, SelectMethod, MasterPage, LoginView, ContentPlaceHolder, Cache, SessionShim, ConfigurationManagerShim, ValidationSummary). All tests passing (0 failures). Code coverage: 87%→94% on transforms module. Ready for merge to feature/global-tool-port. — decided by Scribe
 
 ## Core Context
@@ -515,4 +517,21 @@ Conventions discovered: SessionShim uses Shouldly assertions + xUnit `[Fact]` (m
 - Reflection to inject `_clientScript`/`_clientScriptResolved` on `Mock<BaseWebFormsComponent>` for `GetCurrent` success test (ClientScript property is non-virtual, can't be mocked directly).
 - Fully-qualified `BlazorWebFormsComponents.BaseWebFormsComponent` required — test project has a `BaseWebFormsComponent/` folder creating namespace ambiguity. Same for `System.EventArgs` vs `EventArgs/` folder.
 - `dotnet test --filter` uses `|` for OR (not `OR` keyword) in vstest filter expressions.
+
+### FormShim & WebFormsForm Tests (Issue #533)
+
+**39 new tests — all passing.** Created 2 test files covering FormShim dual-mode support and WebFormsForm component rendering.
+
+**Test files created:**
+- `FormShimTests.cs` (27 tests, all pass): Dual-mode coverage for SSR (IFormCollection) and interactive (Dictionary<string, StringValues>) paths. Tests indexer, GetValues, AllKeys, Count, ContainsKey for both modes plus null/empty. SetFormData mutation tests for interactive mode (populate, replace, multi-value preservation).
+- `WebFormsForm/WebFormsFormTests.razor` (12 tests, all pass): bUnit rendering tests — form element renders, default method is POST, Method/Action parameters, ChildContent renders inside form, HtmlAttributes (class, id, data-*), multiple attributes, empty form, nested elements.
+
+**Bug found and fixed:**
+- `WebFormsForm.razor` was missing `@inherits ComponentBase`, causing it to inherit `BaseWebFormsComponent` via `_Imports.razor`. Both `BaseWebFormsComponent` and `WebFormsForm` had `[Parameter(CaptureUnmatchedValues = true)]`, causing `ThrowForMultipleCaptureUnmatchedValuesParameters` at render time. Fixed by adding explicit `@inherits ComponentBase`.
+- `RequestShim.cs` line 79: `new FormShim(null)` was ambiguous between `FormShim(IFormCollection?)` and `FormShim(Dictionary<string, StringValues>)`. Fixed by casting to `(IFormCollection?)null`.
+
+**Key patterns:**
+- FormShim tests are pure C# xUnit (no bUnit needed) — use `new FormCollection(dict)` for SSR mock data.
+- WebFormsForm tests use `.razor` bUnit pattern inheriting `BlazorWebFormsTestContext`.
+- Any `.razor` component in the main project that should NOT inherit `BaseWebFormsComponent` must have explicit `@inherits ComponentBase` to override the project-level `_Imports.razor`.
 

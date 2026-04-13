@@ -6,9 +6,24 @@ Bishop is the Migration Tooling Dev on the BlazorWebFormsComponents project, res
 ## Project Context
 BlazorWebFormsComponents is a library providing Blazor components that emulate ASP.NET Web Forms controls, enabling migration with minimal markup changes. The project aims to preserve the same component names, attributes, and HTML output as the original Web Forms controls.
 
+## Core Historical Context
+
+**2025-01-26 to 2026-03-29:** Built foundational migration infrastructure:
+- WI-8 (2025-01-26): .skin file parser + SkinFileParser.cs runtime parser for theme migration
+- Theme Migration SKILL.md (2025-01-27): Documented auto-discovery pattern (copy → SkinFileParser → ThemeProvider)
+- Migration Automation Audit (2026-07-25): Identified 23 gaps, proposed solutions across 3 phases
+- Phase 1 L1 Script Enhancements (2026-07-25): Implemented 6 GAPs (Web.config→appsettings, IsPostBack unwrap, App_Start copy, selective using retention, URL cleanup, Bind()→@bind)
+- Phase 2 Lifecycle & Event Handlers (2026-03-29): Added Page_Load→OnInitializedAsync, event handler signature transforms
+- Global Tool Pipeline + 16 Markup Transforms (2026-07-27): Built complete MigrationPipeline, 16 markup transforms ported from PowerShell script
+- MasterPageTransform + GetRouteUrlTransform + TC12–TC23 (2026-04-03): Added MasterPage directive rewriting, GetRouteUrl conversion, 12 new acceptance tests
+
 ## Learnings
 
-### WI-8: .skin File Parser Implementation (2025-01-26)
+📌 Team update (2026-04-12): All migration transforms pipeline infrastructure complete — 17 transforms (added 3: ConfigurationManager, RequestForm, ServerShim), 373/373 tests passing, expected files regenerated. WingtipToys analysis shows WebFormsPageBase enables 31 pages to eliminate manual shim wiring. — decided by Psylocke, Forge, Bishop
+
+📌 Team update (2026-04-12): CLI tool references were added by Coordinator to all 4 migration-toolkit docs missing them (METHODOLOGY.md, CHECKLIST.md, README.md), ensuring consistent tool naming and linking across all migration-toolkit documentation. — decided by Coordinator
+
+### Shim Inventory & CLI Transform Update (2026-04-12)
 
 **Task**: Build a runtime parser that reads ASP.NET Web Forms .skin files and converts them into ThemeConfiguration objects.
 
@@ -197,3 +212,53 @@ TC19 (lifecycle) and TC20/TC21 (event handlers) are dedicated test cases for the
 1. Master page filename → layout class name conversion must strip `~/`, directory path, and `.Master` extension, then PascalCase — a single regex replacement handles the common case but a helper method is cleaner for edge cases (spaces, hyphens).
 2. GetRouteUrl route-parameter extraction uses named capture groups to map `new { k = v }` anonymous objects; iteration order of anonymous-object properties must be preserved (C# doesn't guarantee it at runtime, but test data uses single-param routes to avoid ordering issues).
 3. ManualItem severity enum (`Info`, `Warning`, `Error`) maps to exit code: any `Error`-level item causes non-zero CLI exit, enabling CI gate integration.
+
+📌 Team update (2026-04-12): All migration transforms pipeline infrastructure complete — 17 transforms (added 3: ConfigurationManager, RequestForm, ServerShim), 373/373 tests passing, expected files regenerated. WingtipToys analysis shows WebFormsPageBase enables 31 pages to eliminate manual shim wiring. — decided by Psylocke, Forge, Bishop
+
+### Shim Inventory & CLI Transform Update (2026-04-12)
+
+**Shims Identified (14 total)**:
+- FormShim, ClientScriptShim, ResponseShim, RequestShim, SessionShim, ServerShim, CacheShim, ScriptManagerShim — auto-wired via WebFormsPageBase DI
+- ConfigurationManager — static shim bridging `AppSettings`/`ConnectionStrings` to ASP.NET Core `IConfiguration`
+- WebFormsPageBase — ComponentBase subclass with shim properties
+- BundleConfig, RouteConfig — startup compatibility helpers
+- PostBackEventArgs, FormSubmitEventArgs — event models for `<WebFormsForm>`
+
+**New CLI Transforms Created**:
+1. **ConfigurationManagerTransform** (Order 110) — strips `using System.Configuration;` (BWFC shim replaces it), detects `AppSettings`/`ConnectionStrings` usage, emits guidance block
+2. **RequestFormTransform** (Order 320) — detects `Request.Form["key"]` patterns, emits FormShim + `<WebFormsForm>` guidance
+3. **ServerShimTransform** (Order 330) — detects `Server.MapPath()`, `Server.HtmlEncode()`, `Server.UrlEncode()`, `Server.UrlDecode()`, emits ServerShim guidance
+
+**Updated Files**:
+- `TodoHeaderTransform`: header now references all 14 shims with tagged TODO markers
+- `bwfc-migrate.ps1`: added BWFC015-018 scan patterns for Server utility, ConfigurationManager, ClientScript, Cache access
+- `CONTROL-COVERAGE.md`: added "Migration Shims (14)" section
+- `TestHelpers.cs`: registered 3 new transforms in test pipeline
+- All 13 expected `.razor.cs` test files regenerated
+
+**Key Learnings**:
+1. New transforms must be registered in BOTH `Program.cs` (DI) AND `TestHelpers.CreateDefaultPipeline()` — forgetting the test pipeline causes L1 integration test failures
+2. Transforms are sorted by `Order` property in `MigrationPipeline`, so list order in registration doesn't matter
+3. When changing the TodoHeader, ALL 13 code-behind expected files must be regenerated — use a temp console project referencing the CLI to regenerate via the actual pipeline
+4. `UsingStripTransform` already handles `System.Web.Optimization` and `System.Web.Routing` via its `WebUsingsRegex` pattern — no extra work needed for BundleConfig/RouteConfig namespaces
+5. "Guidance-only" transforms (detect + TODO comment) are the right pattern when shims make original code compile unchanged on WebFormsPageBase
+
+### Shim-First Documentation Update (2026-04-13)
+
+**Task**: Update all 5 migration-toolkit docs (METHODOLOGY.md, CHECKLIST.md, QUICKSTART.md, README.md, CONTROL-COVERAGE.md) to reflect the "shim-first" migration paradigm.
+
+**Key Changes**:
+- Pipeline coverage percentages updated: L1 ~60% (was ~40%), L2 ~30% (was ~45%), L3 ~10% (was ~15%)
+- METHODOLOGY.md: Added "Shim Infrastructure" subsection to Layer 1, "What Shims Handle Automatically" table to Layer 2, "Shim Path vs. Native Blazor Path" comparison box, removed Session from L3 decisions
+- CHECKLIST.md: Added L1 shim setup items (AddBlazorWebFormsComponents, @inherits, WebFormsForm), marked Response.Redirect/Session/IsPostBack/Page.Title/Request.QueryString/Cache as "✅ works AS-IS", added "Optional: Refactor to Native Blazor" section
+- QUICKSTART.md: Added shim callout in Step 4 and Step 6, updated transform table removing shim-handled items, added WebFormsForm guidance
+- README.md: Updated coverage percentages, time estimates, added shim bullet in Quick Overview
+- CONTROL-COVERAGE.md: Added "Infrastructure & Shim Components" section with full 15-row table, updated supporting component count to 96 (total 154)
+
+**Key Decisions**:
+1. Session["key"] moved from Layer 3 architecture decision to "works AS-IS" — SessionShim provides in-memory dictionary. Persistent/distributed session is still an architecture decision but basic usage compiles unchanged.
+2. Response.Redirect removed from Layer 2 manual transforms — ResponseShim handles it automatically including ~/prefix and .aspx stripping.
+3. Added "Optional: Refactor to Native Blazor" as a post-verification section in the checklist — acknowledges shims are a valid long-term choice, not just a crutch.
+4. Time estimates reduced: Layer 2 with Copilot from 2-4 hours to 1-3 hours reflecting reduced manual work.
+
+**Files Modified**: migration-toolkit/METHODOLOGY.md, CHECKLIST.md, QUICKSTART.md, README.md, CONTROL-COVERAGE.md
