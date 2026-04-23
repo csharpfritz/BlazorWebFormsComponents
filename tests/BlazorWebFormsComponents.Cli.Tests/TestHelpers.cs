@@ -175,9 +175,10 @@ public static class TestHelpers
             // Order 600-610: Prefix stripping (Ajax before Asp)
             new AjaxToolkitPrefixTransform(),
             new AspPrefixTransform(),
-            // Order 700-720: Attributes
+            // Order 700-750: Attributes & refs
             new AttributeStripTransform(),
             new EventWiringTransform(),
+            new ComponentRefMarkupTransform(),
             new UrlReferenceTransform(),
             // Order 800-820: Normalize & templates
             new TemplatePlaceholderTransform(),
@@ -189,8 +190,13 @@ public static class TestHelpers
         {
             new TodoHeaderTransform(),
             new UsingStripTransform(),
+            new IdentityUsingTransform(),
+            new EntityFrameworkTransform(),
             new ConfigurationManagerTransform(),
             new BaseClassStripTransform(),
+            new ClassNameAlignTransform(),
+            new MethodNameCollisionTransform(),
+            new ComponentRefCodeBehindTransform(),
             new ResponseRedirectTransform(),
             new RequestFormTransform(),
             new ServerShimTransform(),
