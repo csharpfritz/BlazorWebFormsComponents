@@ -1,8 +1,10 @@
 using System.CommandLine;
 using BlazorWebFormsComponents.Cli.Config;
+using BlazorWebFormsComponents.Cli.Interop;
 using BlazorWebFormsComponents.Cli.Io;
 using BlazorWebFormsComponents.Cli.Pipeline;
 using BlazorWebFormsComponents.Cli.Scaffolding;
+using BlazorWebFormsComponents.Cli.SemanticPatterns;
 using BlazorWebFormsComponents.Cli.Transforms;
 using BlazorWebFormsComponents.Cli.Transforms.CodeBehind;
 using BlazorWebFormsComponents.Cli.Transforms.Directives;
@@ -22,6 +24,7 @@ class Program
 
         rootCommand.AddCommand(BuildMigrateCommand());
         rootCommand.AddCommand(BuildConvertCommand());
+        rootCommand.AddCommand(BuildPrescanCommand());
 
         return await rootCommand.InvokeAsync(args);
     }
@@ -60,6 +63,7 @@ class Program
         services.AddSingleton<ICodeBehindTransform, ConfigurationManagerTransform>();
         services.AddSingleton<ICodeBehindTransform, BaseClassStripTransform>();
         services.AddSingleton<ICodeBehindTransform, ClassNameAlignTransform>();
+        services.AddSingleton<ICodeBehindTransform, NamespaceAlignTransform>();
         services.AddSingleton<ICodeBehindTransform, MethodNameCollisionTransform>();
         services.AddSingleton<ICodeBehindTransform, ComponentRefCodeBehindTransform>();
         services.AddSingleton<ICodeBehindTransform, ResponseRedirectTransform>();
@@ -79,26 +83,55 @@ class Program
         services.AddSingleton<ProjectScaffolder>();
         services.AddSingleton<GlobalUsingsGenerator>();
         services.AddSingleton<ShimGenerator>();
+        services.AddSingleton<AppAssetInjector>();
 
         // Config
         services.AddSingleton<DatabaseProviderDetector>();
         services.AddSingleton<WebConfigTransformer>();
+        services.AddSingleton<PrescanAnalyzer>();
+        services.AddSingleton<NuGetStaticAssetExtractor>();
+        services.AddSingleton<EdmxConverterBridge>();
+        services.AddSingleton<PowerShellScriptRunner>();
 
         // I/O
         services.AddSingleton<OutputWriter>();
+        services.AddSingleton<SourceRootResolver>();
         services.AddSingleton<SourceScanner>();
         services.AddSingleton<StaticFileCopier>();
         services.AddSingleton<SourceFileCopier>();
+        services.AddSingleton<AppStartCopier>();
 
-        // Pipeline
-        services.AddSingleton<MigrationPipeline>();
+         // Pipeline
+          services.AddSingleton<RedirectHandlerAnnotator>();
+         // Registration order is significant when patterns share the same Order value.
+         services.AddSingleton<ISemanticPattern, QueryDetailsSemanticPattern>();
+         services.AddSingleton<ISemanticPattern, MasterContentContractsSemanticPattern>();
+         services.AddSingleton<ISemanticPattern, ActionPagesSemanticPattern>();
+         services.AddSingleton<ISemanticPattern, AccountPagesSemanticPattern>();
+         services.AddSingleton<SemanticPatternCatalog>();
+        services.AddSingleton(sp => new MigrationPipeline(
+            sp.GetServices<IMarkupTransform>(),
+            sp.GetServices<ICodeBehindTransform>(),
+            sp.GetRequiredService<SemanticPatternCatalog>(),
+            sp.GetRequiredService<ProjectScaffolder>(),
+            sp.GetRequiredService<GlobalUsingsGenerator>(),
+            sp.GetRequiredService<ShimGenerator>(),
+            sp.GetRequiredService<WebConfigTransformer>(),
+            sp.GetRequiredService<OutputWriter>(),
+            sp.GetRequiredService<StaticFileCopier>(),
+            sp.GetRequiredService<SourceFileCopier>(),
+            sp.GetRequiredService<AppStartCopier>(),
+            sp.GetRequiredService<AppAssetInjector>(),
+            sp.GetRequiredService<NuGetStaticAssetExtractor>(),
+            sp.GetRequiredService<EdmxConverterBridge>(),
+            sp.GetRequiredService<RedirectHandlerAnnotator>()));
 
         return services.BuildServiceProvider();
     }
 
     private static Command BuildMigrateCommand()
     {
-        var migrateCommand = new Command("migrate", "Full project migration from Web Forms to Blazor");
+        var migrateCommand = new Command("migrate", "Full project migration from Web Forms to Blazor SSR on .NET 10");
 
         var inputOption = new Option<string>(
             aliases: ["--input", "-i"],
@@ -107,12 +140,12 @@ class Program
 
         var outputOption = new Option<string>(
             aliases: ["--output", "-o"],
-            description: "Output Blazor project directory (required)")
+            description: "Output .NET 10 Blazor SSR project directory (required)")
         { IsRequired = true };
 
         var skipScaffoldOption = new Option<bool>(
             name: "--skip-scaffold",
-            description: "Skip .csproj, Program.cs, _Imports.razor generation",
+            description: "Skip .NET 10 Blazor SSR scaffold generation (.csproj, Program.cs, _Imports.razor, App.razor, Routes.razor)",
             getDefaultValue: () => false);
 
         var dryRunOption = new Option<bool>(
@@ -147,12 +180,14 @@ class Program
             try
             {
                 using var sp = BuildServiceProvider();
+                var sourceRootResolver = sp.GetRequiredService<SourceRootResolver>();
                 var scanner = sp.GetRequiredService<SourceScanner>();
                 var pipeline = sp.GetRequiredService<MigrationPipeline>();
+                var effectiveInput = sourceRootResolver.Resolve(input);
 
                 var context = new MigrationContext
                 {
-                    SourcePath = input,
+                    SourcePath = effectiveInput,
                     OutputPath = output,
                     Options = new MigrationOptions
                     {
@@ -164,9 +199,11 @@ class Program
                     }
                 };
 
-                context.SourceFiles = scanner.Scan(input, output);
+                context.SourceFiles = scanner.Scan(effectiveInput, output);
 
                 Console.WriteLine($"Found {context.SourceFiles.Count} Web Forms file(s) to migrate...");
+                if (verbose && !string.Equals(input, effectiveInput, StringComparison.OrdinalIgnoreCase))
+                    Console.WriteLine($"Resolved source root: {effectiveInput}");
                 if (dryRun)
                     Console.WriteLine("(dry-run mode — no files will be written)");
 
@@ -191,7 +228,7 @@ class Program
 
     private static Command BuildConvertCommand()
     {
-        var convertCommand = new Command("convert", "Single file conversion from Web Forms to Blazor");
+        var convertCommand = new Command("convert", "Single file conversion from Web Forms to a Blazor SSR-compatible Razor file");
 
         var inputOption = new Option<string>(
             aliases: ["--input", "-i"],
@@ -284,6 +321,54 @@ class Program
         }, inputOption, outputOption, overwriteOption);
 
         return convertCommand;
+    }
+
+    private static Command BuildPrescanCommand()
+    {
+        var prescanCommand = new Command("prescan", "Scan source files for common Web Forms migration patterns and emit a JSON summary");
+
+        var inputOption = new Option<string>(
+            aliases: ["--input", "-i"],
+            description: "Source Web Forms project root (required)")
+        { IsRequired = true };
+
+        var reportOption = new Option<string?>(
+            name: "--report",
+            description: "Write prescan JSON output to file");
+
+        prescanCommand.AddOption(inputOption);
+        prescanCommand.AddOption(reportOption);
+
+        prescanCommand.SetHandler(async (input, report) =>
+        {
+            try
+            {
+                using var sp = BuildServiceProvider();
+                var analyzer = sp.GetRequiredService<PrescanAnalyzer>();
+                var result = analyzer.Analyze(input);
+                var json = PrescanAnalyzer.ToJson(result);
+
+                if (!string.IsNullOrEmpty(report))
+                {
+                    var directory = Path.GetDirectoryName(report);
+                    if (!string.IsNullOrEmpty(directory))
+                        Directory.CreateDirectory(directory);
+
+                    await File.WriteAllTextAsync(report, json);
+                }
+
+                Console.WriteLine(json);
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.Error.WriteLine($"Error: {ex.Message}");
+                Console.ResetColor();
+                Environment.Exit(1);
+            }
+        }, inputOption, reportOption);
+
+        return prescanCommand;
     }
 }
 

@@ -56,10 +56,10 @@ The scan report tells you whether BWFC is a good fit before you invest time in m
 
 ## Layer 1: Automated Transforms
 
-**Primary tool:** [`webforms-to-blazor` CLI](../src/BlazorWebFormsComponents.Cli/) — 37 compiled C# transforms with 373 unit tests
-**Alternative:** [`scripts/bwfc-migrate.ps1`](../scripts/bwfc-migrate.ps1) — lightweight PowerShell regex transforms (no .NET SDK required)
+**Primary tool:** [`webforms-to-blazor` CLI](../src/BlazorWebFormsComponents.Cli/) — compiled C# transforms that scaffold a **.NET 10 Blazor Web App using static server-side rendering (SSR)**
+**Alternative:** [`scripts/bwfc-migrate.ps1`](../scripts/bwfc-migrate.ps1) — lightweight PowerShell regex transforms that target the same **.NET 10 Blazor SSR** output
 
-Layer 1 handles every transform that can be applied mechanically. The CLI tool applies compiled, unit-tested transforms with a migration report; the PowerShell script provides simpler regex-based transforms for quick starts.
+Layer 1 handles every transform that can be applied mechanically. The CLI tool applies compiled, unit-tested transforms with a migration report; the PowerShell script provides simpler regex-based transforms for quick starts. **Both tools standardize on .NET 10 Blazor SSR as the migration target — not global interactive Blazor Server mode.**
 
 ### What Layer 1 Does
 
@@ -70,11 +70,12 @@ Layer 1 handles every transform that can be applied mechanically. The CLI tool a
 | Expression conversions (`<%: %>` → `@()`) | ~35 | 100% |
 | `ItemType` → `TItem` conversions | 8 | 100% |
 | Content wrapper removals (`<asp:Content>`) | 28 | 100% |
+| Runnable master-page shell generation | Master pages | 100% |
 | URL conversions (`~/` → `/`) | All | 100% |
 | File renaming (`.aspx` → `.razor`) | 33 | 100% |
 | Project scaffold (`.csproj`, `Program.cs`, `_Imports.razor`, `App.razor`) | Full | ✅ |
 
-The CLI generates `_Imports.razor` with `@inherits BlazorWebFormsComponents.WebFormsPageBase` so every page automatically gets `Page.Title`, `Page.MetaDescription`, `Page.MetaKeywords`, `IsPostBack`, `Session`, `Response`, `Request`, `Server`, `Cache`, and `ClientScript` — with the same API as Web Forms. The layout scaffold includes `<BlazorWebFormsComponents.Page />` to render `<PageTitle>` and `<meta>` tags.
+The CLI generates `_Imports.razor` with `@inherits BlazorWebFormsComponents.WebFormsPageBase` so every page automatically gets `Page.Title`, `Page.MetaDescription`, `Page.MetaKeywords`, `IsPostBack`, `Session`, `Response`, `Request`, `Server`, `Cache`, and `ClientScript` — with the same API as Web Forms. The scaffolded app targets **static SSR on .NET 10**, preserving the Web Forms request/response lifecycle by default.
 
 The CLI also generates `Program.cs` with `builder.Services.AddBlazorWebFormsComponents()`, which registers all the shim infrastructure (SessionShim, ResponseShim, RequestShim, CacheShim, ServerShim, ClientScriptShim, ViewStateShim) automatically.
 
@@ -104,7 +105,7 @@ This means that code-behind files referencing `Response.Redirect`, `Session`, `R
 - Convert code-behind lifecycle methods like `Page_Load` signature (requires semantic understanding)
 - Replace DataSource controls (requires architecture decisions)
 - Wire authentication (requires knowing your auth strategy)
-- Convert Master Pages to layouts (partially — removes directives but doesn't create `@Body`)
+- Collapse migrated master pages all the way to final native `@layout` / `@Body` layouts
 
 These are intentionally left for Layer 2 and Layer 3.
 
@@ -155,9 +156,18 @@ These items were previously Layer 2 manual transforms but are now handled AS-IS 
 | Lifecycle methods | `Page_Load(object sender, EventArgs e)` signature | `OnInitializedAsync` (the `IsPostBack` inside works AS-IS) |
 | Event handlers | `void Btn_Click(object sender, EventArgs e)` | `void Btn_Click()` |
 | Form wrappers | `<form runat="server">` | Removed, or `<WebFormsForm>` for Request.Form, or `<EditForm>` for validation |
-| Layout conversion | `<asp:ContentPlaceHolder ID="MainContent">` | `@Body` |
+| Master/content contract normalization | Page-specific `<asp:Content>` sections | `<ChildComponents><Content ContentPlaceHolderID="..." />...</ChildComponents>` |
+| Optional native layout cleanup | Single-slot `<MasterPage>` shell | `@layout` + `@Body` when the shell has truly become a single body slot |
 | Query parameters | `[QueryString] int? id` | `[SupplyParameterFromQuery]` |
 | Route parameters | `[RouteData] int id` | `@page "/path/{id:int}"` + `[Parameter]` |
+
+For master pages, the current migration strategy is:
+
+1. **Layer 1** emits a runnable BWFC shell using `<MasterPage>`, optional `<Head>`, and `<ChildContent>`.
+2. **Layer 2** normalizes child pages so their named regions become `<Content>` blocks grouped under `<ChildComponents>`.
+3. **Layer 3** optionally simplifies the result to native Blazor layouts when only a single body slot remains and the named-section bridge is no longer needed.
+
+To keep this extensible, recurring page-shape rewrites should live in an isolated **semantic pattern catalog** rather than being added as one-off regex transforms. Each pattern can then be introduced as its own matcher/applicator pair with targeted fixtures and docs. See `docs\cli\semantic-pattern-catalog.md` in the main repo for the contributor contract.
 
 ### How to Use Layer 2
 

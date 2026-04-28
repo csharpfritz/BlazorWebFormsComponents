@@ -34,7 +34,7 @@ public class ProjectScaffolder
         result.Files["csproj"] = new ScaffoldFile
         {
             RelativePath = $"{projectName}.csproj",
-            Content = GenerateCsproj(projectName, hasModels, hasIdentity, dbProvider)
+            Content = GenerateCsproj(projectName, outputRoot, hasModels, hasIdentity, dbProvider)
         };
 
         result.Files["program"] = new ScaffoldFile
@@ -46,7 +46,7 @@ public class ProjectScaffolder
         result.Files["imports"] = new ScaffoldFile
         {
             RelativePath = "_Imports.razor",
-            Content = GenerateImportsRazor(projectName)
+            Content = GenerateImportsRazor(projectName, hasModels)
         };
 
         result.Files["app"] = new ScaffoldFile
@@ -59,6 +59,12 @@ public class ProjectScaffolder
         {
             RelativePath = Path.Combine("Components", "Routes.razor"),
             Content = GenerateRoutesRazor()
+        };
+
+        result.Files["layout"] = new ScaffoldFile
+        {
+            RelativePath = Path.Combine("Components", "Layout", "MainLayout.razor"),
+            Content = GenerateMainLayoutRazor()
         };
 
         result.Files["launchSettings"] = new ScaffoldFile
@@ -89,7 +95,7 @@ public class ProjectScaffolder
                File.Exists(Path.Combine(sourcePath, "Register.aspx"));
     }
 
-    private static string GenerateCsproj(string projectName, bool hasModels, bool hasIdentity, DatabaseProviderInfo dbProvider)
+    private static string GenerateCsproj(string projectName, string outputRoot, bool hasModels, bool hasIdentity, DatabaseProviderInfo dbProvider)
     {
         var additionalPackages = "";
         if (hasModels)
@@ -104,6 +110,8 @@ public class ProjectScaffolder
             additionalPackages += "\n    <PackageReference Include=\"Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore\" Version=\"10.0.0\" />";
         }
 
+        var bwfcReference = ResolveBwfcReference(outputRoot);
+
         return $@"<Project Sdk=""Microsoft.NET.Sdk.Web"">
 
   <PropertyGroup>
@@ -114,11 +122,32 @@ public class ProjectScaffolder
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include=""Fritz.BlazorWebFormsComponents"" Version=""*"" />{additionalPackages}
+{bwfcReference}{additionalPackages}
   </ItemGroup>
 
 </Project>
 ";
+    }
+
+    private static string ResolveBwfcReference(string outputRoot)
+    {
+        var outputFullPath = Path.GetFullPath(outputRoot);
+        var current = new DirectoryInfo(outputFullPath);
+
+        while (current is not null)
+        {
+            var candidate = Path.Combine(current.FullName, "src", "BlazorWebFormsComponents", "BlazorWebFormsComponents.csproj");
+            if (File.Exists(candidate))
+            {
+                var relativePath = Path.GetRelativePath(outputFullPath, candidate)
+                    .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+                return $@"    <ProjectReference Include=""{relativePath}"" />";
+            }
+
+            current = current.Parent;
+        }
+
+        return @"    <PackageReference Include=""Fritz.BlazorWebFormsComponents"" Version=""*"" />";
     }
 
     private static string GenerateProgramCs(string projectName, bool hasModels, bool hasIdentity, DatabaseProviderInfo dbProvider)
@@ -166,12 +195,12 @@ public class ProjectScaffolder
         }
 
         return $@"// TODO(bwfc-general): Review and adjust this generated Program.cs for your application needs.
+// Generated for .NET 10 Blazor static SSR. Keep interactive render modes opt-in and page-specific.
 using BlazorWebFormsComponents;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+builder.Services.AddRazorComponents();
 
 builder.Services.AddBlazorWebFormsComponents();
 {identityServiceBlock}
@@ -187,16 +216,21 @@ app.UseHttpsRedirection();
 app.MapStaticAssets();
 app.UseAntiforgery();
 {identityMiddlewareBlock}
-app.MapRazorComponents<{projectName}.Components.App>()
-    .AddInteractiveServerRenderMode();
+app.MapRazorComponents<{projectName}.Components.App>();
 
 app.Run();
 ";
     }
 
-    private static string GenerateImportsRazor(string projectName)
+    private static string GenerateImportsRazor(string projectName, bool hasModels)
     {
-        return $@"@using System.Net.Http
+        var modelsUsing = hasModels
+            ? $@"
+@using global::{projectName}.Models"
+            : string.Empty;
+
+        return $@"@namespace {projectName}
+@using System.Net.Http
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
@@ -204,10 +238,10 @@ app.Run();
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @using BlazorWebFormsComponents
+@using BlazorWebFormsComponents.Enums
 @using BlazorWebFormsComponents.LoginControls
-@using static Microsoft.AspNetCore.Components.Web.RenderMode
-@using {projectName}
-@using {projectName}.Models
+@using BlazorWebFormsComponents.Validations
+@using global::{projectName}{modelsUsing}
 @inherits BlazorWebFormsComponents.WebFormsPageBase
 ";
     }
@@ -224,10 +258,9 @@ app.Run();
     <HeadOutlet />
 </head>
 
-@* SSR by default — add @rendermode=""InteractiveServer"" to pages that need interactivity *@
+@* Generated for .NET 10 static SSR migration output. Only opt into interactive render modes deliberately and per page. *@
 <body>
     <Routes />
-    <script src=""_framework/blazor.web.js""></script>
 </body>
 
 </html>
@@ -242,6 +275,16 @@ app.Run();
         <FocusOnNavigate RouteData=""routeData"" Selector=""h1"" />
     </Found>
 </Router>
+";
+    }
+
+    private static string GenerateMainLayoutRazor()
+    {
+        return @"@inherits LayoutComponentBase
+
+<main>
+    @Body
+</main>
 ";
     }
 

@@ -49,6 +49,24 @@ public class ScaffoldingTests : IDisposable
     }
 
     [Fact]
+    public void ProjectScaffolder_UsesProjectReference_WhenOutputIsInsideRepo()
+    {
+        var repoRoot = Path.Combine(_tempDir, "repo");
+        var srcDir = Path.Combine(repoRoot, "src", "BlazorWebFormsComponents");
+        var outputDir = Path.Combine(repoRoot, "samples", "AfterTestApp");
+
+        Directory.CreateDirectory(srcDir);
+        Directory.CreateDirectory(outputDir);
+        File.WriteAllText(Path.Combine(srcDir, "BlazorWebFormsComponents.csproj"), "<Project />");
+
+        var result = _scaffolder.Scaffold(repoRoot, outputDir, "TestApp");
+        var csproj = result.Files["csproj"].Content;
+
+        Assert.Contains(@"<ProjectReference Include=""..\..\src\BlazorWebFormsComponents\BlazorWebFormsComponents.csproj"" />", csproj);
+        Assert.DoesNotContain(@"<PackageReference Include=""Fritz.BlazorWebFormsComponents"" Version=""*"" />", csproj);
+    }
+
+    [Fact]
     public void ProjectScaffolder_CsprojFileName_MatchesProjectName()
     {
         var result = _scaffolder.Scaffold(_tempDir, _tempDir, "MyWebApp");
@@ -65,7 +83,8 @@ public class ScaffoldingTests : IDisposable
 
         Assert.Contains("AddBlazorWebFormsComponents()", program);
         Assert.Contains("AddRazorComponents()", program);
-        Assert.Contains("AddInteractiveServerComponents()", program);
+        Assert.DoesNotContain("AddInteractiveServerComponents()", program);
+        Assert.Contains("Generated for .NET 10 Blazor static SSR", program);
         Assert.Contains("using BlazorWebFormsComponents;", program);
     }
 
@@ -77,7 +96,7 @@ public class ScaffoldingTests : IDisposable
         var program = result.Files["program"].Content;
 
         Assert.Contains("MapRazorComponents<TestApp.Components.App>()", program);
-        Assert.Contains("AddInteractiveServerRenderMode()", program);
+        Assert.DoesNotContain("AddInteractiveServerRenderMode()", program);
     }
 
     [Fact]
@@ -88,16 +107,31 @@ public class ScaffoldingTests : IDisposable
         var imports = result.Files["imports"].Content;
 
         // Standard Blazor usings
+        Assert.Contains("@namespace TestApp", imports);
         Assert.Contains("@using Microsoft.AspNetCore.Components.Web", imports);
         Assert.Contains("@using Microsoft.AspNetCore.Components.Forms", imports);
         Assert.Contains("@using Microsoft.AspNetCore.Components.Routing", imports);
         Assert.Contains("@using Microsoft.JSInterop", imports);
         // BWFC usings
         Assert.Contains("@using BlazorWebFormsComponents", imports);
+        Assert.Contains("@using BlazorWebFormsComponents.Enums", imports);
+        Assert.Contains("@using BlazorWebFormsComponents.Validations", imports);
+        Assert.DoesNotContain("@using static Microsoft.AspNetCore.Components.Web.RenderMode", imports);
         // Project namespace
-        Assert.Contains("@using TestApp", imports);
+        Assert.Contains("@using global::TestApp", imports);
         // WebFormsPageBase inherits
         Assert.Contains("@inherits BlazorWebFormsComponents.WebFormsPageBase", imports);
+    }
+
+    [Fact]
+    public void ProjectScaffolder_GeneratesModelsUsing_WhenModelsExist()
+    {
+        Directory.CreateDirectory(Path.Combine(_tempDir, "Models"));
+
+        var result = _scaffolder.Scaffold(_tempDir, _tempDir, "TestApp");
+        var imports = result.Files["imports"].Content;
+
+        Assert.Contains("@using global::TestApp.Models", imports);
     }
 
     [Fact]
@@ -110,7 +144,8 @@ public class ScaffoldingTests : IDisposable
         Assert.Contains("<Routes />", appRazor);
         Assert.Contains("<HeadOutlet />", appRazor);
         Assert.Contains("<!DOCTYPE html>", appRazor);
-        Assert.Contains("blazor.web.js", appRazor);
+        Assert.DoesNotContain("blazor.web.js", appRazor);
+        Assert.Contains("Generated for .NET 10 static SSR migration output", appRazor);
     }
 
     [Fact]
@@ -123,6 +158,17 @@ public class ScaffoldingTests : IDisposable
         Assert.Contains("<Router", routes);
         Assert.Contains("RouteView", routes);
         Assert.Contains("FocusOnNavigate", routes);
+    }
+
+    [Fact]
+    public void ProjectScaffolder_GeneratesMainLayout()
+    {
+        var result = _scaffolder.Scaffold(_tempDir, _tempDir, "TestApp");
+
+        var layout = result.Files["layout"].Content;
+
+        Assert.Contains("@inherits LayoutComponentBase", layout);
+        Assert.Contains("@Body", layout);
     }
 
     [Fact]
@@ -189,8 +235,9 @@ public class ScaffoldingTests : IDisposable
         Assert.Contains("imports", result.Files.Keys);
         Assert.Contains("app", result.Files.Keys);
         Assert.Contains("routes", result.Files.Keys);
+        Assert.Contains("layout", result.Files.Keys);
         Assert.Contains("launchSettings", result.Files.Keys);
-        Assert.Equal(6, result.Files.Count);
+        Assert.Equal(7, result.Files.Count);
     }
 
     // ───────────────────────────────────────────────────────────────

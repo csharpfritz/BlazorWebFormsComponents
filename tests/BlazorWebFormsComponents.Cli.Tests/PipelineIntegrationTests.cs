@@ -1,8 +1,12 @@
+using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using BlazorWebFormsComponents.Cli.Config;
+using BlazorWebFormsComponents.Cli.Interop;
 using BlazorWebFormsComponents.Cli.Io;
 using BlazorWebFormsComponents.Cli.Pipeline;
 using BlazorWebFormsComponents.Cli.Scaffolding;
+using BlazorWebFormsComponents.Cli.SemanticPatterns;
 
 namespace BlazorWebFormsComponents.Cli.Tests;
 
@@ -47,13 +51,19 @@ public class PipelineIntegrationTests : IDisposable
         return new MigrationPipeline(
             markupTransforms,
             codeBehindTransforms,
+            new SemanticPatternCatalog(TestHelpers.CreateDefaultSemanticPatterns()),
             new ProjectScaffolder(new DatabaseProviderDetector()),
             new GlobalUsingsGenerator(),
             new ShimGenerator(),
             new WebConfigTransformer(),
             outputWriter,
             new StaticFileCopier(outputWriter),
-            new SourceFileCopier(outputWriter, codeBehindTransforms));
+            new SourceFileCopier(outputWriter, codeBehindTransforms),
+            new AppStartCopier(outputWriter),
+            new AppAssetInjector(outputWriter),
+            new NuGetStaticAssetExtractor(new PowerShellScriptRunner()),
+            new EdmxConverterBridge(new PowerShellScriptRunner()),
+            new RedirectHandlerAnnotator(outputWriter));
     }
 
     private (string inputDir, string outputDir) CreateTempProjectDir(
@@ -134,6 +144,60 @@ public class PipelineIntegrationTests : IDisposable
         return (inputDir, outputDir);
     }
 
+    private (string inputDir, string outputDir) CreateRepoScopedProjectDir(string suffix)
+    {
+        var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
+        var baseDir = Path.Combine(projectRoot, "obj", $"bwfc-pipeline-{suffix}-{Guid.NewGuid():N}");
+        var inputDir = Path.Combine(baseDir, "input");
+        var outputDir = Path.Combine(baseDir, "output");
+
+        Directory.CreateDirectory(inputDir);
+        Directory.CreateDirectory(outputDir);
+        _tempDirs.Add(baseDir);
+
+        return (inputDir, outputDir);
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunProcessAsync(string fileName, string arguments, string workingDirectory)
+    {
+        var output = new StringBuilder();
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                WorkingDirectory = workingDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        };
+
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                output.AppendLine(e.Data);
+            }
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                output.AppendLine(e.Data);
+            }
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        await process.WaitForExitAsync();
+
+        return (process.ExitCode, output.ToString());
+    }
+
     // ───────────────────────────────────────────────────────────────
     //  Full pipeline — markup transforms
     // ───────────────────────────────────────────────────────────────
@@ -191,7 +255,7 @@ public class PipelineIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task Pipeline_CreatesCodeBehindFiles()
+    public async Task Pipeline_QuarantinesCodeBehindFilesAsManualArtifacts()
     {
         var (inputDir, outputDir) = CreateTempProjectDir(includeCodeBehind: true);
         var pipeline = CreateFullPipeline();
@@ -209,9 +273,192 @@ public class PipelineIntegrationTests : IDisposable
         var report = await pipeline.ExecuteAsync(context);
 
         Assert.Empty(report.Errors);
-        // Default.aspx has a code-behind → should produce Default.razor.cs
-        Assert.True(File.Exists(Path.Combine(outputDir, "Default.razor.cs")),
-            "Default.razor.cs should be created from code-behind");
+        // Default.aspx has a code-behind → should produce a quarantined manual artifact, not a compile-included .razor.cs file
+        Assert.False(File.Exists(Path.Combine(outputDir, "Default.razor.cs")),
+            "Default.razor.cs should not be written directly into the compile surface");
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "codebehind", "Default.razor.cs.txt")),
+            "Default.razor.cs.txt should be created as a manual migration artifact");
+    }
+
+    [Fact]
+    public async Task Pipeline_QueryDetailsPattern_RewritesMarkupWithQueryStub()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir(includeWebConfig: false, includeCodeBehind: false);
+        File.WriteAllText(Path.Combine(inputDir, "ProductDetails.aspx"), """
+            <%@ Page Title="Product Details" Language="C#" AutoEventWireup="true" CodeBehind="ProductDetails.aspx.cs" Inherits="TestApp.ProductDetails" %>
+            <asp:FormView ID="productDetail" runat="server" ItemType="TestApp.Models.Product" SelectMethod="GetProduct" />
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "ProductDetails.aspx.cs"), """
+            using System.Linq;
+            using TestApp.Models;
+
+            namespace TestApp
+            {
+                public partial class ProductDetails
+                {
+                    public IQueryable<Product> GetProduct([QueryString("ProductID")] int? productId, [RouteData] string productName)
+                    {
+                        return Enumerable.Empty<Product>().AsQueryable();
+                    }
+                }
+            }
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false, SkipScaffold = true },
+            SourceFiles = sourceFiles
+        };
+
+        var report = await pipeline.ExecuteAsync(context);
+
+        var markup = File.ReadAllText(Path.Combine(outputDir, "ProductDetails.razor"));
+        Assert.Contains("SelectItems=\"GetProductQueryDetails_SelectItems\"", markup);
+        Assert.Contains("SupplyParameterFromQuery(Name = \"ProductID\")", markup);
+        Assert.True(report.SemanticPatternsApplied >= 1, $"Expected at least one semantic rewrite, got {report.SemanticPatternsApplied}");
+        Assert.Contains(report.ManualItems, item => item.Category == "bwfc-query-details");
+    }
+
+    [Fact]
+    public async Task Pipeline_ActionPagePattern_ReplacesBlankHandlerOutput()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir(includeWebConfig: false, includeCodeBehind: false);
+        File.WriteAllText(Path.Combine(inputDir, "AddToCart.aspx"), """
+            <%@ Page Language="C#" AutoEventWireup="true" CodeBehind="AddToCart.aspx.cs" Inherits="TestApp.AddToCart" %>
+            <html xmlns="http://www.w3.org/1999/xhtml">
+            <head runat="server"><title></title></head>
+            <body>
+                <form id="form1" runat="server">
+                    <div></div>
+                </form>
+            </body>
+            </html>
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "AddToCart.aspx.cs"), """
+            namespace TestApp
+            {
+                public partial class AddToCart
+                {
+                    protected void Page_Load()
+                    {
+                        var rawId = Request.QueryString["ProductID"];
+                        usersShoppingCart.AddToCart(Convert.ToInt16(rawId));
+                        Response.Redirect("ShoppingCart.aspx");
+                    }
+                }
+            }
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false, SkipScaffold = true },
+            SourceFiles = sourceFiles
+        };
+
+        var report = await pipeline.ExecuteAsync(context);
+
+        var markup = File.ReadAllText(Path.Combine(outputDir, "AddToCart.razor"));
+        Assert.Contains("<PageTitle>AddToCart</PageTitle>", markup);
+        Assert.Contains("action=\"/__bwfc/actions/AddToCart\"", markup);
+        Assert.Contains("document.getElementById('bwfc-action-pages-form')?.submit();", markup);
+        Assert.Contains("TODO(bwfc-action-pages)", markup);
+        Assert.True(report.SemanticPatternsApplied >= 1, $"Expected at least one semantic rewrite, got {report.SemanticPatternsApplied}");
+        Assert.Contains(report.ManualItems, item => item.Category == "bwfc-action-pages");
+    }
+
+    [Fact]
+    public async Task Pipeline_MasterContentContractPatterns_RewriteDefaultCatalogMasterLayouts()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir(includeWebConfig: false, includeCodeBehind: false);
+        File.WriteAllText(Path.Combine(inputDir, "Site.Master"), """
+            <%@ Master Language="C#" %>
+            <asp:ContentPlaceHolder ID="HeadContent" runat="server" />
+            <div class="shell">
+                <asp:ContentPlaceHolder ID="MainContent" runat="server" />
+            </div>
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false, SkipScaffold = true },
+            SourceFiles = sourceFiles
+        };
+
+        var report = await pipeline.ExecuteAsync(context);
+
+        var masterMarkup = File.ReadAllText(Path.Combine(outputDir, "Site.razor"));
+        var defaultMarkup = File.ReadAllText(Path.Combine(outputDir, "Default.razor"));
+
+        Assert.Contains("@ChildComponents", masterMarkup);
+        Assert.Contains("public RenderFragment? ChildComponents { get; set; }", masterMarkup);
+        Assert.Contains("<ChildComponents>", defaultMarkup);
+        Assert.DoesNotContain("<ChildContent>", defaultMarkup);
+        Assert.True(report.SemanticPatternsApplied >= 3, $"Expected master/content semantic rewrites to run, got {report.SemanticPatternsApplied}");
+    }
+
+    [Fact]
+    public async Task Pipeline_AccountPagePattern_RewritesDefaultCatalogLoginPage()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir(includeWebConfig: false, includeCodeBehind: false, includeAccount: true);
+        File.WriteAllText(Path.Combine(inputDir, "Account", "Login.aspx"), """
+            <%@ Page Title="Log in" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" %>
+            <asp:Content ID="BodyContent" ContentPlaceHolderID="MainContent" runat="server">
+                <asp:ValidationSummary CssClass="text-danger" runat="server" />
+                <asp:Label AssociatedControlID="Email">Email</asp:Label>
+                <asp:TextBox ID="Email" CssClass="form-control" TextMode="Email" runat="server" />
+                <asp:RequiredFieldValidator ControlToValidate="Email" ErrorMessage="Email is required." runat="server" />
+                <asp:Label AssociatedControlID="Password">Password</asp:Label>
+                <asp:TextBox ID="Password" CssClass="form-control" TextMode="Password" runat="server" />
+                <asp:RequiredFieldValidator ControlToValidate="Password" ErrorMessage="Password is required." runat="server" />
+                <asp:CheckBox ID="RememberMe" runat="server" />
+                <asp:Label AssociatedControlID="RememberMe">Remember me?</asp:Label>
+                <asp:Button Text="Log in" CssClass="btn btn-default" runat="server" />
+                <asp:HyperLink runat="server">Register as a new user</asp:HyperLink>
+            </asp:Content>
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false, SkipScaffold = true },
+            SourceFiles = sourceFiles
+        };
+
+        var report = await pipeline.ExecuteAsync(context);
+
+        var loginMarkup = File.ReadAllText(Path.Combine(outputDir, "Account", "Login.razor"));
+
+        Assert.Contains("TODO(bwfc-identity)", loginMarkup);
+        Assert.Contains("<form method=\"get\" action=\"/Account/PerformLogin\" class=\"form-horizontal\">", loginMarkup);
+        Assert.Contains("type=\"email\"", loginMarkup);
+        Assert.Contains("type=\"password\"", loginMarkup);
+        Assert.Contains("Register as a new user", loginMarkup);
+        Assert.Contains("SupplyParameterFromQuery(Name = \"returnUrl\")", loginMarkup);
+        Assert.DoesNotContain("<RequiredFieldValidator", loginMarkup);
+        Assert.True(report.SemanticPatternsApplied >= 1, "Expected the account semantic pattern to run for Account/Login.aspx");
     }
 
     // ───────────────────────────────────────────────────────────────
@@ -440,8 +687,9 @@ public class PipelineIntegrationTests : IDisposable
         Assert.True(File.Exists(Path.Combine(outputDir, "Default.razor")), "Default.razor missing");
         Assert.True(File.Exists(Path.Combine(outputDir, "About.razor")), "About.razor missing");
 
-        // Assert — transformed code-behind
-        Assert.True(File.Exists(Path.Combine(outputDir, "Default.razor.cs")), "Default.razor.cs missing");
+        // Assert — transformed code-behind is quarantined as a manual artifact
+        Assert.False(File.Exists(Path.Combine(outputDir, "Default.razor.cs")), "Default.razor.cs should not be emitted into the compile surface");
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "codebehind", "Default.razor.cs.txt")), "Default.razor.cs.txt missing");
 
         // Assert — no identity shims (no Account folder)
         Assert.False(File.Exists(Path.Combine(outputDir, "IdentityShims.cs")),
@@ -475,6 +723,456 @@ public class PipelineIntegrationTests : IDisposable
 
         Assert.True(File.Exists(Path.Combine(outputDir, "WebFormsShims.cs")));
         Assert.True(File.Exists(Path.Combine(outputDir, "IdentityShims.cs")));
+    }
+
+    [Fact]
+    public async Task FullMigration_InjectsDetectedCssAndScriptsIntoAppRazor()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir();
+        Directory.CreateDirectory(Path.Combine(inputDir, "Content"));
+        File.WriteAllText(Path.Combine(inputDir, "Content", "site.css"), "body { color: red; }");
+        Directory.CreateDirectory(Path.Combine(inputDir, "Scripts"));
+        File.WriteAllText(Path.Combine(inputDir, "Scripts", "jquery-3.7.1.js"), "window.jqueryLoaded = true;");
+        File.WriteAllText(Path.Combine(inputDir, "Site.Master"), """
+            <%@ Master Language="C#" %>
+            <html>
+            <head>
+                <link rel="stylesheet" href="https://cdn.example.com/site.css" />
+                <script src="https://cdn.example.com/site.js"></script>
+            </head>
+            <body>
+                <asp:ContentPlaceHolder ID="MainContent" runat="server" />
+            </body>
+            </html>
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false },
+            SourceFiles = sourceFiles
+        };
+
+        await pipeline.ExecuteAsync(context);
+
+        var appRazor = File.ReadAllText(Path.Combine(outputDir, "Components", "App.razor"));
+        Assert.Contains("/Content/site.css", appRazor);
+        Assert.Contains("https://cdn.example.com/site.css", appRazor);
+        Assert.Contains("/Scripts/jquery-3.7.1.js", appRazor);
+    }
+
+    [Fact]
+    public async Task FullMigration_QuarantinesAppStartFilesAsManualArtifacts()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir();
+        Directory.CreateDirectory(Path.Combine(inputDir, "App_Start"));
+        File.WriteAllText(Path.Combine(inputDir, "App_Start", "RouteConfig.cs"), """
+            using System.Web.Routing;
+
+            public class RouteConfig
+            {
+            }
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "App_Start", "WebApiConfig.cs"), """
+            public class WebApiConfig
+            {
+            }
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false },
+            SourceFiles = sourceFiles
+        };
+
+        var report = await pipeline.ExecuteAsync(context);
+
+        Assert.False(File.Exists(Path.Combine(outputDir, "RouteConfig.cs")));
+        Assert.False(File.Exists(Path.Combine(outputDir, "WebApiConfig.cs")));
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "App_Start", "RouteConfig.cs.txt")));
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "App_Start", "WebApiConfig.cs.txt")));
+        Assert.Contains("Blazor has no App_Start convention", File.ReadAllText(Path.Combine(outputDir, "migration-artifacts", "App_Start", "RouteConfig.cs.txt")));
+        Assert.Contains(report.ManualItems, item => item.Category == "AppStart");
+    }
+
+    [Fact]
+    public async Task FullMigration_QuarantinesLegacyCompileSurfaceFilesAndKeepsSafeSources()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir();
+        Directory.CreateDirectory(Path.Combine(inputDir, "Models"));
+
+        File.WriteAllText(Path.Combine(inputDir, "Startup.Auth.cs"), """
+            using Microsoft.Owin;
+            using Owin;
+
+            public partial class Startup
+            {
+                public void ConfigureAuth(IAppBuilder app)
+                {
+                }
+            }
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "CatalogDatabaseInitializer.cs"), """
+            using System.Data.Entity;
+
+            public class CatalogDatabaseInitializer : DropCreateDatabaseIfModelChanges<CatalogContext>
+            {
+            }
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "Models", "Product.cs"), """
+            namespace TestApp.Models;
+
+            public class Product
+            {
+                public int Id { get; set; }
+                public string Name { get; set; } = string.Empty;
+            }
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false },
+            SourceFiles = sourceFiles
+        };
+
+        var report = await pipeline.ExecuteAsync(context);
+
+        Assert.False(File.Exists(Path.Combine(outputDir, "Startup.Auth.cs")));
+        Assert.False(File.Exists(Path.Combine(outputDir, "CatalogDatabaseInitializer.cs")));
+        Assert.True(File.Exists(Path.Combine(outputDir, "Models", "Product.cs")));
+
+        var startupArtifact = Path.Combine(outputDir, "migration-artifacts", "compile-surface", "Startup.Auth.cs.txt");
+        var efArtifact = Path.Combine(outputDir, "migration-artifacts", "compile-surface", "CatalogDatabaseInitializer.cs.txt");
+
+        Assert.True(File.Exists(startupArtifact));
+        Assert.True(File.Exists(efArtifact));
+        Assert.Contains("quarantined from the generated Blazor SSR compile surface", File.ReadAllText(startupArtifact));
+        Assert.Contains(report.ManualItems, item => item.Category == "bwfc-compile-surface" && item.File == "Startup.Auth.cs");
+        Assert.Contains(report.ManualItems, item => item.Category == "bwfc-compile-surface" && item.File == "CatalogDatabaseInitializer.cs");
+    }
+
+    [Fact]
+    public async Task FullMigration_BuildsGeneratedApp_WhenLegacyCompileSurfaceFilesAreQuarantined()
+    {
+        var (inputDir, outputDir) = CreateRepoScopedProjectDir("build-clean");
+        Directory.CreateDirectory(Path.Combine(inputDir, "Account"));
+
+        File.WriteAllText(Path.Combine(inputDir, "Site.Master"), """
+            <%@ Master Language="C#" AutoEventWireup="true" CodeBehind="Site.master.cs" Inherits="TestApp.SiteMaster" %>
+            <!DOCTYPE html>
+            <html>
+            <head runat="server">
+                <title>Wingtip Shell</title>
+                <asp:ContentPlaceHolder ID="HeadContent" runat="server" />
+            </head>
+            <body>
+                <form runat="server">
+                    <div class="shell">
+                        <asp:ContentPlaceHolder ID="MainContent" runat="server" />
+                    </div>
+                </form>
+            </body>
+            </html>
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "Default.aspx"), """
+            <%@ Page Title="Home" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" Inherits="TestApp._Default" %>
+            <asp:Content ID="BodyContent" ContentPlaceHolderID="MainContent" runat="server">
+                <asp:Label ID="Label1" runat="server" Text="Hello World" CssClass="title" />
+            </asp:Content>
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "AddToCart.aspx"), """
+            <%@ Page Language="C#" AutoEventWireup="true" CodeBehind="AddToCart.aspx.cs" Inherits="TestApp.AddToCart" %>
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "AddToCart.aspx.cs"), """
+            using System;
+
+            namespace TestApp
+            {
+                public partial class AddToCart
+                {
+                    protected void Page_Load(object sender, EventArgs e)
+                    {
+                        var rawId = Request.QueryString["ProductID"];
+                        Response.Redirect("~/ShoppingCart.aspx");
+                    }
+                }
+            }
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "Account", "Login.aspx"), """
+            <%@ Page Title="Log in" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" Inherits="TestApp.Account.Login" %>
+            <asp:Content ID="BodyContent" ContentPlaceHolderID="MainContent" runat="server">
+                <asp:Label AssociatedControlID="Email">Email</asp:Label>
+                <asp:TextBox ID="Email" runat="server" TextMode="Email" CssClass="form-control" />
+                <asp:RequiredFieldValidator ControlToValidate="Email" ErrorMessage="Email is required." runat="server" />
+                <asp:Label AssociatedControlID="Password">Password</asp:Label>
+                <asp:TextBox ID="Password" runat="server" TextMode="Password" CssClass="form-control" />
+                <asp:RequiredFieldValidator ControlToValidate="Password" ErrorMessage="Password is required." runat="server" />
+                <asp:Button ID="LoginButton" runat="server" Text="Log in" CssClass="btn btn-default" />
+            </asp:Content>
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "Account", "Register.aspx"), """
+            <%@ Page Title="Register" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" Inherits="TestApp.Account.Register" %>
+            <asp:Content ID="BodyContent" ContentPlaceHolderID="MainContent" runat="server">
+                <asp:Label AssociatedControlID="Email">Email</asp:Label>
+                <asp:TextBox ID="Email" runat="server" TextMode="Email" CssClass="form-control" />
+                <asp:RequiredFieldValidator ControlToValidate="Email" ErrorMessage="Email is required." runat="server" />
+                <asp:Label AssociatedControlID="Password">Password</asp:Label>
+                <asp:TextBox ID="Password" runat="server" TextMode="Password" CssClass="form-control" />
+                <asp:RequiredFieldValidator ControlToValidate="Password" ErrorMessage="Password is required." runat="server" />
+                <asp:Label AssociatedControlID="ConfirmPassword">Confirm password</asp:Label>
+                <asp:TextBox ID="ConfirmPassword" runat="server" TextMode="Password" CssClass="form-control" />
+                <asp:CompareValidator ControlToValidate="ConfirmPassword" ControlToCompare="Password" ErrorMessage="Mismatch" runat="server" />
+                <asp:Button ID="RegisterButton" runat="server" Text="Register" CssClass="btn btn-default" />
+            </asp:Content>
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "Web.config"), """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <appSettings>
+                <add key="SiteName" value="Wingtip Acceptance" />
+              </appSettings>
+            </configuration>
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "Startup.Auth.cs"), """
+            using Microsoft.Owin;
+            using Owin;
+
+            public partial class Startup
+            {
+                public void ConfigureAuth(IAppBuilder app)
+                {
+                }
+            }
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "IdentityConfig.cs"), """
+            using Microsoft.AspNet.Identity;
+
+            public class IdentityConfig
+            {
+            }
+            """);
+
+        File.WriteAllText(Path.Combine(inputDir, "CatalogDatabaseInitializer.cs"), """
+            using System.Data.Entity;
+
+            public class CatalogDatabaseInitializer : DropCreateDatabaseIfModelChanges<object>
+            {
+            }
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false },
+            SourceFiles = sourceFiles
+        };
+
+        var report = await pipeline.ExecuteAsync(context);
+        Assert.Empty(report.Errors);
+
+        Assert.False(File.Exists(Path.Combine(outputDir, "Startup.Auth.cs")));
+        Assert.False(File.Exists(Path.Combine(outputDir, "IdentityConfig.cs")));
+        Assert.False(File.Exists(Path.Combine(outputDir, "CatalogDatabaseInitializer.cs")));
+
+        var layoutDir = Path.Combine(outputDir, "Layout");
+        Directory.CreateDirectory(layoutDir);
+        File.WriteAllText(Path.Combine(layoutDir, "MainLayout.razor"), """
+            @inherits Microsoft.AspNetCore.Components.LayoutComponentBase
+
+            <main>
+                @Body
+            </main>
+            """);
+
+        var projectPath = Directory.GetFiles(outputDir, "*.csproj", SearchOption.TopDirectoryOnly).Single();
+        var (exitCode, buildOutput) = await RunProcessAsync("dotnet", $"build \"{projectPath}\" -c Release --nologo", outputDir);
+
+        Assert.True(exitCode == 0, buildOutput);
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "compile-surface", "Startup.Auth.cs.txt")));
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "compile-surface", "IdentityConfig.cs.txt")));
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "compile-surface", "CatalogDatabaseInitializer.cs.txt")));
+    }
+
+    [Fact]
+    public async Task FullMigration_AnnotatesProgramForRedirectHandlerPages()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir();
+        File.WriteAllText(Path.Combine(inputDir, "CheckoutStart.aspx"), """
+            <%@ Page Language="C#" AutoEventWireup="true" CodeBehind="CheckoutStart.aspx.cs" Inherits="TestApp.CheckoutStart" %>
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "CheckoutStart.aspx.cs"), """
+            using System;
+
+            namespace TestApp
+            {
+                public partial class CheckoutStart
+                {
+                    protected void Page_Load(object sender, EventArgs e)
+                    {
+                        Response.Redirect("~/Checkout/Start.aspx");
+                    }
+                }
+            }
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false },
+            SourceFiles = sourceFiles
+        };
+
+        await pipeline.ExecuteAsync(context);
+
+        var program = File.ReadAllText(Path.Combine(outputDir, "Program.cs"));
+        Assert.Contains("app.MapPost(\"/__bwfc/actions/CheckoutStart\"", program);
+        Assert.Contains("TODO(bwfc-action-pages)", program);
+    }
+
+    [Fact]
+    public async Task FullMigration_GeneratesRoutableWingtipStyleShellArtifacts()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir(includeWebConfig: false, includeAccount: true);
+        File.WriteAllText(Path.Combine(inputDir, "Site.Master"), """
+            <%@ Master Language="C#" %>
+            <div class="site-shell">
+                <asp:ContentPlaceHolder ID="HeadContent" runat="server" />
+                <asp:ContentPlaceHolder ID="MainContent" runat="server" />
+            </div>
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "Account", "Login.aspx"), """
+            <%@ Page Title="Log in" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" %>
+            <asp:Content ID="BodyContent" ContentPlaceHolderID="MainContent" runat="server">
+                <asp:ValidationSummary CssClass="text-danger" runat="server" />
+                <asp:Label AssociatedControlID="Email">Email</asp:Label>
+                <asp:TextBox ID="Email" CssClass="form-control" TextMode="Email" runat="server" />
+                <asp:Label AssociatedControlID="Password">Password</asp:Label>
+                <asp:TextBox ID="Password" CssClass="form-control" TextMode="Password" runat="server" />
+                <asp:Button Text="Log in" CssClass="btn btn-default" runat="server" />
+            </asp:Content>
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "Account", "Register.aspx"), """
+            <%@ Page Title="Register" Language="C#" MasterPageFile="~/Site.Master" AutoEventWireup="true" %>
+            <asp:Content ID="BodyContent" ContentPlaceHolderID="MainContent" runat="server">
+                <asp:ValidationSummary CssClass="text-danger" runat="server" />
+                <asp:Label AssociatedControlID="Email">Email</asp:Label>
+                <asp:TextBox ID="Email" CssClass="form-control" TextMode="Email" runat="server" />
+                <asp:Label AssociatedControlID="Password">Password</asp:Label>
+                <asp:TextBox ID="Password" CssClass="form-control" TextMode="Password" runat="server" />
+                <asp:Label AssociatedControlID="ConfirmPassword">Confirm password</asp:Label>
+                <asp:TextBox ID="ConfirmPassword" CssClass="form-control" TextMode="Password" runat="server" />
+                <asp:Button Text="Register" CssClass="btn btn-default" runat="server" />
+            </asp:Content>
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "AddToCart.aspx"), """
+            <%@ Page Language="C#" AutoEventWireup="true" CodeBehind="AddToCart.aspx.cs" Inherits="TestApp.AddToCart" %>
+            <html xmlns="http://www.w3.org/1999/xhtml">
+            <head runat="server"><title></title></head>
+            <body>
+                <form id="form1" runat="server">
+                    <div></div>
+                </form>
+            </body>
+            </html>
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "AddToCart.aspx.cs"), """
+            namespace TestApp
+            {
+                public partial class AddToCart
+                {
+                    protected void Page_Load()
+                    {
+                        var rawId = Request.QueryString["ProductID"];
+                        Response.Redirect("ShoppingCart.aspx");
+                    }
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(inputDir, "Startup.Auth.cs"), """
+            using Microsoft.Owin;
+            using Owin;
+
+            public partial class Startup
+            {
+                public void ConfigureAuth(IAppBuilder app)
+                {
+                }
+            }
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false },
+            SourceFiles = sourceFiles
+        };
+
+        await pipeline.ExecuteAsync(context);
+
+        var siteMarkup = File.ReadAllText(Path.Combine(outputDir, "Site.razor"));
+        var loginMarkup = File.ReadAllText(Path.Combine(outputDir, "Account", "Login.razor"));
+        var registerMarkup = File.ReadAllText(Path.Combine(outputDir, "Account", "Register.razor"));
+        var actionMarkup = File.ReadAllText(Path.Combine(outputDir, "AddToCart.razor"));
+        var program = File.ReadAllText(Path.Combine(outputDir, "Program.cs"));
+
+        Assert.Contains("@ChildComponents", siteMarkup);
+        Assert.Contains("ContentPlaceHolder", siteMarkup);
+        Assert.Contains("MainContent", siteMarkup);
+        Assert.Contains("method=\"get\"", loginMarkup);
+        Assert.Contains("action=\"/Account/PerformLogin\"", loginMarkup);
+        Assert.Contains("SupplyParameterFromQuery(Name = \"returnUrl\")", loginMarkup);
+        Assert.Contains("method=\"get\"", registerMarkup);
+        Assert.Contains("action=\"/Account/PerformRegister\"", registerMarkup);
+        Assert.Contains("action=\"/__bwfc/actions/AddToCart\"", actionMarkup);
+        Assert.Contains("document.getElementById('bwfc-action-pages-form')?.submit();", actionMarkup);
+        Assert.Contains("app.MapGet(\"/Account/PerformLogin\"", program);
+        Assert.Contains("app.MapGet(\"/Account/PerformRegister\"", program);
+        Assert.Contains("app.MapPost(\"/__bwfc/actions/AddToCart\"", program);
+        Assert.Contains("DisableAntiforgery()", program);
+        Assert.False(File.Exists(Path.Combine(outputDir, "Startup.Auth.cs")));
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "compile-surface", "Startup.Auth.cs.txt")));
     }
 
     // ───────────────────────────────────────────────────────────────

@@ -1,7 +1,9 @@
 using BlazorWebFormsComponents.Cli.Config;
 using BlazorWebFormsComponents.Cli.Io;
 using BlazorWebFormsComponents.Cli.Scaffolding;
+using BlazorWebFormsComponents.Cli.SemanticPatterns;
 using BlazorWebFormsComponents.Cli.Transforms;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BlazorWebFormsComponents.Cli.Pipeline;
 
@@ -19,23 +21,37 @@ public class MigrationPipeline
     private readonly OutputWriter _outputWriter;
     private readonly StaticFileCopier? _staticFileCopier;
     private readonly SourceFileCopier? _sourceFileCopier;
+    private readonly AppStartCopier? _appStartCopier;
+    private readonly AppAssetInjector? _appAssetInjector;
+    private readonly NuGetStaticAssetExtractor? _nuGetStaticAssetExtractor;
+    private readonly EdmxConverterBridge? _edmxConverterBridge;
+    private readonly RedirectHandlerAnnotator? _redirectHandlerAnnotator;
+    private readonly SemanticPatternCatalog _semanticPatternCatalog;
 
     /// <summary>
     /// Full constructor for DI — used by the CLI commands.
     /// </summary>
+    [ActivatorUtilitiesConstructor]
     public MigrationPipeline(
         IEnumerable<IMarkupTransform> markupTransforms,
         IEnumerable<ICodeBehindTransform> codeBehindTransforms,
+        SemanticPatternCatalog semanticPatternCatalog,
         ProjectScaffolder scaffolder,
         GlobalUsingsGenerator globalUsings,
         ShimGenerator shimGenerator,
         WebConfigTransformer webConfigTransformer,
         OutputWriter outputWriter,
         StaticFileCopier staticFileCopier,
-        SourceFileCopier sourceFileCopier)
+        SourceFileCopier sourceFileCopier,
+        AppStartCopier appStartCopier,
+        AppAssetInjector appAssetInjector,
+        NuGetStaticAssetExtractor nuGetStaticAssetExtractor,
+        EdmxConverterBridge edmxConverterBridge,
+        RedirectHandlerAnnotator redirectHandlerAnnotator)
     {
         _markupTransforms = markupTransforms.OrderBy(t => t.Order).ToList();
         _codeBehindTransforms = codeBehindTransforms.OrderBy(t => t.Order).ToList();
+        _semanticPatternCatalog = semanticPatternCatalog;
         _scaffolder = scaffolder;
         _globalUsings = globalUsings;
         _shimGenerator = shimGenerator;
@@ -43,6 +59,11 @@ public class MigrationPipeline
         _outputWriter = outputWriter;
         _staticFileCopier = staticFileCopier;
         _sourceFileCopier = sourceFileCopier;
+        _appStartCopier = appStartCopier;
+        _appAssetInjector = appAssetInjector;
+        _nuGetStaticAssetExtractor = nuGetStaticAssetExtractor;
+        _edmxConverterBridge = edmxConverterBridge;
+        _redirectHandlerAnnotator = redirectHandlerAnnotator;
     }
 
     /// <summary>
@@ -50,15 +71,22 @@ public class MigrationPipeline
     /// </summary>
     public MigrationPipeline(
         IEnumerable<IMarkupTransform> markupTransforms,
-        IEnumerable<ICodeBehindTransform> codeBehindTransforms)
+        IEnumerable<ICodeBehindTransform> codeBehindTransforms,
+        IEnumerable<ISemanticPattern>? semanticPatterns = null)
     {
         _markupTransforms = markupTransforms.OrderBy(t => t.Order).ToList();
         _codeBehindTransforms = codeBehindTransforms.OrderBy(t => t.Order).ToList();
+        _semanticPatternCatalog = new SemanticPatternCatalog(semanticPatterns ?? []);
         _scaffolder = null!;
         _globalUsings = null!;
         _shimGenerator = null!;
         _webConfigTransformer = null!;
         _outputWriter = null!;
+        _appStartCopier = null;
+        _appAssetInjector = null;
+        _nuGetStaticAssetExtractor = null;
+        _edmxConverterBridge = null;
+        _redirectHandlerAnnotator = null;
     }
 
     /// <summary>
@@ -101,15 +129,58 @@ public class MigrationPipeline
                 context.SourcePath, context.OutputPath, context.Options.Verbose);
         }
 
-        // Step 5: Copy non-page source files (Models, Logic, etc.) with namespace transforms
+        var projectName = GetProjectName(context.SourcePath);
+
+        // Step 5: Generate EF Core output from EDMX before source copy so original T4 artifacts can be skipped.
+        ISet<string>? excludedSourceFiles = null;
+        if (_edmxConverterBridge != null)
+        {
+            excludedSourceFiles = await _edmxConverterBridge.ConvertAsync(
+                context.SourcePath,
+                context.OutputPath,
+                projectName,
+                context.Options.DryRun,
+                report);
+        }
+
+        // Step 6: Copy non-page source files (Models, Logic, etc.) with namespace transforms
         if (_sourceFileCopier != null)
         {
             var sourceCount = await _sourceFileCopier.CopySourceFilesAsync(
-                context.SourcePath, context.OutputPath, context.SourceFiles, context.Options.Verbose);
+                context.SourcePath, context.OutputPath, context.SourceFiles, context.Options.Verbose, report, excludedSourceFiles);
             report.FilesWritten += sourceCount;
         }
 
-        // Step 6: Generate report
+        // Step 7: Copy App_Start artifacts to the project root
+        if (_appStartCopier != null)
+        {
+            var appStartCount = await _appStartCopier.CopyAsync(context.SourcePath, context.OutputPath, report);
+            report.FilesWritten += appStartCount;
+        }
+
+        // Step 8: Extract package static assets
+        if (_nuGetStaticAssetExtractor != null)
+        {
+            await _nuGetStaticAssetExtractor.ExtractAsync(
+                context.SourcePath,
+                context.OutputPath,
+                context.Options.DryRun,
+                report);
+        }
+
+        // Step 9: Inject CSS/JS references into App.razor
+        if (_appAssetInjector != null && !context.Options.SkipScaffold)
+        {
+            await _appAssetInjector.InjectAsync(context.SourcePath, context.OutputPath);
+        }
+
+        // Step 10: Annotate Program.cs for redirect-only pages
+        if (_redirectHandlerAnnotator != null)
+        {
+            await _redirectHandlerAnnotator.AnnotateAsync(context, report);
+        }
+
+        // Step 11: Generate report
         report.GeneratedFiles.AddRange(_outputWriter.WrittenFiles);
         report.FilesWritten = _outputWriter.WrittenFiles.Count;
 
@@ -123,9 +194,7 @@ public class MigrationPipeline
 
     private async Task ScaffoldProjectAsync(MigrationContext context, MigrationReport report)
     {
-        var projectName = Path.GetFileName(context.SourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        if (string.IsNullOrEmpty(projectName))
-            projectName = "MigratedApp";
+        var projectName = GetProjectName(context.SourcePath);
 
         Console.WriteLine($"Scaffolding project: {projectName}");
 
@@ -182,12 +251,16 @@ public class MigrationPipeline
     private async Task ProcessSourceFileAsync(SourceFile sourceFile, MigrationContext context, MigrationReport report)
     {
         var markupContent = await File.ReadAllTextAsync(sourceFile.MarkupPath);
+        var projectName = GetProjectName(context.SourcePath);
+
         var metadata = new FileMetadata
         {
             SourceFilePath = sourceFile.MarkupPath,
             OutputFilePath = sourceFile.OutputPath,
             FileType = sourceFile.FileType,
-            OriginalContent = markupContent
+            OriginalContent = markupContent,
+            OutputRootPath = context.OutputPath,
+            ProjectNamespace = projectName
         };
 
         // Read code-behind if present
@@ -218,7 +291,16 @@ public class MigrationPipeline
         }
 
         // Use potentially modified markup content from code-behind transforms
-        var finalMarkup = metadata.MarkupContent ?? markup;
+        var semanticResult = _semanticPatternCatalog.Apply(
+            context,
+            sourceFile,
+            metadata,
+            metadata.MarkupContent ?? markup,
+            codeBehind,
+            report);
+
+        var finalMarkup = semanticResult.Markup;
+        codeBehind = semanticResult.CodeBehind;
 
         // Write markup output
         await _outputWriter.WriteFileAsync(sourceFile.OutputPath, finalMarkup,
@@ -227,9 +309,14 @@ public class MigrationPipeline
         // Write code-behind output
         if (codeBehind != null)
         {
-            var codeOutputPath = sourceFile.OutputPath + ".cs";
+            var relativeMarkupPath = Path.GetRelativePath(context.OutputPath, sourceFile.OutputPath);
+            var codeOutputPath = Path.Combine(
+                context.OutputPath,
+                "migration-artifacts",
+                "codebehind",
+                relativeMarkupPath + ".cs.txt");
             await _outputWriter.WriteFileAsync(codeOutputPath, codeBehind,
-                $"Code-behind for {Path.GetFileName(sourceFile.MarkupPath)}");
+                $"Manual code-behind artifact for {Path.GetFileName(sourceFile.MarkupPath)}");
         }
 
         report.FilesProcessed++;
@@ -257,5 +344,11 @@ public class MigrationPipeline
             content = transform.Apply(content, metadata);
         }
         return content;
+    }
+
+    private static string GetProjectName(string sourcePath)
+    {
+        var projectName = Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return string.IsNullOrEmpty(projectName) ? "MigratedApp" : projectName;
     }
 }

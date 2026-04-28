@@ -1,41 +1,9 @@
-@page "/ManageLogins"
-@using Microsoft.AspNetCore.Identity
-<h2>Manage your external logins.</h2>
-    <PlaceHolder ID="successMessage" Visible="false">
-            <p class="text-success">@(SuccessMessage)</p>
-        </PlaceHolder>
-    <div>
-        <section id="externalLoginsForm">
+@page "/Account/ManageLogins"
 
-            <ListView
-                ItemType="UserLoginInfo"
-                SelectMethod="@GetLogins" DeleteMethod="RemoveLogin" DataKeyNames="LoginProvider,ProviderKey">
-@* TODO: SelectMethod="GetLogins" preserved — convert to delegate: SelectMethod="@((maxRows, startRow, sort, out total) => YourService.GetLogins(maxRows, startRow, sort, out total))" *@
-
-                <LayoutTemplate>
-                    <h4>Registered Logins</h4>
-                    <table class="table">
-                        <tbody>
-                            @context
-                        </tbody>
-                    </table>
-
-                </LayoutTemplate>
-                <ItemTemplate>
-                    <tr>
-                        <td>@context.LoginProvider</td>
-                        <td>
-                            @* TODO: ToolTip and Visible attributes used Web Forms <%# %> data-binding syntax — migrate to Blazor *@
-                            <Button Text="Remove" CommandName="Delete" CausesValidation="false"
-                                CssClass="btn btn-default" />
-                        </td>
-                    </tr>
-                </ItemTemplate>
-            </ListView>
-
-        </section>
-    </div>
-    <div>
-        <OpenAuthProviders ReturnUrl="~/Account/ManageLogins" />
-    </div>
-
+<PageTitle>Manage your external logins</PageTitle>
+<Site>
+    <Content ContentPlaceHolderID="MainContent">
+        <h1>Manage external logins</h1>
+        <p>External login providers are not configured in the migrated benchmark sample.</p>
+    </Content>
+</Site>
