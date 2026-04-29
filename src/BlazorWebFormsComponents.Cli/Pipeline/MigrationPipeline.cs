@@ -309,14 +309,24 @@ public class MigrationPipeline
         // Write code-behind output
         if (codeBehind != null)
         {
-            var relativeMarkupPath = Path.GetRelativePath(context.OutputPath, sourceFile.OutputPath);
-            var codeOutputPath = Path.Combine(
-                context.OutputPath,
-                "migration-artifacts",
-                "codebehind",
-                relativeMarkupPath + ".cs.txt");
-            await _outputWriter.WriteFileAsync(codeOutputPath, codeBehind,
-                $"Manual code-behind artifact for {Path.GetFileName(sourceFile.MarkupPath)}");
+            var emissionPlan = PageCodeBehindEmissionPlanner.Create(metadata, finalMarkup, codeBehind);
+
+            if (emissionPlan.EmitToCompileSurface)
+            {
+                await _outputWriter.WriteFileAsync(sourceFile.OutputPath + ".cs", codeBehind,
+                    $"Converted code-behind for {Path.GetFileName(sourceFile.MarkupPath)}");
+            }
+            else
+            {
+                var relativeMarkupPath = Path.GetRelativePath(context.OutputPath, sourceFile.OutputPath);
+                var codeOutputPath = Path.Combine(
+                    context.OutputPath,
+                    "migration-artifacts",
+                    "codebehind",
+                    relativeMarkupPath + ".cs.txt");
+                await _outputWriter.WriteFileAsync(codeOutputPath, codeBehind,
+                    $"Manual code-behind artifact for {Path.GetFileName(sourceFile.MarkupPath)}");
+            }
         }
 
         report.FilesProcessed++;

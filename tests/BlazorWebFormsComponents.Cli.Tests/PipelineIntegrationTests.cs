@@ -255,7 +255,7 @@ public class PipelineIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task Pipeline_QuarantinesCodeBehindFilesAsManualArtifacts()
+    public async Task Pipeline_EmitsShimCompatiblePageCodeBehindIntoCompileSurface()
     {
         var (inputDir, outputDir) = CreateTempProjectDir(includeCodeBehind: true);
         var pipeline = CreateFullPipeline();
@@ -273,11 +273,49 @@ public class PipelineIntegrationTests : IDisposable
         var report = await pipeline.ExecuteAsync(context);
 
         Assert.Empty(report.Errors);
-        // Default.aspx has a code-behind → should produce a quarantined manual artifact, not a compile-included .razor.cs file
-        Assert.False(File.Exists(Path.Combine(outputDir, "Default.razor.cs")),
-            "Default.razor.cs should not be written directly into the compile surface");
-        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "codebehind", "Default.razor.cs.txt")),
-            "Default.razor.cs.txt should be created as a manual migration artifact");
+        Assert.True(File.Exists(Path.Combine(outputDir, "Default.razor.cs")),
+            "Default.razor.cs should be written into the compile surface for shim-compatible pages");
+        Assert.False(File.Exists(Path.Combine(outputDir, "migration-artifacts", "codebehind", "Default.razor.cs.txt")),
+            "Default.razor.cs.txt should not be created when the page code-behind is compile-safe");
+    }
+
+    [Fact]
+    public async Task Pipeline_QuarantinesPageCodeBehind_WhenUnsupportedWebFormsPatternsRemain()
+    {
+        var (inputDir, outputDir) = CreateTempProjectDir(includeCodeBehind: true);
+        File.WriteAllText(Path.Combine(inputDir, "Default.aspx.cs"), """
+            using System;
+
+            namespace TestApp
+            {
+                public partial class _Default
+                {
+                    protected void Page_Load(object sender, EventArgs e)
+                    {
+                        var row = CartList.Rows[0];
+                        var remove = row.FindControl("Remove");
+                    }
+                }
+            }
+            """);
+
+        var pipeline = CreateFullPipeline();
+        var scanner = new SourceScanner();
+        var sourceFiles = scanner.Scan(inputDir, outputDir);
+
+        var context = new MigrationContext
+        {
+            SourcePath = inputDir,
+            OutputPath = outputDir,
+            Options = new MigrationOptions { DryRun = false, SkipScaffold = true },
+            SourceFiles = sourceFiles
+        };
+
+        var report = await pipeline.ExecuteAsync(context);
+
+        Assert.Empty(report.Errors);
+        Assert.False(File.Exists(Path.Combine(outputDir, "Default.razor.cs")));
+        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "codebehind", "Default.razor.cs.txt")));
     }
 
     [Fact]
@@ -687,9 +725,9 @@ public class PipelineIntegrationTests : IDisposable
         Assert.True(File.Exists(Path.Combine(outputDir, "Default.razor")), "Default.razor missing");
         Assert.True(File.Exists(Path.Combine(outputDir, "About.razor")), "About.razor missing");
 
-        // Assert — transformed code-behind is quarantined as a manual artifact
-        Assert.False(File.Exists(Path.Combine(outputDir, "Default.razor.cs")), "Default.razor.cs should not be emitted into the compile surface");
-        Assert.True(File.Exists(Path.Combine(outputDir, "migration-artifacts", "codebehind", "Default.razor.cs.txt")), "Default.razor.cs.txt missing");
+        // Assert — shim-compatible page code-behind is emitted into the compile surface
+        Assert.True(File.Exists(Path.Combine(outputDir, "Default.razor.cs")), "Default.razor.cs should be emitted into the compile surface");
+        Assert.False(File.Exists(Path.Combine(outputDir, "migration-artifacts", "codebehind", "Default.razor.cs.txt")), "Default.razor.cs.txt should not be emitted for compile-safe pages");
 
         // Assert — no identity shims (no Account folder)
         Assert.False(File.Exists(Path.Combine(outputDir, "IdentityShims.cs")),

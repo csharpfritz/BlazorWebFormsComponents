@@ -254,6 +254,10 @@ public class ScaffoldingTests : IDisposable
         Assert.Contains("global using Microsoft.AspNetCore.Components;", content);
         Assert.Contains("global using Microsoft.AspNetCore.Components.Web;", content);
         Assert.Contains("global using Microsoft.AspNetCore.Components.Routing;", content);
+        Assert.Contains("global using BlazorWebFormsComponents;", content);
+        Assert.Contains("global using BlazorWebFormsComponents.Enums;", content);
+        Assert.Contains("global using BlazorWebFormsComponents.LoginControls;", content);
+        Assert.Contains("global using BlazorWebFormsComponents.Validations;", content);
         Assert.DoesNotContain("Identity", content);
     }
 
