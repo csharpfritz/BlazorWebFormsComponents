@@ -1,10 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.IO;
+using System.Text;
 
-using Microsoft.AspNetCore.Http;
-namespace WingtipToys.Logic
+namespace WingtipToys.Logic;
+
+public static class ExceptionUtility
 {
   // Create our own utility for exceptions
   public sealed class ExceptionUtility
@@ -25,8 +23,7 @@ namespace WingtipToys.Logic
     {
       // Include logic for logging exceptions
       // Get the absolute path to the log file
-      string logFile = "App_Data/ErrorLog.txt";
-      logFile = _httpContextAccessor.HttpContext?.Path.Combine(AppContext.BaseDirectory, "App_Data", "ErrorLog.txt");
+      string logFile = Path.Combine(AppContext.BaseDirectory, "App_Data", "ErrorLog.txt");
 
       // Open the log file for append and write the log
       StreamWriter sw = new StreamWriter(logFile, true);
@@ -41,21 +38,6 @@ namespace WingtipToys.Logic
         sw.WriteLine(exc.InnerException.Source);
         if (exc.InnerException.StackTrace != null)
         {
-          sw.WriteLine("Inner Stack Trace: ");
-          sw.WriteLine(exc.InnerException.StackTrace);
         }
-      }
-      sw.Write("Exception Type: ");
-      sw.WriteLine(exc.GetType().ToString());
-      sw.WriteLine("Exception: " + exc.Message);
-      sw.WriteLine("Source: " + source);
-      sw.WriteLine("Stack Trace: ");
-      if (exc.StackTrace != null)
-      {
-        sw.WriteLine(exc.StackTrace);
-        sw.WriteLine();
-      }
-      sw.Close();
     }
-  }
 }

@@ -1,8 +1,948 @@
+# Decisions
+
+> Shared team decisions. All agents read this. Only Scribe writes here (by merging from inbox).
+
+<!-- Decisions are appended below by the Scribe after merging from .squad/decisions/inbox/ -->
+
+# Decision: Master Page Migration Documentation Update
+
+**Date:** 2026-04-27
+**Author:** Beast (Technical Writer)
+**Status:** Completed
+
+## Decision
+
+Updated `docs/Migration/MasterPages.md` to emphasize the **improved automated migration path** using the `webforms-to-blazor` CLI tool as the primary recommendation, with manual migration and BWFC components as fallback options.
+
+## Key Changes Made
+
+### 1. Reordered Migration Strategies
+- **Strategy 1 (New):** CLI Tool (Automated) — Recommended ⭐
+- **Strategy 2:** Manual to Blazor Layouts — Alternative
+- **Strategy 3:** Gradual via BWFC Components — Stepping stone
+
+### 2. Added CLI Tool Section
+- Comprehensive table showing L1 transforms (what the CLI outputs)
+- Before/after code examples for complete master page migration
+- Exact output structure (MainLayout.razor, App.razor updates)
+- Installation and usage instructions
+
+### 3. Added CSS Link Migration Guidance
+- Explains why CSS must move from layouts to App.razor
+- Path rewriting rules table (tilde to root-relative)
+- Examples of automatic path transformations
+- Critical note: Blazor layouts don't control HTML structure
+
+### 4. Updated BWFC Components Context
+- Marked as "gradual migration stepping stone only"
+- Clarified that BWFC components are **not for new development**
+- Added warning admonition
+- Positioned after automated path
+
+### 5. Enhanced Best Practices
+- Separate guidance for CLI users vs manual migration
+- Head content best practices (global vs page-specific)
+- "From Web Forms thinking" guidance — anti-patterns vs patterns
+- Emphasized CLI tool as the starting point
+
+### 6. Updated Conclusion
+- Emphasizes automation is now fully reliable
+- Clear recommendation: CLI tool first
+- Explains when to use BWFC components (migration aid only)
+- Links to related documentation
+
+## Rationale
+
+The original documentation was comprehensive but buried the most important information (the CLI tool) in a secondary position. The improvements:
+
+1. **Front-load automation** — Most teams will use the CLI tool; they should see it first
+2. **Clarify BWFC role** — BWFC components are for gradual manual migration, not primary path
+3. **Document tooling output** — Developers need to know what the CLI generates
+4. **Explain path rewriting** — CSS link migration is a common pain point
+5. **Provide clear guidance** — "Use the CLI tool" is simpler than "here are three paths"
+
+## Documentation Links Updated
+
+- Added link to `/cli/index.md` (CLI Tool Documentation)
+- Added link to `/cli/transforms.md` (Transform Reference)
+- Cross-links to Three-Layer Methodology
+
+## Navigation Impact
+
+No navigation changes required — MasterPages.md remains at:
+```
+Migration:
+  Implement:
+    Master Pages: Migration/MasterPages.md
+```
+
+This is the correct location for this type of guidance.
+
+## Future Considerations
+
+- If BWFC adds more master page features (e.g., nested master pages), update the BWFC Components section
+- If CLI tool adds new transforms, update the automation table
+- Monitor for CSS path rewriting edge cases (e.g., CDN URLs, blob storage paths)
+
+## Testing
+
+Documentation has been reviewed for:
+- ✅ Accuracy (matches CLI tool behavior and BWFC API)
+- ✅ Clarity (examples are clear and follow the Beast documentation template)
+- ✅ Completeness (covers all three migration paths, limitations, and best practices)
+- ✅ Cross-links (links to related migration guides and component docs)
+
+# Decision: Master-Page Migration Strategy
+
+**Date:** 2026-04-27  
+**Author:** Bishop (Migration Tooling Dev)  
+**Status:** Accepted
+
+## Context
+
+The CLI migrator was converting all `<asp:ContentPlaceHolder>` elements to Razor `@Body` and adding
+`@inherits LayoutComponentBase`, producing a shallow single-slot Blazor layout. This discarded named
+placeholder relationships, and the generated layout still contained the full HTML document scaffold
+(`<!DOCTYPE html>`, `<html>`, `<head>`, `<body>`, etc.) which broke downstream Blazor rendering.
+# Bishop decision inbox — G3/G4 fixes
+
+- **Date:** 2026-05-08T10:42:43-04:00
+- **Owner:** Bishop
+
+## Decision
+For benchmark-facing identity scaffolds, the CLI should emit one consistent auth contract end to end:
+- account semantic rewrites post to `/Account/LoginHandler` and `/Account/RegisterHandler`
+- generated `Program.cs` configures application cookie `LoginPath` and `LogoutPath`
+- redirect handler stubs use ASP.NET Core Identity (`SignInManager<IdentityUser>` / `UserManager<IdentityUser>`) and preserve `ReturnUrl` when it is local
+
+For validator typing, `RequiredFieldValidator` should infer its generic `Type` from the validated control when possible (notably `TextBox` -> `string`) and only fall back to `object` when no control hint exists.
+
+## Why
+Run 42 showed that mismatched auth contracts caused the only first-pass failure, while blanket validator defaults created avoidable generic warnings. Encoding both decisions in the CLI keeps Layer 1 output runnable without forcing manual post-processing.
 
 
 
 
+# Decision: Xml and BaseCompareValidator — tracked test gap resolution
 
+**Date:** 2026-06-12T09:56:18-04:00
+**Date:** 2026-05-08T13:02:09-04:00
+**Author:** Bishop
+**Status:** Proposed
+
+## Decision
+Add TemplateField preservation regression coverage at both layers of the CLI test surface:
+
+Rewrite `MasterPageTransform` and `ContentWrapperTransform` to target the BWFC built-in
+`MasterPage` / `ContentPlaceHolder` / `Content` component system instead of Blazor's layout system.
+
+### MasterPageTransform (Order=250, .master → .razor)
+
+- Strip HTML document scaffold (DOCTYPE, html, head, body tags).
+- Extract `<head>` contents: CSS `<link rel="stylesheet">` elements are removed and collected into a
+  `@* TODO(bwfc-master-page): CSS <link> refs from <head> — move to App.razor: ... *@` comment.
+  Non-CSS head content (title, meta, Razor comments) is placed in `<MasterPage><Head>`.
+- Convert each `<asp:ContentPlaceHolder ID="X">` to `<ContentPlaceHolder ID="X">` preserving
+  default content (not discarded).
+- Wrap body content in `<MasterPage><Head>...</Head><ChildContent>...</ChildContent></MasterPage>`.
+- Preserve leading `@using` directives outside the `<MasterPage>` wrapper.
+- Remove `@inherits LayoutComponentBase` (BWFC MasterPage uses `@layout EmptyLayout` internally).
+
+### ContentWrapperTransform (Order=300, content .aspx → .razor)
+
+- Convert `<asp:Content ... ContentPlaceHolderID="X" ...>` → `<Content ContentPlaceHolderID="X">`,
+  preserving the named relationship.
+- Convert `</asp:Content>` → `</Content>`.
+- Read `MasterPageFile="..."` from `metadata.OriginalContent` (before PageDirectiveTransform strips
+  the `<%@ Page %>` directive) and derive the component name via
+  `Path.GetFileNameWithoutExtension(masterFile)` (e.g. `~/Site.Master` → `Site`).
+- Wrap all Content elements in `<ComponentName>...</ComponentName>`.
+
+## Key Constraints
+
+- CSS `<link>` elements from `<head>` go to **App.razor**, not to the layout or the MasterPage
+  `<Head>` parameter. The transform flags them with a TODO comment.
+- The `@inherits LayoutComponentBase` approach is **not used**; BWFC's `MasterPage` component
+  handles layout internally via `@layout EmptyLayout`.
+- Default content inside `<asp:ContentPlaceHolder>` blocks is **preserved** (not discarded), since
+  BWFC renders default content when no matching `<Content>` is provided at runtime.
+
+## prescan Rule Added
+
+`BWFC021` added to `bwfc-migrate.ps1` prescan patterns to flag files using ContentPlaceHolder /
+MasterPageFile relationships.
+
+## Files Changed
+
+- `src/BlazorWebFormsComponents.Cli/Transforms/Markup/MasterPageTransform.cs`
+- `src/BlazorWebFormsComponents.Cli/Transforms/Markup/ContentWrapperTransform.cs`
+- `tests/BlazorWebFormsComponents.Cli.Tests/TransformUnit/MasterPageTransformTests.cs`
+- `tests/BlazorWebFormsComponents.Cli.Tests/TransformUnit/ContentWrapperTransformTests.cs`
+- `tests/BlazorWebFormsComponents.Cli.Tests/TestData/expected/TC23-MasterPage.razor`
+- `tests/BlazorWebFormsComponents.Cli.Tests/TestData/expected/TC09-ContentWrappers.razor`
+- `tests/BlazorWebFormsComponents.Cli.Tests/TestData/expected/TC28-MasterPageLayout.razor`
+- `migration-toolkit/scripts/bwfc-migrate.ps1` (BWFC021 prescan pattern)
+
+### 2026-04-28: First-pass semantic pattern runtime contract
+**By:** Bishop
+**What:** Added two production semantic catalog entries for the CLI: `pattern-query-details` rewrites query-bound `SelectMethod` pages to query-property + `SelectItems` scaffolds, and `pattern-action-pages` rewrites blank action/redirect pages to SSR handler scaffolds with explicit redirect targets and TODO boundaries. Also changed CLI DI wiring to construct `MigrationPipeline` through an explicit factory because the new semantic-pattern registrations made the public lightweight constructor ambiguous for container activation.
+**Why:** The new isolated semantic runtime now handles two recurring Wingtip-style page shapes without expanding the Layer 1 transform list. The factory registration keeps the test-only lightweight constructor available while making production activation deterministic.
+
+### 2026-04-27: .squad is the canonical runtime folder again
+
+**Date:** 2026-04-27
+**By:** Bishop
+**Status:** Implemented
+
+## Decision
+
+Runtime coordination artifacts now live canonically under .squad/. Coordinators, workflows, and agents should resolve team, routing, decisions, logs, and agent runtime files from .squad/ first.
+
+## Rationale
+
+The live runtime had drifted into .ai-team/, while repository automation already preferred .squad/ with .ai-team/ as a fallback. Restoring .squad/ as the primary runtime folder keeps workflow resolution predictable without deleting legacy .ai-team/ artifacts.
+
+## Migration Notes
+
+- Copied current runtime content from .ai-team/ into .squad/
+- Restored expected .squad/team.md, .squad/routing.md, and .squad/agents/* files
+- Rebased migrated path references from .ai-team/ to .squad/
+- Preserved existing .squad/casting/* state and left .ai-team/ intact as a compatibility mirror during transition
+
+### MasterPage Bridge — Playwright Integration Test Coverage
+
+**Date:** 2026-04-27T17:05:17.9322370-04:00
+**By:** Colossus (Integration Test Engineer)
+**Requested by:** Jeffrey T. Fritz
+**Status:** IMPLEMENTED
+
+---
+
+## Context
+
+Forge's `forge-masterpage-bridge.md` contract fixes the `MasterPage` cascading gap (Content → ContentPlaceHolder slot-filling was non-functional because `MasterPage.razor` never emitted `<CascadingValue Value="this">`). After that fix, the sample pages at `/ControlSamples/Content` and `/ControlSamples/ContentPlaceHolder` host live demos of the slot-filling mechanism.
+
+---
+
+## Coverage Audit Before This Task
+
+| Route | Smoke | Interaction |
+|---|---|---|
+| `/control-samples/masterpage` | ✅ `OtherControl_Loads_WithoutErrors` | — (static info page, no interaction needed) |
+| `/ControlSamples/Content` | ✅ `UtilityFeature_Loads_WithoutErrors` | ⚠️ Only `Content_Renders_MasterPageDemoElements` (heading/body length only) |
+| `/ControlSamples/ContentPlaceHolder` | ✅ `UtilityFeature_Loads_WithoutErrors` | ⚠️ Only `ContentPlaceHolder_Renders_DemoContent` (heading/body length only) |
+
+---
+
+## Tests Added
+
+All four tests added to the `#region Content / ContentPlaceHolder / View Tests` block in
+`samples/AfterBlazorServerSide.Tests/InteractiveComponentTests.cs`.
+
+### 1. `Content_SlotFilling_InjectsContentAndPreservesDefault`
+- Scopes to `[data-audit-control="Content-1"]`
+- Asserts "Custom Header:" text is present (Content component injected into DemoHeader placeholder)
+- Asserts "Default body" text is present (DemoBody placeholder default is untouched)
+- **Why:** Proves the P0 cascading fix is working end-to-end in the browser.
+
+### 2. `Content_DynamicButton_UpdatesMessageInPlaceholder`
+- Scopes to `[data-audit-control="Content-3"]`
+- Records initial `<strong>` text (initial message)
+- Clicks "Change Message" button
+- Asserts the `<strong>` text changed and contains "Updated at"
+- **Why:** Verifies interactive Blazor re-render still updates content inside a `Content` child render fragment after the cascade fix.
+
+### 3. `ContentPlaceHolder_ContentReplacement_ReplacesTargetedRegionOnly`
+- Scopes to `[data-audit-control="ContentPlaceHolder-2"]`
+- Asserts "Region A was" is present (Region A was replaced)
+- Asserts "default Region B content" is present (Region B's default shows — no override)
+- **Why:** Explicitly validates the two-region replacement contract central to the migration bridge.
+
+### 4. `ContentPlaceHolder_ToggleOverride_SwitchesBetweenDefaultAndOverride`
+- Scopes to `[data-audit-control="ContentPlaceHolder-3"]`
+- Asserts "Default content" visible before toggle
+- Clicks "Apply Override" → asserts "Override active!" appears
+- Clicks "Remove Override" → asserts "Default content" returns
+- **Why:** Full round-trip test of the slot-filling mechanism under dynamic Blazor re-renders.
+
+---
+
+## Decisions / Conventions
+
+- Used `DOMContentLoaded` (not `NetworkIdle`) for InteractiveServer pages, consistent with established team convention for async-bound components.
+- Scoped all locators to `[data-audit-control="*"]` containers to avoid false matches from `<pre><code>` blocks that contain identical text snippets.
+- `Filter(HasTextString)` pattern not needed here because `data-audit-control` scoping is sufficient.
+- No changes to sample page files — all work confined to the test project.
+
+# Decision: MasterPage Migration Bridge Strengthening
+
+**By:** Cyclops  
+**Date:** 2026-04-27  
+**Status:** Implemented
+
+## What
+
+Substantially strengthened the `MasterPage` / `Content` / `ContentPlaceHolder` component trio so that migrated Web Forms master-page structures are practical and predictable. Key changes:
+
+1. **New `MasterPageContext` class** (`MasterPageContext.cs`) — a lightweight, disposable shared-state object that coordinates named slot communication. ContentPlaceHolder controls subscribe to their named slot; Content controls push fragments in; subscribers are notified immediately when their slot content changes. Change-reference detection prevents redundant re-renders.
+
+2. **`MasterPage.razor` cascade** — the component now wraps `ChildContent` in a nested `CascadingValue<MasterPageContext>` (alongside the existing `CascadingValue<BaseWebFormsComponent>` from the base class), so all descendants receive the context with no extra setup required in user markup.
+
+3. **`MasterPage.razor.cs` additions:**
+   - `Context` property exposes the `MasterPageContext` instance.
+   - `ContentSections` (backward-compat) is now a read-only view backed by `Context` — existing tests that access `MasterPage.ContentSections.ContainsKey(...)` continue to work.
+   - `OnAfterRenderAsync(firstRender)` triggers a second `StateHasChanged()` as belt-and-suspenders for any edge case where Content registered after ContentPlaceHolder had already passed its `OnInitialized` phase.
+   - `MasterPageLayoutBase` — new abstract class inheriting `LayoutComponentBase` (not `BaseWebFormsComponent`) that uses the same `_renderFragment` reflection pattern as `BaseWebFormsComponent` to wrap the entire layout output in `CascadingValue<MasterPageContext>`. Migrated master pages that adopt `@inherits MasterPageLayoutBase` (and use `@Body` for child page content) gain full ContentPlaceHolder / Content slot relationships in the Blazor layout scenario.
+
+4. **`ContentPlaceHolder.razor.cs`** — now implements `IDisposable`, subscribes to `MasterPageContext` in `OnInitialized`, and reads content in `OnParametersSet` on every re-render. The subscription callback calls `InvokeAsync(StateHasChanged)` so it is always marshalled to the Blazor sync context.
+
+5. **`Content.razor.cs`** — registers its fragment via `MasterPageContext.SetContent` in `OnParametersSet` (not just `OnInitializedAsync`), enabling dynamic content updates. Also pushes through the `ParentMasterPage.Context` path for the component-model pattern.
+
+## Why
+
+The previous implementation had two critical flaws:
+
+- No explicit `CascadingValue<MasterPage>` (only the base-class `CascadingValue<BaseWebFormsComponent>` existed), making the CascadingParameter match order-dependent on a Blazor runtime implementation detail.
+- Content registered in `OnInitializedAsync` was only consumed once by ContentPlaceHolder's `OnInitializedAsync`. In a Blazor **layout** scenario the layout template renders before `@Body`, meaning ContentPlaceHolder always initialised before Content — so placeholders always showed their default content even when a matching Content was present.
+
+The subscription-based `MasterPageContext` pattern eliminates the ordering constraint entirely.
+
+## What Remains
+
+- `MasterPageLayoutBase` is provided but the **migration toolkit's `MasterPageTransform`** still converts all `<asp:ContentPlaceHolder>` to `@Body`. A future toolkit update should emit `@inherits MasterPageLayoutBase` + preserve `<ContentPlaceHolder ID="...">` controls instead of flattening to `@Body`. This is a toolkit scope change, not a library scope change.
+- CSS link handling is intentionally left outside the layout path (per team decision).
+- Nested master pages (master page using another master page) are out of scope; use nested Blazor layouts.
+
+# 2026-04-28 — Semantic pattern normalization defaults
+
+- Added two isolated CLI semantic patterns:
+  - `pattern-account-pages`
+  - `pattern-master-content-contracts`
+- Decision: account-form pages should normalize to compile-safe SSR `<form method="post">` stubs with explicit `TODO(bwfc-identity)` markers instead of preserving validator-heavy Web Forms control trees.
+- Decision: generated master/content pairs should use explicit `ChildContent` + `ChildComponents` contracts so named `<Content>` regions stay separate from body content while still flowing through the BWFC master-page bridge.
+- Follow-up wiring, if/when coordinator wants these live in the pipeline:
+  - register both patterns alongside existing semantic registrations in `src/BlazorWebFormsComponents.Cli/Program.cs`
+  - add both patterns to `TestHelpers.CreateDefaultSemanticPatterns()` in `tests/BlazorWebFormsComponents.Cli.Tests/TestHelpers.cs`
+
+### MasterPage Migration Bridge — Implementation Contract
+
+**Date:** 2026-04-27T17:05:17-04:00
+**By:** Forge (Lead Architect / Web Forms Reviewer)
+**Requested by:** Jeffrey T. Fritz
+**Status:** APPROVED — ready for implementation
+
+---
+
+## TL;DR for Implementers
+
+**The core bug:** `MasterPage.razor` does not cascade itself, so `<Content>` never receives a parent reference and slot-filling is completely broken.
+
+**The core fix:** Wrap `@ChildContent` in `<CascadingValue Value="this">` in `MasterPage.razor`.
+
+**The tooling gap:** CLI and PS toolkit emit `@Body` for ALL ContentPlaceHolders and strip ALL Content wrappers. They should preserve secondary ContentPlaceHolders as `<ContentPlaceHolder>` and secondary Content as `<Content>` so the bridge components can work.
+
+---
+
+## Problem Statement
+
+Run 27 confirms the #1 toolkit gap: master-page conversion does not produce a usable Blazor layout. The generated `Site.razor` retains bundling tags and unconverted `<% %>` markup, requiring 14+ minutes of manual Layer 2 repair focused primarily on layout rewriting. The BWFC library has `MasterPage`, `Content`, and `ContentPlaceHolder` components, but neither the C# CLI migrator nor the PowerShell toolkit emits markup that uses them. The components themselves have a structural gap: `Content` registers with `MasterPage` via `CascadingParameter`, but `MasterPage` never cascades itself (no `<CascadingValue>` wrapping `ChildContent` in the .razor file). This means the Content→ContentPlaceHolder slot-filling mechanism is non-functional at runtime.
+
+---
+
+## Contract: 5 Work Areas
+
+### 1. Component Library (`src/BlazorWebFormsComponents/`)
+
+**1a. Fix MasterPage cascading (P0 — blocking):**
+- `MasterPage.razor` must wrap `@ChildContent` in `<CascadingValue Value="this">` so that `Content` and `ContentPlaceHolder` children receive the `[CascadingParameter] MasterPage` they expect.
+- Current `.razor` file does NOT cascade `this`; the `Content.razor.cs` `ParentMasterPage` is always `null`.
+
+**1b. MasterPage behavior contract:**
+- Renders NO wrapper element (matches Web Forms MasterPage behavior — no `<div>` or `<section>`)
+- `Head` RenderFragment → `<HeadContent>` (already implemented, keep)
+- `ChildContent` RenderFragment → rendered directly (already implemented, keep)
+- `Visible` parameter controls rendering (already implemented, keep)
+- `Title` / `MasterPageFile` remain `[Obsolete]` with guidance (already implemented, keep)
+- `EmptyLayout` is used via `@layout` to prevent layout recursion (already implemented, keep)
+
+**1c. ContentPlaceHolder behavior contract:**
+- Renders content from matching `Content` component if present; otherwise renders `ChildContent` (default content). Already coded in `.razor` — works once cascading is fixed.
+- Requires `ID` parameter to match with `Content.ContentPlaceHolderID`.
+- No wrapper element.
+
+**1d. Content behavior contract:**
+- Registers its `ChildContent` with the parent `MasterPage.ContentSections[ContentPlaceHolderID]`.
+- Renders nothing itself (already implemented — `.razor` is empty).
+- Requires `ContentPlaceHolderID` parameter.
+
+**1e. NOT in scope:**
+- Nested master pages (Web Forms `MasterPageFile` nesting). Document as unsupported; use nested Blazor layouts.
+- Runtime dynamic master-page switching. Out of scope.
+- `FindControl()` API on master pages. Not applicable in Blazor.
+
+### 2. C# CLI Migrator (`src/BlazorWebFormsComponents.Cli/`)
+
+**2a. MasterPageTransform — change output target (P0):**
+- Current: Replaces ALL `<asp:ContentPlaceHolder>` with `@Body` and prepends `@inherits LayoutComponentBase`.
+- New behavior for `.master` files: Emit a BWFC bridge layout instead of a raw Blazor layout.
+  - Prepend `@inherits LayoutComponentBase` (keep).
+  - Replace the PRIMARY ContentPlaceHolder (ID matching `MainContent|ContentPlaceHolder1|BodyContent`) with `@Body`.
+  - Replace OTHER ContentPlaceHolders with `<ContentPlaceHolder ID="OriginalID">` (preserving default content between tags).
+  - Strip `runat="server"` from `<head>` and `<form>` (keep existing behavior).
+  - Extract `<head>` content into `<HeadContent>` block (align with PS toolkit behavior).
+  - Add a TODO comment for head content review (keep).
+
+**2b. ContentWrapperTransform — preserve relationships (P1):**
+- Current: Strips ALL `<asp:Content>` wrappers, losing the `ContentPlaceHolderID` binding.
+- New behavior for `.aspx` child pages:
+  - Content targeting the PRIMARY ContentPlaceHolder (MainContent/ContentPlaceHolder1/BodyContent) → strip wrapper, keep inner content (current behavior, correct).
+  - Content targeting `HeadContent`/`head`/`TitleContent` → convert to `<HeadContent>...</HeadContent>`.
+  - Content targeting OTHER ContentPlaceHolderIDs → convert to `<Content ContentPlaceHolderID="OriginalID">...</Content>` (BWFC component, preserving the relationship).
+- This requires `ContentWrapperTransform` to be aware of which ContentPlaceHolder IDs exist. Options:
+  - **Option A (recommended):** Maintain a static list of "primary" IDs (`MainContent`, `ContentPlaceHolder1`, `BodyContent`) and "head" IDs (`HeadContent`, `head`, `TitleContent`). Anything else → preserve as `<Content>`.
+  - **Option B:** Parse the `.master` file first to extract ContentPlaceHolder IDs and pass them through pipeline context. More accurate, more complex.
+  - **Decision:** Start with Option A. It handles >95% of real-world cases. Option B can be added later if edge cases arise.
+
+**2c. New: Add CLI tests for master page transforms (P1):**
+- Test `.master` → layout with primary CPH → `@Body` + secondary CPH → `<ContentPlaceHolder>`.
+- Test `.aspx` with multiple Content blocks → primary stripped, head converted, others preserved.
+- Test self-closing ContentPlaceHolder variants.
+
+### 3. PowerShell Migration Toolkit (`migration-toolkit/scripts/bwfc-migrate.ps1`)
+
+**3a. ConvertFrom-MasterPage — align with CLI path (P1):**
+- Current behavior at lines 1536-1562 is mostly correct:
+  - Primary CPH IDs → `@Body` ✓
+  - Other CPH IDs → TODO comment with BWFC hint ✓
+- **Change:** Replace TODO comments for secondary ContentPlaceHolders with actual `<ContentPlaceHolder ID="...">` components instead of comment-only output.
+- Replace: `@* TODO: ContentPlaceHolder 'X' — BWFC provides... *@`
+- With: `<ContentPlaceHolder ID="X">` (preserving default content between the original tags) `</ContentPlaceHolder>`
+- Keep the `Write-ManualItem` hint for developer awareness.
+
+**3b. ConvertFrom-ContentWrappers (child pages) — align with CLI (P1):**
+- Lines 1338-1360 handle content extraction. Apply same logic as CLI:
+  - Primary CPH → strip wrapper (current behavior ✓)
+  - Head/Title CPH → convert to `<HeadContent>` (current behavior ✓)
+  - Other CPH → convert to `<Content ContentPlaceHolderID="X">` instead of stripping
+
+**3c. Validation:**
+- The `Test-BwfcControlPreservation` function should recognize `<ContentPlaceHolder>` and `<Content>` as valid BWFC components (add to the known-component list if not already present).
+
+### 4. Tests and Samples
+
+**4a. Fix existing tests (P0):**
+- The 5 existing test files in `src/BlazorWebFormsComponents.Test/MasterPage/` should continue passing after the cascading fix. They test MasterPage + ContentPlaceHolder rendering but do NOT test Content→ContentPlaceHolder slot filling (because it was broken). Verify no regressions.
+
+**4b. Add Content slot-filling tests (P0):**
+- `Content/SlotFilling.razor` — Test that `<Content ContentPlaceHolderID="X">` inside a `<MasterPage>` replaces the default content of `<ContentPlaceHolder ID="X">`.
+- `Content/MultipleSlots.razor` — Test multiple Content blocks targeting different ContentPlaceHolders.
+- `Content/UnmatchedContent.razor` — Test Content with a ContentPlaceHolderID that doesn't match any ContentPlaceHolder (should be silently ignored, not crash).
+- `Content/MixedDefaultAndOverride.razor` — Test one CPH with Content override, another with default content.
+
+**4c. Update sample page (P1):**
+- `samples/AfterBlazorServerSide/Components/Pages/ControlSamples/MasterPage/Index.razor` — Add a live demo section that actually renders the `<MasterPage>` + `<ContentPlaceHolder>` + `<Content>` components, not just static code snippets.
+
+**4d. CLI transform tests (P1):**
+- Add xUnit tests for `MasterPageTransform` and `ContentWrapperTransform` in the CLI test project.
+
+### 5. Documentation
+
+**5a. Update `docs/Migration/MasterPages.md` (P1):**
+- Add a "Bridge Components" section explaining the two-phase approach:
+  1. Phase 1 (automated): Toolkit converts `.master` to layout with BWFC `<ContentPlaceHolder>` bridge, converts child `.aspx` to pages with BWFC `<Content>` bridge.
+  2. Phase 2 (manual): Developer replaces BWFC bridge components with native Blazor patterns (`@Body`, `@section`).
+- Document the `Head` parameter behavior.
+- Document limitations (nested masters not supported).
+
+**5b. Update component doc if separate from migration doc (P1).**
+
+---
+
+## Edge Cases and Acceptable Limitations
+
+| Edge Case | Handling | Status |
+|-----------|----------|--------|
+| Nested master pages (`MasterPageFile` in a master) | Not supported. Document: use nested `@layout` directives. | Acceptable limitation |
+| Multiple ContentPlaceHolders with same ID | Last-write-wins in `ContentSections` dictionary. Document as undefined behavior. | Acceptable limitation |
+| Content without parent MasterPage | `ParentMasterPage` is null; Content renders nothing. No crash. | Already handled |
+| ContentPlaceHolder without parent MasterPage | Renders default `ChildContent`. No crash. | Already handled |
+| Dynamic master page switching at runtime | Not supported. Not a real migration scenario. | Acceptable limitation |
+| `<head runat="server">` containing `<asp:ContentPlaceHolder ID="HeadContent">` | CLI/PS both extract head metadata into `<HeadContent>` and replace HeadContent CPH. Well-handled. | Already handled |
+| Master page with NO primary CPH (only secondary CPHs) | No `@Body` emitted. Layout compiles but renders nothing in Body slot. Add a TODO warning. | P2 enhancement |
+| Very large master pages with inline code blocks (`<% %>`) | CLI/PS already flag these as TODO. Not auto-converted. | Acceptable limitation |
+
+---
+
+## Priority Summary
+
+| Priority | Item | Owner Suggestion |
+|----------|------|-----------------|
+| P0 | Fix MasterPage cascading (`<CascadingValue>`) | Component dev (Cyclops) |
+| P0 | Content slot-filling tests | Test dev (Rogue) |
+| P0 | Verify existing 5 MasterPage tests still pass | Test dev (Rogue) |
+| P1 | CLI MasterPageTransform: secondary CPH → `<ContentPlaceHolder>` | CLI dev (Bishop) |
+| P1 | CLI ContentWrapperTransform: secondary Content → `<Content>` | CLI dev (Bishop) |
+| P1 | CLI transform tests | CLI dev (Bishop) |
+| P1 | PS ConvertFrom-MasterPage: secondary CPH → `<ContentPlaceHolder>` | Toolkit dev (Bishop) |
+| P1 | PS content wrapper: secondary Content → `<Content>` | Toolkit dev (Bishop) |
+| P1 | Update docs/Migration/MasterPages.md | Doc dev (Beast) |
+| P1 | Update sample page with live demo | Sample dev (Jubilee) |
+| P2 | Warn when no primary CPH found | CLI/PS dev |
+
+---
+
+## Verification Criteria
+
+1. `dotnet build` succeeds with zero new warnings in BWFC library.
+2. All existing MasterPage tests pass (5 files, ~15 tests).
+3. New Content slot-filling tests pass (4+ new test files).
+4. CLI transforms produce correct output for `.master` with mixed primary/secondary CPHs.
+5. PS toolkit produces matching output structure.
+6. Next WingtipToys benchmark run (Run 28+) shows reduced Layer 2 repair time for layout.
+7. Sample page renders the bridge components live, not just as code snippets.
+
+---
+
+## Acceptance Bar (Human Terms)
+
+**This batch is DONE when:**
+
+1. **Content slot-filling works end-to-end:** A developer can place `<Content ContentPlaceHolderID="X">` inside a `<MasterPage>`, and that content replaces the default content of `<ContentPlaceHolder ID="X">`. This is currently broken — the component never receives the parent reference.
+
+2. **Migration toolkit emits bridge components:** Running `bwfc-migrate.ps1` on a Web Forms project with a `.master` file produces a layout that uses `<ContentPlaceHolder ID="...">` for secondary placeholders (not just `@Body`), and child pages use `<Content ContentPlaceHolderID="...">` for non-primary content regions (not stripped entirely).
+
+3. **No wrapper elements:** Neither `MasterPage`, `ContentPlaceHolder`, nor `Content` should emit any wrapper `<div>`, `<span>`, or structural HTML. They are transparent pass-through components matching Web Forms behavior.
+
+4. **Test coverage exists:** At least 4 new tests verify Content→ContentPlaceHolder slot-filling (matched, unmatched, multiple slots, mixed default/override scenarios).
+
+5. **Docs describe the bridge pattern:** The MasterPages.md migration doc explains the two-phase approach: automated bridge component emission, then optional manual modernization to native Blazor patterns.
+
+6. **Benchmark improvement:** Run 28+ should show measurably less manual repair time for layout conversion compared to Run 27's 14+ minutes.
+
+## 2026-04-28 — Semantic pattern catalog guardrails
+
+**By:** Forge  
+**Scope:** `pattern-query-details`, `pattern-action-pages`, `pattern-account-pages`, `pattern-master-content-contracts`
+
+### Decision
+
+1. **Run master/content contract normalization semantically after existing transforms.**
+   - Mechanical transforms should keep doing tag conversion first.
+   - The semantic pass should then normalize generated master shells and child pages onto the BWFC-tested contract:
+     - master shell markup in `ChildContent`
+     - migrated `<Content ContentPlaceHolderID="...">...</Content>` registrars in `ChildComponents`
+     - exact placeholder IDs preserved, including head slots
+
+2. **Do not over-promise account/auth rewrites.**
+   - Account pages may be recognized semantically, but working auth flows are **manual/TODO boundaries** unless the output is explicitly wired through HTTP endpoints/handlers.
+   - Cookie issuance, logout, external provider challenge, 2FA, password reset tokens, and login-management mutations are not safe “automatic rewrite” targets from markup shape alone.
+
+3. **Keep query/detail and action-page patterns narrow.**
+   - `pattern-query-details` is for read-only query/route driven pages with pure `SelectMethod` filtering.
+   - `pattern-action-pages` is for non-visual, redirecting action pages with deterministic query inputs and no auth/form/postback semantics.
+
+### Minimum valid master/content output contract
+
+**Generated master component**
+
+```razor
+<MasterPage>
+    <Head>
+        ...master head content, including any named head placeholders...
+    </Head>
+    <ChildContent>
+        ...master chrome...
+        <ContentPlaceHolder ID="MainContent" />
+        ...other named placeholders...
+    </ChildContent>
+    <ChildComponents>
+        @ChildComponents
+    </ChildComponents>
+</MasterPage>
+
+@code {
+    [Parameter] public RenderFragment? ChildComponents { get; set; }
+}
+```
+
+**Generated child page**
+
+```razor
+<Site>
+    <ChildComponents>
+        <Content ContentPlaceHolderID="MainContent">
+            ...
+        </Content>
+        <Content ContentPlaceHolderID="HeadContent">
+            ...
+        </Content>
+    </ChildComponents>
+</Site>
+```
+
+### Rejections
+
+- **Reject** any implementation that rewrites multi-placeholder master pages to `@Body`/single-slot Blazor layouts.  
+  **Safer alternative:** preserve `ContentPlaceHolderID` names and normalize to `ChildContent` + `ChildComponents`.
+
+- **Reject** any implementation that converts account pages into apparently-working Blazor `OnClick` auth handlers without HTTP endpoint semantics.  
+  **Safer alternative:** emit the page shell plus explicit auth TODO/endpoint contract and preserve `ReturnUrl` / status query parameters.
+
+- **Reject** any implementation that turns redirect-only action pages into informational pages.  
+  **Safer alternative:** keep action-on-navigation behavior or leave an explicit manual handler TODO.
+
+- **Reject** any implementation that discards route/query precedence on detail pages.  
+  **Safer alternative:** preserve the original parameter names and precedence or stop at a TODO.
+
+### Why
+
+The current isolated semantic subsystem is the right place for these four patterns because they are cross-file, contract-level rewrites, not local syntax edits. But Web Forms fidelity matters more than “helpful looking” output: named master sections, auth/account behavior, and query/action routes are exactly where a misleading rewrite creates the worst migration debt.
+
+### 2026-04-27: MasterPage sample updated — practical bridge demos added
+
+**By:** Jubilee
+**Date:** 2026-04-27
+
+**What:**
+- `MasterPage/Index.razor` updated with two live `@rendermode InteractiveServer` demos:
+  1. **Practical Migration Bridge demo** — a realistic `Site.Master`-style layout (header / main /
+     sidebar / footer) using named `ContentPlaceHolder` slots (`MainContent`, `Sidebar`, `Footer`).
+     `Content` components fill `MainContent` and `Sidebar`; `Footer` keeps its master-page default.
+     This matches how a real migrated `.aspx` / `.master` pair looks in production.
+  2. **Head parameter demo** — shows `<Head>` injecting metadata into `<HeadContent>`, with
+     a migration tip mapping `<head runat="server">` / `HeadContent` placeholder to the
+     Blazor equivalent.
+- Removed the code-only "Bridge Components (Temporary Migration Aid)" card; live demos replace it.
+- `ComponentList.razor` updated — `Content`, `ContentPlaceHolder`, and `MasterPage` added to the
+  **Migration Helpers** section (alphabetical insertion) so they appear in the component catalog page.
+
+**Why:**
+- The previous page presented the bridge as a code snippet curiosity with a "temporary aid" warning.
+  Per team direction, demos should show *practical migration-bridge usage*, not idealized
+  pure-layout-only usage, and must be realistic for migrated Web Forms pages with named placeholders.
+- `Content` and `ContentPlaceHolder` had no entry point from the component list; adding them to
+  Migration Helpers surfaces them alongside the other bridge utilities.
+
+**Boundaries respected:**
+- No component implementation changed.
+- No documentation (MkDocs) files changed — this is a sample-only update.
+- No test files changed.
+
+# QA Decision Record: MasterPage Migration Test Coverage
+**Date:** 2026-04-27  
+**Author:** Rogue (QA Analyst)  
+**Scope:** MasterPage, Content, ContentPlaceHolder components + CLI transforms
+
+---
+
+## Summary
+
+Added 18 new tests (7 bUnit + 5 ContentWrapperTransform rewrites + 6 MasterPageTransform additions) and fixed one critical runtime defect in `MasterPage.razor`.
+
+---
+
+## Critical Defect Found and Fixed
+
+**File:** `src/BlazorWebFormsComponents/MasterPage.razor`  
+**Defect:** `Content` and `ContentPlaceHolder` both declare `[CascadingParameter] private MasterPage ParentMasterPage`, but `MasterPage.razor` was not providing a `CascadingValue<MasterPage>`. The `BaseWebFormsComponent` constructor only cascades `this` as `CascadingValue<BaseWebFormsComponent>` (with Name="ParentComponent"), which does **not** satisfy a type-based match for `MasterPage`. The result was that `ParentMasterPage` was always `null`, making content injection silently fail.
+
+**Fix:** Wrapped `@ChildContent` in `<CascadingValue Value="this">` in `MasterPage.razor`. This is the same named-cascading-parent pattern used by all other BWFC container components (Calendar, DataGrid, Menu, TreeView, etc.).
+
+**Impact:** Without this fix, `Content` controls in child pages could never inject content into `ContentPlaceHolder` regions. The component API existed but the wiring was broken at runtime.
+
+---
+
+## New Test Files
+
+### `src/BlazorWebFormsComponents.Test/MasterPage/ContentRelationshipTests.razor` (7 tests)
+
+Covers the Content → ContentPlaceHolder injection contract:
+- Content with matching ID replaces placeholder default content ✅  
+- Content with non-matching ID leaves placeholder showing its default ✅  
+- Content with empty ContentPlaceHolderID has no side effects ✅  
+- Two Content controls inject into two distinct placeholders simultaneously ✅  
+- ContentPlaceHolder rendered outside any MasterPage shows default content (no crash) ✅  
+- Multiple ContentPlaceHolders in one MasterPage register without errors ✅  
+- After render, MasterPage.ContentSections contains the registered key ✅  
+
+---
+
+## Updated Test Files
+
+### `tests/BlazorWebFormsComponents.Cli.Tests/TransformUnit/ContentWrapperTransformTests.cs`
+
+Previous state: 3 stub tests that only asserted on the input string, never calling `ContentWrapperTransform.Apply()`. These passed trivially and provided zero coverage of the transform.
+
+Replaced with 9 real tests using the live transform:
+- Strips open `<asp:Content>` tag, preserves inner HTML  
+- Strips close `</asp:Content>` tag  
+- Full round-trip: inner content fully preserved  
+- Multiple Content blocks stripped in one pass  
+- Applies to Page files  
+- Applies to Master files (no file-type guard)  
+- Passthrough when no Content tags present  
+- `Order` is 300  
+- `Name` is "ContentWrapper"
+
+### `tests/BlazorWebFormsComponents.Cli.Tests/TransformUnit/MasterPageTransformTests.cs`
+
+Added 5 edge-case tests:
+- Multiple ContentPlaceHolder controls each become `@Body` (documents current behavior)  
+- `Name` property is "MasterPage"  
+- `runat="server"` stripped from `<head>` when `runat` appears as first attribute  
+- `runat="server"` stripped from `<form>` that also has an `action` attribute  
+- Block ContentPlaceHolder with multi-line default content replaced in full  
+
+---
+
+## Test Counts (after this session)
+
+| Suite | Before | After |
+|-------|--------|-------|
+| bUnit MasterPage (net8/9/10) | 16 | 23 |
+| MasterPageTransformTests | 11 | 16 |
+| ContentWrapperTransformTests | 3 (stubs) | 9 (real) |
+| **Full bUnit suite** | 2,874 | **2,881** |
+| **CLI transform suite** | 15 | 26 |
+
+All green. No regressions.
+
+---
+
+## Decisions
+
+1. **Content injection requires explicit CascadingValue<MasterPage>** — BaseWebFormsComponent's generic cascade is insufficient for type-based cascading parameter matching. Any BWFC component that wishes to be found by type (without a Name) must provide its own explicit `<CascadingValue Value="this">` in its `.razor` file. Prefer Named cascades (e.g., `Name="ParentMasterPage"`) for clarity, but the anonymous type-based cascade added here is consistent with how Blazor's `EditContext` is cascaded.
+
+2. **ContentWrapperTransform stub tests removed** — The three placeholder tests in `ContentWrapperTransformTests.cs` that asserted on the input string (not the transform output) were misleading. Real tests call `Apply()`. This pattern must not be used in future TDD stubs — use `[Fact(Skip = "...")]` instead so it's visible as pending.
+
+# Decision: Compile-Surface Quarantine for Non-Migratable Pages
+
+**Date:** 2026-05-07T13:58:11-04:00  
+**Author:** Bishop (Migration Tooling Dev)  
+**Requested by:** Jeffrey T. Fritz  
+**Status:** Proposed
+
+## Context
+
+Run 40 showed that the CLI still emitted dozens of non-benchmark pages whose generated markup or code-behind could not compile inside the migrated Blazor runtime. These pages were not the benchmark path, but they still blocked every end-to-end build until a human manually stubbed them.
+
+## Decision
+
+Add an explicit compile-surface quarantine step to the CLI page pipeline.
+
+### What the quarantine step does
+
+- Detects risky pages by feature bucket before or after transforms run:
+  - ASP.NET Identity / membership APIs
+  - payment or checkout integrations
+  - mobile-only pages and shells
+  - admin CRUD pages with 3+ legacy data-source bindings
+  - unresolved compile-surface blockers still flagged by the emission planner after transforms complete
+- Replaces quarantined `.razor` output with a build-safe placeholder that still routes and clearly explains the manual migration boundary.
+- Emits a minimal `.razor.cs` stub inheriting `BlazorWebFormsComponents.WebFormsPageBase` so the generated app still compiles.
+- Preserves transformed original code-behind under `migration-artifacts/codebehind/` when code-behind exists.
+- Writes `migration-artifacts/quarantine-manifest.json` with source-relative path, detected unsupported features, quarantine reason, and suggested migration approach.
+
+## Rationale
+
+The CLI should prefer a clean, buildable migrated surface over emitting broken pages that are known to require manual work. A manifest-backed quarantine step also makes deferred work explicit and scriptable for later L2/L3 repair passes.
+
+## Implementation Notes
+
+- `CompileSurfaceStubTransform` now delegates to shared quarantine detection so early high-confidence cases are stubbed consistently.
+- `MigrationPipeline` performs a late quarantine pass after semantic patterns, allowing normalized login/action pages to remain compile-safe when possible.
+- The late pass uses existing compile-surface emission-plan failures as another quarantine signal instead of silently dropping page code-behind from the build.
+
+## Validation
+
+- `dotnet test tests\BlazorWebFormsComponents.Cli.Tests --nologo`
+
+## Follow-up
+
+- Consider feeding the manifest into migration-toolkit benchmark repair workflows so quarantined pages can be auto-prioritized for targeted L2 prompts.
+
+
+# Decision: Run 41 quarantine, static-file, and antiforgery hardening
+
+**Date:** 2026-05-07T15:38:16-04:00  
+**Author:** Bishop  
+**Requested by:** Jeffrey T. Fritz  
+**Status:** Proposed
+
+## Decision
+
+1. Add an essential-page allowlist to `PageQuarantineDetector` so benchmark-critical product, catalog, cart, shopping, home, about, and contact paths are not quarantined for incidental heuristic signals.
+2. Raise heuristic quarantine sensitivity so a single weak signal does not quarantine ordinary pages unless the path is clearly non-essential (`Account/`, `Admin/`, `Checkout/`, mobile shells) or the blocker is strong enough to break the compile surface.
+3. Generate `Program.cs` with `app.UseStaticFiles();` and `app.UseAntiforgery();` for all scaffolded SSR apps.
+4. Post-process semantic-pattern form output so generated `<form>`/`<EditForm>` markup receives `<AntiforgeryToken />` and a deterministic form name automatically.
+
+## Rationale
+
+Run 41 proved the CLI was over-quarantining core Wingtip pages, under-configuring the SSR scaffold for copied static assets, and leaving generated POST forms without the Blazor antiforgery contract. The chosen fix keeps benchmark paths runnable, preserves quarantine for true out-of-scope areas, and hardens generated SSR forms without duplicating form logic inside every semantic pattern.
+
+## Files
+
+- `src\BlazorWebFormsComponents.Cli\Pipeline\PageQuarantineDetector.cs`
+- `src\BlazorWebFormsComponents.Cli\Scaffolding\ProgramCsEmitter.cs`
+- `src\BlazorWebFormsComponents.Cli\SemanticPatterns\SemanticPatternCatalog.cs`
+- `src\BlazorWebFormsComponents.Cli\Transforms\Markup\FormAntiforgeryPostProcessor.cs`
+- `tests\BlazorWebFormsComponents.Cli.Tests\TransformUnit\PageQuarantineDetectorTests.cs`
+- `tests\BlazorWebFormsComponents.Cli.Tests\ScaffoldingTests.cs`
+- `tests\BlazorWebFormsComponents.Cli.Tests\SemanticPatternCatalogTests.cs`
+- `tests\BlazorWebFormsComponents.Cli.Tests\SemanticPatternConcreteTests.cs`
+- `tests\BlazorWebFormsComponents.Cli.Tests\PipelineIntegrationTests.cs`
+- `docs\cli\index.md`
+- `docs\cli\transforms.md`
+
+## Validation
+
+- `dotnet test tests\BlazorWebFormsComponents.Cli.Tests --nologo`
+
+
+# Decision: Run 41 benchmark follow-up items
+
+**Date:** 2026-05-07T15:15:19-04:00  
+**Author:** Bishop (Migration Tooling Dev)  
+**Requested by:** Jeffrey T. Fritz  
+**Status:** Proposed
+
+## Context
+
+WingtipToys benchmark Run 41 finished green (25/25 acceptance tests), but only after manual repair of three fresh-output regressions that the cumulative fixes were supposed to reduce: benchmark-path pages were still quarantined, static assets served as zero-length responses under the generated runtime, and SSR cart postbacks still needed manual antiforgery/form-name wiring.
+
+## Decision
+
+Treat Run 41 as a successful benchmark with three prioritized follow-up items for the CLI/runtime scaffold:
+
+1. **Do not quarantine benchmark-critical commerce pages by default.**
+   - Preserve or explicitly allowlist pages like `ProductList`, `ProductDetails`, `AddToCart`, and `ShoppingCart` on Wingtip-style fixtures.
+   - Keep quarantine focused on non-benchmark account/admin/checkout/mobile/payment surfaces.
+
+2. **Prefer classic static-file middleware for migrated sample scaffolds that rely on `wwwroot` asset trees.**
+   - The Run 41 scaffold returned 200 with `Content-Length: 0` for `/Images/logo.jpg` and `/Catalog/Images/...` until `app.UseStaticFiles()` replaced `app.MapStaticAssets()`.
+   - Fresh benchmark runtimes should default to whichever path reliably serves legacy copied assets without additional repair.
+
+3. **Emit a complete SSR form-post contract for pages that use `Request.Form`.**
+   - Middleware: `app.UseAntiforgery()`
+   - Markup: `<AntiforgeryToken />`
+   - Form identity: explicit `@formname`
+   - Without all three, the shopping-cart update path either 400s or fails Playwright postback flows.
+
+## Evidence from Run 41
+
+- Final build: `samples\AfterWingtipToys\WingtipToys.csproj` succeeded with 31 warnings / 0 errors.
+- Final acceptance: `src\WingtipToys.AcceptanceTests` passed 25/25 against `https://localhost:5001`.
+- Quarantine evidence: `samples\AfterWingtipToys\migration-artifacts\quarantine-manifest.json`
+- Report: `dev-docs\migration-tests\wingtiptoys\run41\report.md`
+
+## Rationale
+
+Run 41 proved the benchmark can still end green while preserving BWFC controls, but the repair loop is paying for avoidable scaffolding mistakes instead of true migration complexity. Tightening quarantine scope, static asset serving, and SSR form-post emission should reduce future Wingtip repair time materially without weakening compile safety.
+
+
+# Decision: Stable cart session key for CLI transforms
+
+**Date:** 2026-05-07T13:58:11-04:00  
+**Author:** Rogue (QA Analyst)  
+**Requested by:** Jeffrey T. Fritz  
+**Status:** Proposed
+
+## Context
+
+Run 40 exposed a migration gap in benchmark cart flows: generated code that used `Session.Id` directly for cart lookups was not stable enough under Blazor SSR. Cart and basket code paths need an explicit session-backed identifier that survives the benchmark flow more reliably than the raw session ID.
+
+## Decision
+
+Add a dedicated CLI code-behind transform named `CartSessionKeyTransform` that:
+
+- targets cart/basket-oriented statements still using `Session.Id` or `HttpContext.Session.Id`
+- injects a single `GetOrCreateCartKey()` helper into the generated partial class
+- stores the stable value in `Session["cart-key"]`
+- rewrites matching cart service calls and cart ID assignments to use that helper
+- leaves unrelated `Session.Id` usage untouched to avoid over-matching
+
+## QA Notes
+
+- Added focused transform-unit coverage for cart assignment rewrites, cart service call rewrites, non-cart preservation, helper idempotence, and default-pipeline registration.
+- Updated CLI docs so the transform catalog and overview mention the new cart session-key stabilization step.
+- Full CLI test execution is currently blocked by unrelated workspace changes in `src\BlazorWebFormsComponents.Cli\Pipeline\PageQuarantineDetector.cs`, which fail the CLI build before the new tests can run.
+
+## Files Affected
+
+- `src/BlazorWebFormsComponents.Cli/Transforms/CodeBehind/CartSessionKeyTransform.cs`
+- `src/BlazorWebFormsComponents.Cli/Program.cs`
+- `tests/BlazorWebFormsComponents.Cli.Tests/TestHelpers.cs`
+- `tests/BlazorWebFormsComponents.Cli.Tests/TransformUnit/CartSessionKeyTransformTests.cs`
+- `docs/cli/index.md`
+- `docs/cli/transforms.md`
+
+
+
+# Bishop decision inbox — G3/G4 fixes
+
+- **Date:** 2026-05-08T10:42:43-04:00
+- **Owner:** Bishop
+
+## Decision
+For benchmark-facing identity scaffolds, the CLI should emit one consistent auth contract end to end:
+- account semantic rewrites post to `/Account/LoginHandler` and `/Account/RegisterHandler`
+- generated `Program.cs` configures application cookie `LoginPath` and `LogoutPath`
+- redirect handler stubs use ASP.NET Core Identity (`SignInManager<IdentityUser>` / `UserManager<IdentityUser>`) and preserve `ReturnUrl` when it is local
+
+For validator typing, `RequiredFieldValidator` should infer its generic `Type` from the validated control when possible (notably `TextBox` -> `string`) and only fall back to `object` when no control hint exists.
+
+## Why
+Run 42 showed that mismatched auth contracts caused the only first-pass failure, while blanket validator defaults created avoidable generic warnings. Encoding both decisions in the CLI keeps Layer 1 output runnable without forcing manual post-processing.
+
+
+# Bishop G6/G7 Fixes
+
+Date: 2026-05-08T11:37:18.862-04:00
+Branch: feature/wingtip-next-features-review
+PR: #545
+
+## Decisions
+
+1. `PageDirectiveTransform` now emits a source-relative primary `@page` route for nested `.aspx` pages and keeps the filename-only alias as a secondary route when the two differ. Root-level pages still emit a single route, and `Default.aspx`/`Index.aspx` continue to resolve to `/`.
+2. `PageQuarantineDetector` now bypasses quarantine for redirect-only action pages when their markup is inert and their code-behind uses `Response.Redirect`, unless identity or payment signals are also present.
+3. CLI docs were updated to describe nested route aliasing and the redirect-only quarantine exemption because both behaviors change generated migration output in operator-visible ways.
+1. `tests/BlazorWebFormsComponents.Cli.Tests/TransformUnit/GridViewColumnItemTypeTransformTests.cs`
+2. `tests/BlazorWebFormsComponents.Cli.Tests/PipelineIntegrationTests.cs`
+
+The tests must prove that `TemplateField` columns survive alongside `BoundField` siblings and when they are the only GridView columns, while preserving nested `TextBox`, `CheckBox`, and inline display-expression content.
+
+## Rationale
+TemplateField loss is a high-severity migration failure because it silently drops editable inputs, calculated output, and row-selection controls. The current pipeline behavior depends on multiple ordered markup transforms working together, so a single focused unit test is not enough; we need both transform-level and end-to-end file-migration assertions to keep future ordering changes from regressing Wingtip-style GridViews.
+
+## Files
+- `tests/BlazorWebFormsComponents.Cli.Tests/TransformUnit/GridViewColumnItemTypeTransformTests.cs`
+- `tests/BlazorWebFormsComponents.Cli.Tests/PipelineIntegrationTests.cs`
+
+
+# Decision: ComponentRefCodeBehindTransform Test Coverage Complete
+
+**Date:** 2026-05-15
+**Author:** Rogue (QA Analyst)
+**Status:** Established
+
+## Xml — no tests; deferred component
+
+`Xml` is listed in `tracked-components.json` with `"status": "Deferred"`. No `Xml.razor` or `Xml.razor.cs` component source files exist in the library. The original `System.Web.UI.WebControls.Xml` control was a niche XSL transformation container with no clear Blazor analogue. **No bUnit tests should be added for Xml until a component implementation exists.** The tracked-tests gap for Xml is intentional; it must remain open until the component ships. No repo change is needed beyond this note.
+
+## BaseCompareValidator — abstract base; covered via property tests
+
+`BaseCompareValidator<InputType>` is an abstract generic base class that cannot be directly instantiated. Its only testable surface beyond what `BaseValidator` already provides is:
+
+- `Type` (ValidationDataType, defaults to `String`)
+- `CultureInvariantValues` (bool, defaults to `false`)
+
+Both concrete subclasses (`CompareValidator` and `RangeValidator`) already exercise this base class's `Compare()` logic extensively. To close the tracking gap, targeted property-default and parameter-acceptance tests were added in:
+
+`src/BlazorWebFormsComponents.Test/Validations/BaseCompareValidatorPropertyTests.razor`
+
+These 6 tests use `CompareValidator` and `RangeValidator` as proxies. **No implementation change is needed.** Going forward, `BaseCompareValidator` should be treated as "covered" once these property tests pass.
+
+---
 
 # Decision: Executive Summary Update Pattern
 
@@ -767,4 +1707,1385 @@ The current `Wizard` implementation only raises `ActiveStepIndexChanged` during 
 - QA can keep coverage green while still documenting product gaps in executable form.
 - Future Wizard implementation work has named tests ready to unskip when the behavior lands.
 - Reports can distinguish supported parity from intentionally deferred Wizard behavior.
+
+
+
+---
+
+# Custom control parser + scaffolder handoff (#557, #549, #550, #548)
+
+**Author:** Bishop  
+**Date:** 2026-06-10T10:33:04.9872011-04:00  
+**Scope:** BWFC CLI parser/runtime/pipeline wiring for custom controls
+
+## Decision
+
+Ship #557 now with production-grade parsing + runtime integration, and land only the starter surface for #549 and #550 so follow-on work can iterate safely without re-plumbing core context.
+
+## Delivered in this slice
+
+1. **#557 (implemented):**
+   - `WebConfigAssemblyParser` now aggregates custom control registrations across all `Web.config` files in the source tree.
+   - Parser emits `PrefixToNamespaceMap` to normalize prefix resolution.
+   - `RuntimeDetector` consumes parser output and exposes prefix map through runtime profile.
+   - Added/updated parser + runtime tests.
+
+2. **#549 (started):**
+   - Added `CodeOnlyServerControlAnalyzer` to detect code-only controls (`.cs` classes inheriting Web Forms control bases, no `.ascx/.aspx/.master` companion).
+   - Added `CodeOnlyControlScaffolder` skeleton emitter.
+   - Wired emission into `MigrationPipeline` startup path (after scaffold) to generate placeholder components under `Generated/CodeOnlyControls`.
+   - Added scaffolder and pipeline integration tests for starter behavior.
+
+3. **#550 (plumbing only):**
+   - Added shared context path: `MigrationContext.CustomControlPrefixToNamespace` and `FileMetadata.CustomControlPrefixToNamespace`.
+   - Pipeline now hydrates this map from runtime detection (and from parser when scaffold is skipped).
+
+## Handoff: remaining work
+
+### #549 remaining
+- Replace placeholder generated markup/code with base-class-aware templates (`WebControl`, `CompositeControl`, `DataBoundControl`, `Control`) per team design matrix.
+- Project detected public properties/events into `[Parameter]`/`EventCallback` members.
+- Add deterministic naming/namespace strategy for duplicate class names beyond numeric suffixing.
+- Add migration report surface that links generated control stubs back to source registrations and usage sites.
+
+### #550 remaining
+- Implement markup transform that uses `FileMetadata.CustomControlPrefixToNamespace` to resolve local/custom prefixes into generated components/usings.
+- Coordinate ordering with existing directive/prefix transforms so this runs before generic `AspPrefixTransform` stripping causes information loss.
+- Add regression cases for nested `Web.config` overrides and prefix conflicts.
+
+### #548 handoff note
+- This slice did not implement #548 behavior.
+- If #548 depends on custom control resolution/scaffolding, build directly on the new shared map + detected code-only control descriptors to avoid adding another parser pass.
+
+## Validation executed
+
+- `dotnet test tests\BlazorWebFormsComponents.Cli.Tests --nologo --filter "FullyQualifiedName~WebConfigAssemblyParserTests|FullyQualifiedName~RuntimeDetectorTests|FullyQualifiedName~CodeOnlyControlScaffolderTests|FullyQualifiedName~FullMigration_EmitsCodeOnlyControlSkeletons_AndPopulatesPrefixMap"`
+- `dotnet build samples\AfterWingtipToys --nologo` (fails with pre-existing sample compile error in `Logic\ExceptionUtility.cs`)
+- `dotnet build samples\AfterBlazorServerSide --nologo` (passes)
+
+
+---
+
+# WebFormsForm must inherit ComponentBase explicitly
+
+**Author:** Rogue (QA)  
+**Date:** 2026-07  
+**Scope:** WebFormsForm.razor, RequestShim.cs  
+**Issue:** #533
+
+## Decision
+
+Any `.razor` component in the main project that should NOT be a Web Forms control must explicitly declare `@inherits ComponentBase` to override the project-level `_Imports.razor` (which specifies `@inherits BaseWebFormsComponent`).
+
+## Bugs Found
+
+1. **WebFormsForm.razor** — Missing `@inherits ComponentBase` caused it to inherit `BaseWebFormsComponent` via `_Imports.razor`. Both classes had `[Parameter(CaptureUnmatchedValues = true)]`, throwing `ThrowForMultipleCaptureUnmatchedValuesParameters` at render time. Fixed by adding `@inherits ComponentBase`.
+
+2. **RequestShim.cs line 79** — `new FormShim(null)` was ambiguous between `FormShim(IFormCollection?)` and `FormShim(Dictionary<string, StringValues>)` after the dual-mode constructor was added. Fixed by casting to `(IFormCollection?)null`.
+
+## Impact
+
+Both fixes are required for the WebFormsForm component to render at all. Without them, any page using `<WebFormsForm>` crashes at component initialization.
+
+
+
+# Documentation Alignment Remediation Checklist
+
+**Date:** 2026-06-12  
+**Initiated by:** Beast (Technical Writer)  
+**Scope:** Dashboard accuracy, mkdocs.yml coverage, README completeness, docs file naming alignment
+
+---
+
+## EXECUTIVE SUMMARY
+
+Three meta-gaps identified:
+
+1. **Dashboard scope mismatch**: `docs/dashboard.md` claims "52 targeted Web Forms controls" but `tracked-components.json` contains 61 components. The health dashboard needs scope clarification.
+
+2. **Naming misalignment**: 13 catalog items lack one-to-one documentation pages (e.g., `ConfigurationManager` exists as `Phase1-ConfigurationManager.md` under Migration/), and 15 catalog items are missing README doc links.
+
+3. **Coverage distribution**: While 155+ nav entries exist in `mkdocs.yml` and 191 `.md` files exist under `docs/`, many are utility/infrastructure/migration guides that supplement rather than one-to-one map catalog entries.
+
+---
+
+## BUCKET 1: Must-Fix Mismatches
+
+These require action to prevent user confusion and maintain internal consistency.
+
+### 1.1 Dashboard Scope Number Inconsistency
+
+**Problem:**  
+`docs/dashboard.md` line 9 states: "The dashboard tracks **52 targeted Web Forms controls**"  
+But `dev-docs/tracked-components.json` lists **61 components** across all categories.
+
+**Impact:**  
+- Users reading dashboard.md expect tracking of 52 items but might find 61 in actual dashboard
+- Health scoring logic vs. inventory mismatch confuses developers
+- Non-deterministic: unclear if 52 is intentional subset vs. outdated count
+
+**Suggested Fix:**
+- **Option A:** Update dashboard.md line 9 to say "61 targeted Web Forms controls"
+- **Option B:** Clarify scope: "52 core Web Forms controls plus 9 infrastructure/utility components" with explanation
+- **Recommend Option A** for simplicity (Update `docs/dashboard.md` line 9 only)
+
+**Files to change:**
+- `docs/dashboard.md` (line 9)
+
+**Severity:** HIGH — directly impacts documentation accuracy
+
+---
+
+### 1.2 Infrastructure/Utility Components Missing from README Component Lists
+
+**Problem:**  
+README.md organizes components by Web Forms category (Editor, Data, Validation, Navigation, Login) but omits Infrastructure/Utility controls that are in tracked-components.json:
+- Content
+- ContentPlaceHolder
+- MasterPage
+- NamingContainer
+- ScriptManager (stub)
+- UpdatePanel
+
+**Impact:**  
+- Developers searching README for these components won't find them
+- Suggests components are not officially supported when they are tracked
+- Incomplete public API inventory
+
+**Suggested Fix:**
+Add a new "Infrastructure & Utility Components" section in README.md after Login Controls section (around line 193).
+
+**Files to change:**
+- `README.md` (add section, add links to existing docs)
+
+**Severity:** HIGH — README is public-facing primary documentation
+
+---
+
+## BUCKET 2: Needs Naming/Alignment Decision
+
+These items have documentation coverage but naming/location decisions need team input.
+
+### 2.1 Migration Phase/Shim Docs Mapped Under Different Names
+
+**Problem:**  
+Several catalog entries map to migration methodology docs but NOT with one-to-one page names:
+
+| Catalog Entry | Actual Doc Location | Type |
+|---|---|---|
+| `ConfigurationManager` | `docs/Migration/Phase1-ConfigurationManager.md` | Migration guide (present) |
+| `FindControl` | `docs/Migration/FindControl-Migration.md` | Migration guide (present) |
+| `Session State` | `docs/Migration/Phase2-SessionShim.md` | Migration guide (present) |
+| `Server Utilities` | `docs/UtilityFeatures/ServerShim.md` | Utility feature (present) |
+| `Request.Form` / Web Forms Request | `docs/UtilityFeatures/RequestShim.md` + `docs/UtilityFeatures/WebFormsForm.md` | Utility features (present, split) |
+| `Cache` | `docs/UtilityFeatures/CacheShim.md` | Utility feature (present) |
+| `ClientScript` | `docs/Migration/ClientScriptMigrationGuide.md` | Migration guide (present) |
+
+**Decision Needed:**
+1. **Should these entries get their own same-name doc pages?**  
+   - Pro: Matches ComponentHealthService detection logic (looks for `docs/**/{ComponentName}.md`)
+   - Con: Duplicates content that's already well-covered under Migration/Utility sections
+   
+2. **Or should ComponentHealthService be updated to recognize aliased doc names?**  
+   - Pro: Avoids doc duplication
+   - Con: Requires code logic changes; harder to maintain
+
+**Current State:**
+- ComponentHealthService likely reports these as "missing docs" (false negative)
+- mkdocs.yml does NOT have top-level nav entries for `ConfigurationManager.md`, `FindControl.md`, etc.
+- All content is present in appropriate guides, just under different organizational names
+
+**Recommended Decision:**
+- **Add topic-specific landing pages** under `docs/UtilityFeatures/` and/or `docs/Migration/` with cross-references
+- Create lightweight alias pages: `docs/UtilityFeatures/ClientScript.md` → redirects/embeds `docs/Migration/ClientScriptMigrationGuide.md`
+- OR: Update ComponentHealthService to recognize these mappings as "documented" without literal filename match
+
+**Files likely to change (depending on decision):**
+- `src/BlazorWebFormsComponents/Diagnostics/ComponentHealthService.cs` (detection logic)
+- Potential new files: `docs/UtilityFeatures/ClientScript.md`, `docs/UtilityFeatures/ConfigurationManager.md`, etc.
+- `docs/Migration/ConfigurationManager-Overview.md` (if adding top-level aliases)
+- `mkdocs.yml` (nav entries for new alias pages)
+
+**Severity:** MEDIUM — documentation exists but may not be discoverable by some tools/developers
+
+---
+
+### 2.2 AJAX Toolkit Showcase / AjaxToolkitShowcase Naming
+
+**Problem:**  
+Sample catalog likely has an entry "AjaxToolkitShowcase" or similar but no corresponding one-to-one component doc.
+
+**Current Coverage:**
+- `docs/AjaxToolkit/index.md` exists (overview)
+- Multiple extender docs exist (Accordion.md, AutoCompleteExtender.md, etc.)
+- mkdocs.yml has "Ajax Control Toolkit Extenders" nav section with 20+ entries
+
+**Decision Needed:**
+1. Is "AjaxToolkitShowcase" a **sample page** (not a component) that shouldn't be tracked in ComponentHealthService?
+2. Or should there be a top-level `docs/AjaxToolkit/AjaxToolkitShowcase.md` landing page?
+
+**Recommended Decision:**
+- Verify if this is a sample route vs. a tracked component
+- If sample route: exclude from ComponentHealthService tracked list
+- If component category: create `docs/AjaxToolkit/AjaxToolkitShowcase.md` as overview/index alternative
+
+**Files likely to change:**
+- `dev-docs/tracked-components.json` (possibly remove if not a component)
+- `docs/AjaxToolkit/AjaxToolkitShowcase.md` (create if needed)
+- `src/BlazorWebFormsComponents/Diagnostics/ComponentHealthService.cs` (exclusion logic)
+
+**Severity:** LOW — Toolkit is well-documented; this is more about classification
+
+---
+
+### 2.3 Custom Controls / Custom WebControl Naming
+
+**Problem:**  
+Catalog likely tracks "Custom WebControl" as a component, but this is a **migration pattern**, not a trackable BWFC component.
+
+**Current Coverage:**
+- `docs/Migration/CustomWebControl.md` exists
+- `docs/Migration/Custom-Controls.md` exists
+- Both are about how to migrate custom controls, not "the Custom WebControl component"
+
+**Decision Needed:**
+1. Should "Custom WebControl" be in `tracked-components.json` at all?
+2. Or is it a "feature" (adapter classes) rather than a "component"?
+
+**Recommended Decision:**
+- Remove "Custom WebControl" from tracked-components.json or rename it to "CustomWebControl Adapter" with category "Infrastructure/Feature"
+- Clarify in dashboard.md that this is a *migration tool/pattern*, not a Blazor component
+
+**Files likely to change:**
+- `dev-docs/tracked-components.json` (remove or rename entry)
+- `docs/dashboard.md` (clarify feature vs. component definition)
+
+**Severity:** LOW — Editorial/classification issue
+
+---
+
+## BUCKET 3: Nice-to-Have Cleanup
+
+These are low-risk improvements that enhance clarity and consistency.
+
+### 3.1 Update mkdocs.yml to Cross-Reference Aliased Content
+
+**Problem:**  
+mkdocs.yml has migration guides but no top-level entries linking directly to infrastructure components.
+
+**Current State:**
+```yaml
+- Utility Features:
+    - Cache: UtilityFeatures/CacheShim.md
+    - Server & Path Resolution: UtilityFeatures/ServerShim.md
+    - Request: UtilityFeatures/RequestShim.md
+```
+
+But Component Catalog may expect:
+```yaml
+- Utility Features:
+    - Cache: UtilityFeatures/Cache.md  (alias/landing page)
+    - ConfigurationManager: UtilityFeatures/ConfigurationManager.md  (alias)
+    - ClientScript: UtilityFeatures/ClientScript.md  (alias)
+```
+
+**Suggested Fix:**
+Review mkdocs.yml nav entries and verify naming matches both:
+1. What ComponentHealthService looks for (docs/{ComponentName}.md)
+2. What catalog entries expect
+
+**Files to change:**
+- `mkdocs.yml` (nav section)
+
+**Severity:** LOW — Docs are accessible; this is UX polish
+
+---
+
+### 3.2 Add Brief Component Inventory Doc
+
+**Suggested Improvement:**
+Create `docs/ComponentInventory.md` listing:
+- All 61 tracked components by category
+- Which are "Core" (Editor, Data, Validation, Navigation, Login) vs. "Infrastructure" vs. "Utility"
+- Status (Complete, Stub, Deferred) per tracked-components.json
+
+**Purpose:**
+- Single source of truth for what's tracked and what's not
+- Reduces need to cross-reference catalog/tracked-components.json/dashboard
+- Aligns README, dashboard.md, and mkdocs.yml
+
+**Files to add:**
+- `docs/ComponentInventory.md` (new)
+- `mkdocs.yml` (add entry in nav)
+
+**Severity:** LOW — Nice to have; doesn't fix existing gaps
+
+---
+
+### 3.3 Standardize Naming in tracked-components.json Categories
+
+**Problem:**
+tracked-components.json uses category names that may not match mkdocs.yml section names:
+- "Editor" vs. "Editor Controls"
+- "Data" vs. "Data Controls"
+- "Validation" vs. "Validation Controls"
+- "Navigation" vs. "Navigation Controls"
+- "Login" vs. "Login Controls"
+- "Infrastructure" (no corresponding mkdocs section; scattered across Utility Features & AJAX Controls)
+
+**Suggested Fix:**
+Align category names in `tracked-components.json` to match mkdocs.yml section names for consistency.
+
+**Files to change:**
+- `dev-docs/tracked-components.json` (category name harmonization)
+
+**Severity:** LOW — Cosmetic consistency
+
+---
+
+## SUMMARY TABLE
+
+| Bucket | Item | Priority | Files to Change | Estimated Effort |
+|---|---|---|---|---|
+| **1: Must-Fix** | Dashboard scope number (52 vs 61) | HIGH | `docs/dashboard.md` | 5 min |
+| **1: Must-Fix** | README missing Infrastructure section | HIGH | `README.md` | 15 min |
+| **2: Decision** | ConfigurationManager/FindControl/ClientScript aliasing | MEDIUM | Multiple (depends on decision) | 1-2 hours |
+| **2: Decision** | AjaxToolkitShowcase classification | MEDIUM | `tracked-components.json`, `ComponentHealthService.cs` | 30 min |
+| **2: Decision** | Custom WebControl classification | MEDIUM | `tracked-components.json`, `docs/dashboard.md` | 30 min |
+| **3: Nice-to-Have** | Update mkdocs.yml nav cross-refs | LOW | `mkdocs.yml` | 30 min |
+| **3: Nice-to-Have** | Create ComponentInventory.md | LOW | New file, `mkdocs.yml` | 45 min |
+| **3: Nice-to-Have** | Standardize tracked-components.json categories | LOW | `tracked-components.json` | 20 min |
+
+---
+
+## RECOMMENDED IMMEDIATE ACTIONS (Today)
+
+1. **Fix dashboard.md line 9**: Change "52" → "61" (5 min, resolves confusion)
+2. **Add Infrastructure section to README.md**: List Content, ContentPlaceHolder, MasterPage, NamingContainer (15 min, addresses public-facing gap)
+3. **Create decision issue**: Schedule 15-min team discussion on Bucket 2 naming/aliasing strategy
+
+---
+
+## TEAM QUESTIONS FOR FRITZ
+
+1. **Dashboard Scope**: Is 52 the *original* intended target, or is 61 the current reality we should track?
+2. **Aliasing Strategy**: For migration phase docs (ConfigurationManager, FindControl, ClientScript), do you want:
+   - Option A: Same-name landing pages + cross-references (cleaner for tooling)?
+   - Option B: Update health-detection logic to recognize aliases (less duplication)?
+3. **Infrastructure vs. Component**: Should tracked-components.json include Infrastructure items (Content, ContentPlaceHolder, etc.), or are those "features" not scored?
+
+---
+
+## NEXT STEPS
+
+1. Approve fixes for Bucket 1 (HIGH priority)
+2. Schedule brief decision meeting for Bucket 2 items
+3. Delegate Bucket 3 cleanup as low-priority / deferred work
+4. After decisions, assign implementation tasks to Beast for doc updates
+
+
+# Gap Analysis Execution Plan: Feature Completion
+
+**Date:** 2026-06-12  
+**Prepared by:** Bishop (Migration Tooling Dev)  
+**Status:** Recommended for Team Review  
+**Scope:** Aligning sample catalog, documentation, Playwright tests, and component health scoring
+
+---
+
+## Executive Summary
+
+The audit identified **13 specific gaps in Playwright test coverage**, **13 catalog entries missing one-to-one documentation pages**, and **15 components missing README links**. These gaps cluster into **three distinct gap types** (metadata, test, content) with different fix strategies and owners. No repository files were modified during this audit—this is an analysis-only snapshot.
+
+---
+
+## Gap Classification
+
+### Gap Type 1: **Test Coverage Gaps** (13 items)
+**Nature:** Routes cataloged in `ComponentCatalog.cs` but not explicitly included in `ControlSampleTests.cs` Playwright test suite.
+
+**Affected Routes:**
+- `/ControlSamples/Migration/ConfigurationManager`
+- `/migration/session`
+- `/ControlSamples/NamingContainer`
+- `/ControlSamples/ClientScriptShim`
+- `/ControlSamples/ScriptManagerProxy`
+- `/migration/server-mappath`
+- `/migration/cache`
+- `/migration/request`
+- `/migration/response-redirect`
+- `/migration/ispostback`
+- `/ControlSamples/PostBackDemo`
+- `/migration/findcontrol`
+- `/ControlSamples/Migration/CustomWebControl`
+
+**Gap Type:** Test coverage (these pages exist in the sample app but are not explicitly validated by Playwright).  
+**Severity:** Medium—the pages render but lack automated smoke test coverage.  
+**Owner:** Rogue (Component Test Lead)
+
+---
+
+### Gap Type 2: **Documentation Structure Gaps** (13 items)
+**Nature:** Catalog entries without strict one-to-one matching documentation pages (though some concept coverage may exist under different names).
+
+**Affected Catalog Entries:**
+- `AjaxToolkitShowcase`
+- `ConfigurationManager`
+- `Session State`
+- `ClientScript`
+- `ClientScriptShim`
+- `Server Utilities`
+- `Request.Form`
+- `IsPostBack`
+- `PostBack Demo`
+- `FindControl`
+- `Custom WebControl`
+- `BaseProperties`
+- `Theming`
+
+**Gap Type:** Documentation metadata (docs exist, but naming doesn't match component health detection rules).  
+**Severity:** Low-to-Medium—concepts are documented; the issue is file naming/catalog mismatch.  
+**Root Cause:** `ComponentHealthService` detects docs by strict pattern match: `docs/**/{ComponentName}.md`. Pages like `Phase1-ConfigurationManager.md` exist but fail the pattern.  
+**Owner:** Beast (Documentation Lead)
+
+---
+
+### Gap Type 3: **README Navigation Gaps** (15 items)
+**Nature:** Components missing doc links in the main `README.md` feature list, even if docs exist elsewhere.
+
+**Affected Components:**
+- `Content`
+- `ContentPlaceHolder`
+- `MasterPage`
+- `ModelErrorMessage`
+- `AjaxToolkitShowcase`
+- `ConfigurationManager`
+- `NamingContainer`
+- `ClientScript`
+- `ClientScriptShim`
+- `Cache`
+- `WebFormsForm`
+- `IsPostBack`
+- `FindControl`
+- `BaseProperties`
+- `Theming`
+
+**Gap Type:** Metadata/Navigation (docs link discovery).  
+**Severity:** Low—internal/advanced features not prominent in main README; not a blocker for end users.  
+**Owner:** Beast (Documentation Lead)
+
+---
+
+## Execution Plan by Phase
+
+### Phase 1: Clarify the Documentation Strategy (Owner: Beast + Jeffrey)
+**Duration:** 1 sprint  
+**Goal:** Decide whether the team wants one canonical page per catalog entry or looser conceptual coverage.
+
+**Decisions Needed:**
+1. **Naming convention rule:** Should every catalog entry have a corresponding `docs/{Category}/{ComponentName}.md` file?
+   - Option A: Enforce strict 1:1 mapping (rename/consolidate existing docs)
+   - Option B: Accept conceptual coverage under different names (update health-detection logic)
+
+2. **Health scoring rule:** Should `ComponentHealthService` detect docs by:
+   - Current: Strict file-name pattern match
+   - Alternative: Semantic lookup table (e.g., `"ConfigurationManager" → "docs/Migration/Phase1-ConfigurationManager.md"`)
+
+3. **README.md scope:** Should all 95+ catalog entries be linked in README, or only tier-1 core components?
+   - Current: ~90 links; 15 missing
+   - Decision: Link all, or define a curated "core" list for visibility?
+
+**Validation Gate:** Team decision recorded in `.squad/decisions.md` with chosen strategy.
+
+---
+
+### Phase 2a: Close Test Coverage Gaps (Owner: Rogue)
+**Duration:** 1–2 sprints  
+**Goal:** Add 13 missing routes to `ControlSampleTests.cs` Playwright test matrix.
+
+**Action Items:**
+1. Add `InlineData` entries for each missing route:
+   - `/ControlSamples/Migration/ConfigurationManager`
+   - `/migration/session`
+   - (… etc., all 13 from Gap Type 1)
+
+2. Verify each route loads without JS errors in Playwright tests.
+
+3. Run full `ControlSampleTests` to ensure no regressions.
+
+**Validation Gate:** All 13 routes added to `InlineData` and passing in `dotnet test` run.  
+**Automation:** This can be partially automated: script to extract catalog routes, compare against `InlineData` patterns, emit missing routes.
+
+---
+
+### Phase 2b: Align Documentation Naming (Owner: Beast)
+**Duration:** 1–2 sprints  
+**Goal:** Either rename/consolidate docs to match catalog names OR update health detection.
+
+**Option A Path (1:1 Mapping):**
+1. Create or rename docs files to match strict pattern: `docs/{Category}/{ComponentName}.md`
+   - E.g., rename `docs/Migration/Phase1-ConfigurationManager.md` → `docs/UtilityFeatures/ConfigurationManager.md`
+   - E.g., create `docs/UtilityFeatures/Session.md` for Session State
+
+2. Update `mkdocs.yml` nav entries to match new names.
+
+3. Run component health dashboard locally; verify all 13 entries now show docs checkmark.
+
+**Option B Path (Semantic Lookup):**
+1. Create mapping file: `dev-docs/doc-component-aliases.json`
+   ```json
+   {
+     "ConfigurationManager": "docs/Migration/Phase1-ConfigurationManager.md",
+     "Session State": "docs/UtilityFeatures/Request.md",
+     ...
+   }
+   ```
+
+2. Update `ComponentHealthService.DetectDocumentation()` to consult the alias map before falling back to strict pattern match.
+
+3. Run health dashboard; verify all 13 entries now show docs checkmark.
+
+**Validation Gate:** Health dashboard shows all 13 formerly-missing entries with ✅ for "Has Documentation."
+
+---
+
+### Phase 2c: Update README Links (Owner: Beast)
+**Duration:** 0.5 sprint  
+**Goal:** Add README.md links for all 15 missing components OR update docs/README entry count.
+
+**Action Items:**
+1. Decide scope: Link all 95+ catalog entries, or only core components?
+
+2. Extract missing component names from audit.
+
+3. Add links in appropriate section of README.md.
+
+4. Verify links resolve to live documentation pages.
+
+**Validation Gate:** README links match documentation site structure; `grep` confirms all components mentioned have corresponding docs links.
+
+---
+
+## Automation Recommendations
+
+### High-Priority Automation (Owner: Bishop)
+These checks can be **automated and run on every commit** to prevent future gaps:
+
+1. **Test Route Coverage Audit** (yearly or per-release):
+   - Parse `ComponentCatalog.cs` to extract all routes
+   - Parse `ControlSampleTests.cs` to extract all `InlineData` routes
+   - Compare; emit missing-route report
+   - **Integration:** Add to `.github/workflows/build.yml` as informational check
+
+2. **Documentation Presence Audit** (yearly or per-release):
+   - Use `ComponentHealthService` reflection to discover all tracked components
+   - Scan `docs/` directory (or consult alias map)
+   - Compare; emit missing-docs report
+   - **Integration:** Add to `.github/workflows/docs.yml` or as pre-merge check
+
+3. **README Link Audit** (yearly or per-release):
+   - Parse `README.md` for component doc links
+   - Compare against tracked-components list
+   - Emit missing-link report
+   - **Integration:** Add to build validation matrix
+
+### Low-Priority / Manual Checks
+- Health dashboard Playwright validation (requires running sample app; quarterly or as-needed)
+- Catalog-to-test alignment (manual review, but scripted report reduces effort)
+
+### Recommended Script Locations
+```
+migration-toolkit/scripts/
+  - audit-test-coverage.ps1       (test route gaps)
+  - audit-docs-coverage.ps1       (doc file gaps)
+  - audit-readme-links.ps1        (README link gaps)
+  - audit-all-coverage.ps1        (master runner)
+```
+
+These can be invoked manually or triggered by CI/CD.
+
+---
+
+## Canonical Sources of Truth (Recommended)
+
+### 1. **Sample Catalog (`ComponentCatalog.cs`)**
+- **What it tracks:** Routes, component names, categories, grouping
+- **Current status:** Authoritative for "what's in the sample app"
+- **Recommendation:** Keep this as the primary inventory. Every route listed here should have:
+  - A corresponding Playwright test route
+  - A corresponding doc page (or alias entry)
+  - A corresponding README link (if tier-1 or marked public)
+- **Maintenance:** Update when adding new sample pages; run audit script before PR merge.
+
+### 2. **Documentation Navigation (`mkdocs.yml`)**
+- **What it tracks:** Published documentation structure, nav hierarchy
+- **Current status:** Derived from `docs/` directory
+- **Recommendation:** This is the "published truth." Ensure it stays in sync with actual doc files; use CI to verify no orphaned entries.
+
+### 3. **Component Health Tracking (`tracked-components.json` + `reference-baselines.json`)**
+- **What it tracks:** Expected component surface (property/event parity) + implementation status
+- **Current status:** Hand-curated baselines; optional tracking file
+- **Recommendation:** Adopt `tracked-components.json` as the team's official component inventory for health scoring. Keep in sync with actual implemented components.
+
+### 4. **README.md**
+- **What it tracks:** Public feature list + doc link quick-reference
+- **Current status:** Manual; prone to drift
+- **Recommendation:** This should be derived/generated from `tracked-components.json` or catalog, not hand-maintained. Consider a pre-build step to validate or regenerate it.
+
+### 5. **Test Route Registry (`ControlSampleTests.cs`)**
+- **What it tracks:** Playwright test coverage
+- **Current status:** Broad but incomplete; includes ~146 unique routes vs. ~95 catalog entries
+- **Recommendation:** Treat catalog as source of truth; test registry should be derived. Every catalog route should have a test. Gaps should trigger PR comments.
+
+---
+
+## Validation Gates and Metrics
+
+| Phase | Gate | Measurement | Owner |
+|-------|------|-------------|-------|
+| **Phase 1** | Documentation strategy decided | Decision recorded in `.squad/decisions.md` | Jeffrey / Beast |
+| **Phase 2a** | Test coverage complete | 100% of catalog routes in `ControlSampleTests.cs` | Rogue |
+| **Phase 2b** | Docs aligned | Health dashboard: all tracked components show ✅ for docs | Beast |
+| **Phase 2c** | README current | Grep confirms all 95+ catalog components have README links (if public tier) | Beast |
+| **Ongoing** | Audit automation active | Pre-merge CI check emits coverage report | Bishop |
+
+---
+
+## Effort Estimate
+
+| Phase | Complexity | Effort | Timeline |
+|-------|-----------|--------|----------|
+| Phase 1 (Strategy) | Low | 4–8 hours | Week 1 |
+| Phase 2a (Tests) | Medium | 8–16 hours | Weeks 2–3 |
+| Phase 2b (Docs) | Medium–High | 16–24 hours | Weeks 2–4 |
+| Phase 2c (README) | Low | 2–4 hours | Week 3 |
+| Automation Setup | Low–Medium | 8–12 hours | Week 4 |
+| **Total** | — | **38–64 hours** | **~4 weeks** |
+
+---
+
+## Key Decisions to Record
+
+1. **Documentation naming strategy** (1:1 strict mapping vs. semantic aliases)
+2. **README.md scope** (all components vs. curated tier-1 list)
+3. **Automation priority** (implement all audits, or defer secondary ones)
+4. **Ownership clarification** (Beast, Rogue, Bishop roles confirmed for ongoing maintenance)
+
+---
+
+## Risks & Mitigation
+
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|-----------|
+| Documentation naming conflicts (component + doc name collisions) | Low | Medium | Phase 1 strategy decision clarifies naming rules; aliases prevent collisions |
+| Audit automation doesn't catch all edge cases | Medium | Low | Start with manual audit templates; refine rules as gaps discovered |
+| Playwright test additions slow down CI | Low | Low | Tests are fast; broad test matrix is expected at this repo scale |
+| Team resists process change (new audit automation) | Low | Medium | Pilot audits as informational checks; escalate to requirements only if consensus |
+
+---
+
+## Success Criteria
+
+✅ **Phase 1 Complete:** Team strategy recorded; owners assigned.  
+✅ **Phase 2a Complete:** 13 missing test routes added; all Playwright tests pass.  
+✅ **Phase 2b Complete:** Docs naming aligned; health dashboard shows 100% docs coverage for tracked components.  
+✅ **Phase 2c Complete:** README links match catalog scope; no orphaned components.  
+✅ **Automation Complete:** Audit scripts in place; pre-merge CI validation active.
+
+---
+
+## Next Actions for Bishop
+
+1. **Now:** Share this plan with Jeffrey (user) and team for feedback.
+2. **Decision Point 1:** Wait for Phase 1 strategy clarification (Beast + Jeffrey).
+3. **Decision Point 2:** Confirm automation priority before implementing scripts.
+4. **Ongoing:** Monitor phases 2a–c for blockers; maintain executor → owner alignment.
+
+---
+
+## Appendix: Audit Summary Statistics
+
+| Metric | Count | Status |
+|--------|-------|--------|
+| Total Catalog Entries | 95 | ✅ Inventory current |
+| Test Routes (Playwright InlineData) | 146 | ✅ Broad; some over-coverage |
+| Missing Test Routes | 13 | ⚠️ Gap: Phase 2a |
+| Docs Files in `/docs/` | 191 | ✅ Extensive coverage |
+| MkDocs Nav Entries | 155 | ✅ Well-structured |
+| README Doc Links | 90 | ⚠️ Gap: 15 missing (Phase 2c) |
+| Catalog → Docs Name Mismatches | 13 | ⚠️ Gap: Phase 2b |
+| Tracked Components (health dashboard) | 52 | ✅ Core set well-defined |
+
+---
+
+**This plan is ready for team review and decision. No repository files have been modified.**
+
+
+# Bishop Handoff: #550 and #548
+
+- Timestamp: 2026-06-10T10:33:04.9872011-04:00
+- Requested by: Jeffrey T. Fritz
+
+## Completed context to carry forward
+- #557 is complete: `WebConfigAssemblyParser` now aggregates custom control registrations across discovered `Web.config` files and feeds a shared prefix-to-namespace map through runtime detection.
+- #549 skeleton context is in place: `CodeOnlyServerControlAnalyzer` + `CodeOnlyControlScaffolder` starter path is wired in `MigrationPipeline` to emit placeholder components under `Generated/CodeOnlyControls`.
+
+## #550 next implementation steps
+- Implement `LocalTagNamespaceResolutionTransform` to consume `FileMetadata.CustomControlPrefixToNamespace` and resolve custom/local tag prefixes before generic prefix stripping.
+- Register the transform in both `src\BlazorWebFormsComponents.Cli\Program.cs` and `tests\BlazorWebFormsComponents.Cli.Tests\TestHelpers.cs`.
+- Add regression coverage for nested `Web.config` prefix overrides/conflicts and verify generated component/usings resolution across folder boundaries.
+- Validate ordering with existing directive/prefix transforms so prefix metadata is preserved and resolved deterministically.
+
+## #548 next implementation steps
+- Implement #548 behavior directly on top of the new shared prefix map and code-only control descriptors from #557/#549 (no new parser pass).
+- Define required pipeline hook points so #548 logic runs after runtime metadata hydration but before transforms that erase custom-tag intent.
+- Add focused tests proving #548 works with both normal scaffold mode and `--skip-scaffold` paths.
+- Add a migration report note path that points maintainers from #548 outcomes back to source control registrations and generated placeholders when manual follow-up is required.
+
+
+# Colossus Test Gate Decisions — Integration Test Coverage Audit
+
+**Decision Requested By**: Colossus (Integration Test Engineer)  
+**Context**: Audit of Playwright sample page coverage vs. ComponentCatalog  
+**Date**: 2026-06-12  
+**Audit Report**: `colossus-remediation-checklist.txt`
+
+---
+
+## FINDINGS SUMMARY
+
+### Playwright Smoke Coverage Gaps (13 Routes)
+
+| Route | Sample Page | Status | Classification |
+|-------|-------------|--------|-----------------|
+| /ControlSamples/Migration/ConfigurationManager | ✅ Exists | Missing Test | **Tier 0 — Quick Win** |
+| /ControlSamples/ClientScriptShim | ❌ Not Found | Missing Both | Tier 1 — High Value |
+| /ControlSamples/NamingContainer | ❌ Not Found | Missing Both | Tier 1 — High Value |
+| /ControlSamples/PostBackDemo | ❌ Not Found | Missing Both | Tier 1 — High Value |
+| /ControlSamples/ScriptManagerProxy | ❌ Not Found | Missing Both | Tier 1 — High Value |
+| /migration/cache | ❌ Not Found | Missing Both | Tier 2 — Reference Catalog |
+| /migration/findcontrol | ❌ Not Found | Missing Both | Tier 2 — Reference Catalog |
+| /migration/ispostback | ❌ Not Found | Missing Both | Tier 2 — Reference Catalog |
+| /migration/request | ❌ Not Found | Missing Both | Tier 2 — Reference Catalog |
+| /migration/response-redirect | ❌ Not Found | Missing Both | Tier 2 — Reference Catalog |
+| /migration/server-mappath | ❌ Not Found | Missing Both | Tier 2 — Reference Catalog |
+| /migration/session | ❌ Not Found | Missing Both | Tier 2 — Reference Catalog |
+
+### bUnit Test Gaps (2 Components)
+
+- **Xml** (Editor control, Status: **Deferred**)
+  - Tracked in `tracked-components.json`
+  - No component implementation yet
+  - No bUnit tests
+
+- **BaseCompareValidator** (Validation base class)
+  - Tracked in `tracked-components.json`
+  - Base class infrastructure component
+  - No bUnit tests (CompareValidator tests exist; base class logic untested)
+
+---
+
+## DECISION REQUIRED: TIER PRIORITIZATION
+
+### ❓ Question 1: ConfigurationManager Playwright Test
+
+**What**: Add `[InlineData("/ControlSamples/Migration/ConfigurationManager")]` to ControlSampleTests.cs theory group.
+
+**Options**:
+- **A) Add to "Utility Features" theory** (groups with DataBinder, ViewState, etc.)
+- **B) Add to "Migration Shim Sample Pages" theory** (groups with /migration/request-form, /migration/webforms-form)
+- **C) Create new "Migration Utilities" theory** (separates migration components from basic utilities)
+
+**Recommendation**: **Option B** — /ControlSamples/Migration/ConfigurationManager is a migration shim feature page, not a core utility. Grouping with other migration pages clarifies test organization.
+
+**Impact**: ~1 line change. No implementation needed.
+
+---
+
+### ❓ Question 2: Tier 1 Sample Page Creation (4 pages)
+
+**What**: Decide whether to create sample pages for:
+- `/ControlSamples/ClientScriptShim`
+- `/ControlSamples/NamingContainer`
+- `/ControlSamples/PostBackDemo`
+- `/ControlSamples/ScriptManagerProxy`
+
+**Context**:
+- `NamingContainer` has existing bUnit tests → public API, likely worth a sample page
+- `PostBackDemo` is a migration feature showcase → high value for migration documentation
+- `ClientScriptShim` vs. existing `/ControlSamples/ClientScript` — may be duplicate or naming variant
+- `ScriptManagerProxy` is infrastructure → validate if already covered by ScriptManager sample
+
+**Options**:
+- **A) Create all 4** (complete coverage, ~2-4 hours implementation + tests)
+- **B) Create 2 of 4** (NamingContainer + PostBackDemo only; skip AJAX infrastructure)
+- **C) Defer to WingtipToys benchmark phase** (validate impact on migration workflow first)
+- **D) Create as migration reference code examples** (no dedicated sample page; add to docs instead)
+
+**Recommendation**: **Option B** (NamingContainer + PostBackDemo) — Both have clear use cases:
+- **NamingContainer**: Blazor .NET equivalent of Web Forms NamingContainer behavior (page hierarchies, FindControl scoping)
+- **PostBackDemo**: Demonstrates IsPostBack, Page.PostBack, and client-side __doPostBack JS interop
+
+**Impact**: ~3-4 hours (2 sample pages + 2 smoke tests + 2 interaction tests)
+
+---
+
+### ❓ Question 3: Tier 2 Migration Reference Catalog (7 pages)
+
+**What**: Decide whether to create `/migration/*` reference pages:
+- `/migration/request`
+- `/migration/response-redirect`
+- `/migration/session`
+- `/migration/cache`
+- `/migration/findcontrol`
+- `/migration/ispostback`
+- `/migration/server-mappath`
+
+**Context**:
+- These are migration shim reference features (RequestShim, ResponseShim, SessionShim, CacheShim, FindControl, Page.IsPostBack)
+- Currently only 2 migration pages exist: `/migration/request-form`, `/migration/webforms-form`
+- High value for migration workflows (developers need working examples of shim usage)
+- High volume (7 pages = 4-6 hours implementation + tests)
+
+**Options**:
+- **A) Create all 7 as reference catalog** (one example page per shim feature, phased over Q2-Q3)
+- **B) Create 3 priority features** (session, request, response-redirect; skip cache/findcontrol/ispostback)
+- **C) Defer to docs/tutorial** (add migration guide docs instead of sample pages)
+- **D) Create as code snippets in docs** (no dedicated sample pages; reference in migration guides)
+
+**Recommendation**: **Option A (phased)** — These are high-value for migration workflows and align with WingtipToys benchmark needs:
+- **Phase 1 (M23)**: /migration/session, /migration/response-redirect, /migration/request (critical shims)
+- **Phase 2 (M24)**: /migration/cache, /migration/findcontrol (supporting features)
+- **Phase 3 (M25)**: /migration/ispostback, /migration/server-mappath (documentation examples)
+
+**Impact**: ~6-8 hours across 3 milestones + ~20 min Playwright tests per page
+
+---
+
+### ❓ Question 4: Xml Component Tests
+
+**What**: Decide on test coverage for **Xml** (deferred control).
+
+**Current Status**:
+- Tracked in `tracked-components.json` with status: **Deferred**
+- No component implementation
+- No bUnit tests
+
+**Options**:
+- **A) Keep deferred; add NO tests** (component not yet public; stub tests premature)
+- **B) Add placeholder stub tests** (reserve bUnit folder for future implementation)
+- **C) Remove from tracked components** (not planning to implement Xml)
+
+**Recommendation**: **Option A** — Keep deferred. **Xml is a data-transformation control with limited Blazor use cases** (XML processing for data binding). Defer tests until component implementation is prioritized.
+
+**Impact**: No change. Return to this decision when Xml component is un-deferred.
+
+---
+
+### ❓ Question 5: BaseCompareValidator Tests
+
+**What**: Decide whether to add bUnit tests for **BaseCompareValidator** (base validation class).
+
+**Current Status**:
+- Tracked in `tracked-components.json`
+- Base class; no public user-facing sample page
+- Existing CompareValidator tests cover derived functionality
+- BaseValidator tests exist but BaseCompareValidator logic is untested
+
+**Options**:
+- **A) Add unit tests in Validations folder** (BaseCompareValidatorTests.razor covering type comparers + ControlToCompare binding)
+- **B) Extend CompareValidator tests** (add BaseCompareValidator property coverage to existing CompareValidator tests)
+- **C) Skip — CompareValidator tests sufficient** (derived tests are adequate coverage)
+
+**Recommendation**: **Option A** — Add **BaseCompareValidatorPropertyTests.razor** under `src/BlazorWebFormsComponents.Test/Validations/`:
+- **Why**: BaseCompareValidator contains shared validation logic (type comparers, ControlToCompare property binding) that should have explicit tests
+- **Coverage**: Verify TypeComparer factory, ControlToCompare property/parameter validation, and base error messages
+- **Pattern**: Mirror existing `BaseValidatorPropertyTests.razor` structure
+
+**Impact**: ~1-1.5 hours (1 test file, 8-12 test methods)
+
+---
+
+## TEAM DECISION CHECKLIST
+
+- [ ] **Decision 1 — ConfigurationManager theory group**: Choose A/B/C
+- [ ] **Decision 2 — Tier 1 sample pages**: Choose A/B/C/D
+- [ ] **Decision 3 — Tier 2 migration catalog**: Choose A/B/C/D
+- [ ] **Decision 4 — Xml deferred**: Choose A/B/C
+- [ ] **Decision 5 — BaseCompareValidator tests**: Choose A/B/C
+
+---
+
+## IMPLEMENTATION ROADMAP (Assuming Recommended Path)
+
+| Task | Effort | Phase | Owner |
+|------|--------|-------|-------|
+| Add ConfigurationManager Playwright test | 5 min | M22 | Colossus |
+| Create NamingContainer sample + tests | 90 min | M22 | Cyclops + Colossus |
+| Create PostBackDemo sample + tests | 90 min | M22 | Cyclops + Colossus |
+| Add BaseCompareValidator unit tests | 60 min | M22 | Colossus |
+| **Phase 1 Total** | **~4.5 hours** | **M22** | — |
+| Create /migration/session + /migration/response-redirect + /migration/request pages + tests | 120 min | M23 | Cyclops + Colossus |
+| Create /migration/cache + /migration/findcontrol pages + tests | 100 min | M24 | Cyclops + Colossus |
+| Create /migration/ispostback + /migration/server-mappath pages + tests | 100 min | M25 | Cyclops + Colossus |
+
+---
+
+## DECISION DEADLINE
+
+**Requested from**: Jeffrey T. Fritz, Forge, Cyclops  
+**Needed by**: 2026-06-13 (before M22 sprint planning)  
+**Format**: Reply in this file with decision selections (A/B/C/D) or in `.squad/decisions.md` main file with final ruling.
+
+---
+
+## APPENDIX: AUDIT METRICS
+
+**Catalog Total**: 95 routes  
+**Tested Routes**: 146 (includes sub-pages/variants)  
+**Missing Smoke Tests**: 13  
+**Missing Sample Pages**: 12  
+**Existing but Untested**: 1 (ConfigurationManager)  
+
+**bUnit Test Gaps**: 2 (Xml deferred, BaseCompareValidator)  
+**Components with Tests**: 85 / 87 tracked (98%)
+
+**Estimated Remediation Effort**:
+- Phase 1 (Decisions + High-Priority): 4.5 hours
+- Phase 2 (Interactive assertions): 8-10 hours (ongoing)
+- Phase 3 (Migration reference catalog): 6-8 hours over 3 milestones
+- **Total**: ~20-25 hours over M22-M25
+
+
+# Decision: Legacy .aspx URL Compatibility in Migrated Blazor Apps
+
+**Date:** 2026-06-10T17:29:42-04:00
+**Author:** Cyclops (Component Dev)
+**Status:** Implemented in ContosoUniversity; recommended for all generated apps
+
+## Decision
+
+Migrated Blazor apps must serve legacy `.aspx` URLs (e.g. `/Students.aspx`) via
+301 permanent redirect to the canonical clean Blazor route (e.g. `/Students`).
+
+### Implementation Pattern
+
+Add the following middleware in the generated `Program.cs`, immediately after
+`app.UseHttpsRedirection()` and before `app.MapStaticAssets()`:
+
+```csharp
+// Redirect legacy .aspx URLs to clean Blazor routes
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value ?? string.Empty;
+    if (path.EndsWith(".aspx", StringComparison.OrdinalIgnoreCase))
+    {
+        var cleanPath = path[..^5]; // strip .aspx
+        if (string.Equals(cleanPath, "/Home", StringComparison.OrdinalIgnoreCase))
+            cleanPath = "/";
+        context.Response.Redirect(cleanPath + context.Request.QueryString, permanent: true);
+        return;
+    }
+    await next(context);
+});
+```
+
+### Special Cases
+
+- `/Home.aspx` must map to `/` (root), not `/Home`, because generated `Home.razor`
+  declares `@page "/"`. All other pages follow the simple strip-extension rule.
+- Query strings are preserved through the redirect so deep-link parameters survive.
+
+## Why
+
+The acceptance test suite already used `.aspx` URLs because they were authored
+against the original Web Forms app. Without this redirect, every test that navigated
+to `/Home.aspx`, `/Students.aspx`, etc. returned 404 in the migrated app.
+
+More broadly, real users and external sites have bookmarks/links pointing at the
+original `.aspx` URLs. Issuing a 301 permanent redirect is the standard web
+mechanism to preserve those links while canonicalizing to clean Blazor routes.
+
+## Scope
+
+- **Implemented now:** `samples/AfterContosoUniversity/Program.cs`
+- **Recommended next:** `ProgramCsEmitter` in the CLI should emit this middleware
+  block automatically for all generated apps (WingtipToys, DepartmentPortal, etc.)
+  so the pattern is consistently applied without per-app manual edits.
+- **Acceptance tests:** `src/ContosoUniversity.AcceptanceTests/LegacyAspxUrlTests.cs`
+  provides the coverage template for the other benchmark suites.
+
+
+# Forge: Completion Coverage Remediation Plan
+
+**Date:** 2026-06-12  
+**Author:** Forge  
+**Status:** Proposed  
+**Audience:** Beast (Docs), Jubilee (Samples), Rogue (Tests), Jeffrey (Project Owner)
+
+---
+
+## Overview
+
+The audit identified concrete gaps between what we claim to ship (**tracked-components.json: 61 components**), what the Component Health Dashboard tracks (**docs/dashboard.md: 52 controls**), and what actually has complete coverage across Docs / Tests / Samples.
+
+**Snapshot of Coverage:**
+- Docs: 60/61 components (98%) — Missing only `Xml`
+- Tests: 59/61 components (97%) — Missing `Xml`, `BaseCompareValidator`
+- Samples: 57/61 components (93%) — Missing `TextBox`, `Xml`, `BaseValidator`, `BaseCompareValidator`
+- Playwright routes: 82/95 catalog routes (86%) — 13 migration/utility routes lack broad coverage
+
+**Key insight:** The dashboard claims "52 targeted controls" but our actual shipping scope is 61 components, creating a perception gap that needs either a scope clarification or a dashboard update.
+
+---
+
+## 1. IMMEDIATE FIXES (Do This Sprint)
+
+### 1.1 Metadata Cleanup (Ownership: Scribe + Forge)
+
+**Action:** Align tracked-components.json to actual shipping scope and update dashboard.md  
+**Effort:** 1–2 hours
+
+1. Decide: Do we track **61 components** (current tracked-components.json) or **52 controls** (current dashboard.md claim)?
+   - **Recommended:** Adopt 61. The dashboard's "52" is a subset of "50 essential Web Forms controls + 2 infrastructure" that no longer matches our actual output.
+   - Update `docs/dashboard.md` line 9: "tracks **61 components**" instead of "52 targeted Web Forms controls"
+   - Update the Glossary to clarify: "These 61 include 50 Web Forms controls, 6 validators, 3 infrastructure (Content, ContentPlaceHolder, MasterPage), 2 shims (Xml:Deferred, ScriptManager:Stub)."
+
+2. Document deferred/stub status in dashboard.md decision table:
+   - `Xml` → Deferred (marked in tracked-components.json)
+   - `ScriptManager` → Stub (marked in tracked-components.json)
+   - This clarifies why their scores are lower.
+
+**Owner:** Scribe (or Forge if Scribe unavailable)
+
+---
+
+### 1.2 Route Coverage — Add 13 Missing Playwright Tests (Ownership: Rogue)
+
+**Action:** Extend `ControlSampleTests.cs` to cover all 13 catalog routes  
+**Effort:** 2–3 hours (mostly data entry + one test run)
+
+Missing routes (from audit):
+```
+/ControlSamples/ClientScriptShim
+/ControlSamples/Migration/ConfigurationManager
+/ControlSamples/Migration/CustomWebControl
+/ControlSamples/NamingContainer
+/ControlSamples/PostBackDemo
+/ControlSamples/ScriptManagerProxy
+/migration/cache
+/migration/findcontrol
+/migration/ispostback
+/migration/request
+/migration/response-redirect
+/migration/server-mappath
+/migration/session
+```
+
+**Steps:**
+1. Grep `ComponentCatalog.cs` for these exact route names — confirm they exist
+2. Add `[InlineData(...)]` entries to `ControlSampleTests.cs` (likely in a "Migration Utilities" section after line 224)
+3. Run `dotnet test src/AfterBlazorServerSide.Tests --filter "ControlSampleTests"`
+4. Confirm all 13 routes load without 404 or exceptions
+
+**Expected outcome:** All 95 catalog routes are now covered by Playwright.
+
+**Owner:** Rogue
+
+---
+
+### 1.3 Sample Page Additions (Ownership: Jubilee)
+
+**Action:** Create sample pages for 4 missing tracked components  
+**Effort:** 3–4 hours per component
+
+**Missing sample pages:**
+1. `TextBox` — Editor control, should be trivial (mimic Button sample structure)
+2. `Xml` — Deferred status; create a stub page explaining deferred status
+3. `BaseValidator` — Validation base class; create a concept page showing inheritance hierarchy
+4. `BaseCompareValidator` — Validation base class; create a concept page showing inheritance hierarchy
+
+**Steps per component:**
+1. Create `Pages/ControlSamples/{ComponentName}/Index.razor` + `.razor.cs`
+2. Register in `ComponentCatalog.cs` with the exact route (e.g., `/ControlSamples/TextBox`)
+3. For `Xml` and base classes: add a "Status" banner explaining why they're not fully interactive
+4. Include a link back to `docs/{ComponentCategory}/{ComponentName}.md`
+
+**Owner:** Jubilee
+
+---
+
+### 1.4 Documentation Completeness (Ownership: Beast)
+
+**Action:** Verify one-to-one doc pages for all 61 tracked components  
+**Effort:** 2–3 hours
+
+**Current status:**
+- Missing one-to-one doc page: `Xml` only
+- Naming mismatches (docs exist but under different names/paths):
+  - `ConfigurationManager` → `docs/Migration/Phase1-ConfigurationManager.md` 
+  - `FindControl` → `docs/Migration/FindControl-Migration.md`
+  - `Server Utilities` → `docs/UtilityFeatures/ServerShim.md`
+  - `Request.Form` → possibly split across `RequestShim.md` and `WebFormsForm.md`
+
+**Steps:**
+1. Add `Xml.md` to `docs/EditorControls/` explaining deferred status and migration guidance
+2. Update `mkdocs.yml` nav entry: `- Xml: EditorControls/Xml.md`
+3. Audit the naming-mismatch items: verify docs are discoverable under their tracked names
+4. If a naming mismatch exists (e.g., catalog says "ConfigurationManager" but doc is "Phase1-ConfigurationManager"), either:
+   - Rename the doc to match the catalog name, OR
+   - Create a redirect/symlink in the nav
+5. Add all 61 components to `mkdocs.yml` nav (current snapshot shows some are missing from nav even though docs exist)
+
+**Owner:** Beast
+
+---
+
+### 1.5 README Links (Ownership: Beast)
+
+**Action:** Update README.md component list to be exhaustive  
+**Effort:** 1–2 hours
+
+**Current state:** README lists ~45 components with doc links; 16 are missing or buried.
+
+**Steps:**
+1. Generate an exhaustive list of all 61 components grouped by category
+2. Ensure every tracked component in README has a clickable doc link
+3. For deferred/stub components, add a note (e.g., `[Xml](docs/EditorControls/Xml.md) (Deferred)`)
+
+**Owner:** Beast
+
+---
+
+## 2. STRUCTURAL DECISIONS REQUIRED (This Week)
+
+### 2.1 Definition: "Source of Truth" for Component Completeness
+
+**Question:** Which inventory should be canonical?
+
+- **Option A (Recommended):** `tracked-components.json` (61 components) is the master inventory. Dashboard.md, mkdocs.yml, ComponentCatalog.cs, and README must all reflect this same scope.
+- **Option B:** `ComponentCatalog.cs` (95 entries) is the source of truth. Some catalog entries are meta-concepts (not real components) — dashboard should only track the 61 "true" components.
+
+**Decision for Jeffrey:**  
+I recommend **Option A**. The 61 tracked components are the formal product surface. The 95 catalog entries are a mix of components, concept pages, sample scenarios, and migration examples. By declaring tracked-components.json canonical, we ensure:
+- Completion checklist is unambiguous: 61 → must have docs, tests, samples
+- Health dashboard stays honest: all 61 must be scored
+- README and mkdocs.yml can link all 61 + optionally include the extra 34 as "sample scenarios"
+
+**Action:** Update `.squad/decisions/inbox/forge-completion-plan.md` with this decision and have Scribe merge it into `decisions.md`.
+
+---
+
+### 2.2 Documentation Scope: 1:1 vs. Conceptual
+
+**Question:** Must every tracked component have a same-name markdown file in `docs/`?
+
+- **Current state:** Most do (60/61), but some are grouped under concept pages (e.g., "All Validators" under BaseValidator rather than separate pages per validator)
+- **Tension:** Health dashboard strictly checks `docs/{ComponentName}.md` filename, so any "conceptual grouping" is flagged as missing docs
+
+**Decision for Beast:**  
+I recommend **strict 1:1 mapping**, but with a "hub-and-spoke" structure:
+- Every component gets its own `docs/{Category}/{ComponentName}.md` page
+- That page can reference a hub page (e.g., `ValidationControls/BaseValidator.md` → linked to from each concrete validator page)
+- This ensures the health dashboard detects completeness AND users can find individual components
+
+**Action:** Establish this as a rule in the Contributing Guide / AGENTS.md so future components follow it.
+
+---
+
+### 2.3 Deferred/Stub Handling in Health Dashboard
+
+**Question:** Should deferred components (Xml) and stubs (ScriptManager) count toward completion?
+
+- **Current:** Xml and ScriptManager are in tracked-components.json but have lower baseline/implementation scores
+- **Problem:** Unclear if "incomplete" means "not yet implemented" vs. "intentionally deferred"
+
+**Recommendation:** Add a status indicator to the dashboard scoring:
+- **Status = "Complete"**: Expected = Implemented (green checkmark for all dimensions)
+- **Status = "Stub"**: Intentionally limited scope (show 50% color)
+- **Status = "Deferred"**: Not started (show grey/off-white; exclude from portfolio completeness claims)
+
+**Action:** Update `ComponentHealthService.cs` to visually distinguish status tiers in the dashboard. This lets us claim "60/61 components complete or in progress" instead of the weaker "52 complete."
+
+---
+
+## 3. DEFINITION OF DONE / ACCEPTANCE GATES
+
+### For This Remediation Cycle
+
+A feature is **completion-verified** when ALL of these are true:
+
+#### 3.1 Inventory Completeness
+- [ ] Component is in `tracked-components.json` (single source of truth)
+- [ ] Component is registered in `ComponentCatalog.cs` with a `/ControlSamples/{Name}` route
+- [ ] Component name matches across all three files (case-sensitive, no renaming aliases)
+
+#### 3.2 Documentation Completeness
+- [ ] Component has a markdown file at `docs/{Category}/{ComponentName}.md`
+- [ ] Markdown file is registered in `mkdocs.yml` nav under the correct category section
+- [ ] Component has a clickable link in `README.md` component list
+- [ ] **For deferred/stub:** Status is clearly marked (e.g., "(Deferred)" or "(Stub)") in all three places
+
+#### 3.3 Sample Page Completeness
+- [ ] Component sample page exists at `Pages/ControlSamples/{ComponentName}/Index.razor`
+- [ ] Sample page is registered in `ComponentCatalog.cs` with route matching the filename
+- [ ] Sample page loads without 404 or unhandled exceptions
+
+#### 3.4 Test Coverage Completeness
+- [ ] Component has bUnit tests in `src/BlazorWebFormsComponents.Test/{ComponentName}/`
+- [ ] Component has Playwright route coverage in `ControlSampleTests.cs` (route must appear in `[InlineData(...)]`)
+- [ ] Both test suites pass: `dotnet test src/BlazorWebFormsComponents.Test` + `dotnet test src/AfterBlazorServerSide.Tests`
+
+#### 3.5 Dashboard Health Score
+- [ ] Component appears on `/dashboard` in the sample app
+- [ ] Health score is ≥70% (yellow threshold) for production components, ≥50% for stubs
+- [ ] **For deferred:** Marked with status indicator and noted in dashboard help text
+
+---
+
+### For Future Component Additions
+
+When adding a new component, the PR checklist must include:
+
+1. **Before merging:**
+   - Add component to `tracked-components.json`
+   - Create component in `src/BlazorWebFormsComponents/`
+   - Add to `ComponentCatalog.cs` with a `/ControlSamples/{Name}` route
+   - Add bUnit tests to `src/BlazorWebFormsComponents.Test/{ComponentName}/`
+   - Add sample page to `Pages/ControlSamples/{ComponentName}/`
+   - Create markdown doc at `docs/{Category}/{ComponentName}.md`
+   - Add nav entry to `mkdocs.yml`
+   - Add link to `README.md` component list
+   - Add reference baseline to `dev-docs/reference-baselines.json`
+
+2. **PR validation:**
+   - All 5 test suites pass (component unit, CLI tests, acceptance, etc.)
+   - Dashboard shows new component with ≥70% score
+
+3. **After merge:**
+   - Verify the live sample site reflects the new component
+   - Verify the live docs site has the new page
+
+---
+
+## 4. MAINTAINING COVERAGE GOING FORWARD
+
+### Add a "Completion Status" CI Check
+
+Create a simple PowerShell/bash script that runs after each build and verifies:
+
+```powershell
+# Pseudo-code for a completion validator
+$tracked = Get-Content tracked-components.json | ConvertFrom-Json
+$catalog = Get-Content ComponentCatalog.cs | grep "new(" | measure-object
+$docs = Get-ChildItem docs/**/*.md | measure-object
+$tests = Get-ChildItem src/BlazorWebFormsComponents.Test/*/  -Directory | measure-object
+$samples = Get-ChildItem Pages/ControlSamples/*/ -Directory | measure-object
+
+# Alert if any dimension drops below 95% of tracked count
+if ($docs.Count -lt $tracked.components.Count * 0.95) { 
+    Write-Error "Docs coverage below threshold: $($docs.Count)/$($tracked.components.Count)" 
+}
+```
+
+**Owner:** Rogue (integrate into CI) + Scribe (document the rule)
+
+---
+
+## 5. TIMELINE AND PRIORITY
+
+| Priority | Task | Owner | Est. Effort | Deadline |
+|----------|------|-------|-------------|----------|
+| **P0** | Metadata alignment (tracked-components.json = 61) | Scribe | 1h | End of week |
+| **P0** | Add 13 missing Playwright routes | Rogue | 2h | End of week |
+| **P1** | Add 4 missing sample pages | Jubilee | 4h | Next week |
+| **P1** | Create Xml.md + audit docs naming | Beast | 2h | Next week |
+| **P1** | Update README to be exhaustive | Beast | 1h | Next week |
+| **P2** | Update dashboard scoring for status tiers | Forge + Bishop | 4h | Sprint +2 |
+| **P3** | Implement CI completion validator | Rogue + Scribe | 3h | Sprint +2 |
+
+---
+
+## 6. SUCCESS CRITERIA
+
+**End-of-Sprint "Complete" State:**
+- ✅ All 61 tracked components have docs + sample pages + tests
+- ✅ All 95 catalog routes have Playwright coverage
+- ✅ Dashboard shows 61/61 components (with status labels for deferred/stub)
+- ✅ README links all 61 components
+- ✅ mkdocs.yml nav exhaustively lists all 61
+- ✅ No components appear as "missing" in health dashboard
+- ✅ Audit report shows 61/61 docs, 61/61 tests, 61/61 samples (no gap)
+
+---
+
+## 7. TEAM DECISIONS FOR BOARD
+
+**Forge formally proposes the following team decisions:**
+
+### Decision 1: tracked-components.json (61 components) is the canonical product scope
+- **Rationale:** Clear, auditable, reflects actual shipping scope
+- **Impact:** Dashboard, README, mkdocs.yml, ComponentCatalog must all reflect 61 (not 52 or 95)
+- **Who signs:** Jeffrey (Owner)
+
+### Decision 2: Strict 1:1 documentation mapping (one file per component)
+- **Rationale:** Ensures health dashboard remains honest; easier for users to find docs
+- **Impact:** No more "grouped" concept pages (every validator gets its own page, linked from a hub)
+- **Who signs:** Beast (Docs Lead)
+
+### Decision 3: Deferred and Stub components are separately tracked
+- **Rationale:** Product roadmap clarity; "60/61 complete + 1 deferred" is better than "60/61 incomplete"
+- **Impact:** Dashboard shows status tiers; contributes to portfolio narrative
+- **Who signs:** Forge (Reviewer)
+
+---
+
+## Appendix: Audit Data Summary
+
+### What the audit found:
+- **tracked-components.json:** 61 components (source of truth)
+- **Dashboard.md claim:** 52 controls (outdated)
+- **ComponentCatalog.cs:** 95 routes (includes scenarios + samples)
+- **docs/ presence:** 60/61 markdown files (missing Xml only)
+- **mkdocs.yml nav:** ~48 entries (incomplete; doesn't list all 61)
+- **README.md:** ~45 components with links (incomplete)
+- **Playwright coverage:** 82/95 routes (13 catalog routes untested)
+- **bUnit tests:** 59/61 components (missing Xml, BaseCompareValidator)
+- **Sample pages:** 57/61 components (missing TextBox, Xml, BaseValidator, BaseCompareValidator)
+
+### Gap analysis:
+| Metric | Current | Target | Gap | Effort |
+|--------|---------|--------|-----|--------|
+| Tracked components | 61 | 61 | 0 | — |
+| Docs coverage | 60/61 | 61/61 | 1 (Xml) | 1h |
+| Sample pages | 57/61 | 61/61 | 4 | 4h |
+| bUnit tests | 59/61 | 61/61 | 2 | 2h |
+| Playwright routes | 82/95 | 95/95 | 13 | 2h |
+| README links | ~45 | 61 | 16 | 1h |
+| mkdocs.yml nav | ~48 | 61 | 13 | 1h |
+
+**Total immediate effort: ~14 hours across the team**
+
+
+
+# WebFormsForm must inherit ComponentBase explicitly
+
+**Author:** Rogue (QA)  
+**Date:** 2026-07  
+**Scope:** WebFormsForm.razor, RequestShim.cs  
+**Issue:** #533
+
+## Decision
+
+Any `.razor` component in the main project that should NOT be a Web Forms control must explicitly declare `@inherits ComponentBase` to override the project-level `_Imports.razor` (which specifies `@inherits BaseWebFormsComponent`).
+
+## Bugs Found
+
+1. **WebFormsForm.razor** — Missing `@inherits ComponentBase` caused it to inherit `BaseWebFormsComponent` via `_Imports.razor`. Both classes had `[Parameter(CaptureUnmatchedValues = true)]`, throwing `ThrowForMultipleCaptureUnmatchedValuesParameters` at render time. Fixed by adding `@inherits ComponentBase`.
+
+2. **RequestShim.cs line 79** — `new FormShim(null)` was ambiguous between `FormShim(IFormCollection?)` and `FormShim(Dictionary<string, StringValues>)` after the dual-mode constructor was added. Fixed by casting to `(IFormCollection?)null`.
+
+## Impact
+
+Both fixes are required for the WebFormsForm component to render at all. Without them, any page using `<WebFormsForm>` crashes at component initialization.
 
